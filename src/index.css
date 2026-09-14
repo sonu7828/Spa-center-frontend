@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/* ============================================================
+   OMEGA SPA POS — Design System Tokens (Tailwind v4)
+   Source: DESIGN-SYSTEM.md (LOCKED)
+   ============================================================ */
+
+@theme {
+  /* --- Color System --- */
+  --color-warm-ivory: #FBF7F2;
+  --color-soft-cream: #F6F1EB;
+
+  --color-sage: #A7B89A;
+  --color-sage-hover: #96AA88;
+  --color-sage-soft: #EEF3EA;
+
+  --color-dusty-rose: #E1B6AC;
+  --color-dusty-rose-soft: #F8ECE8;
+
+  --color-charcoal: #2E2F31;
+  --color-muted-gray: #76736F;
+  --color-border: #E8E1D9;
+
+  /* --- Semantic Colors --- */
+  --color-success: #7FA285;
+  --color-success-soft: #EDF4EE;
+  --color-warning: #D8A15F;
+  --color-warning-soft: #FBF2E5;
+  --color-error: #C77B6E;
+  --color-error-soft: #F9EDEA;
+
+  /* --- WhatsApp (only for WhatsApp actions) --- */
+  --color-whatsapp: #25D366;
+
+  /* --- Shadows --- */
+  --shadow-card: 0 4px 16px rgba(46, 47, 49, 0.05);
+
+  /* --- Border Radius --- */
+  --radius-card: 16px;
+  --radius-button: 11px;
+  --radius-input: 11px;
+  --radius-pill: 999px;
+  --radius-modal: 16px;
+
+  /* --- Breakpoints --- */
+  --breakpoint-lg: 1000px;
+
+  /* --- Font Family --- */
+  --font-sans: 'Manrope', 'Inter', sans-serif;
+}
+
+/* ============================================================
+   Base Styles
+   ============================================================ */
+
+html,
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-warm-ivory);
+  color: var(--color-charcoal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: clip;
+  max-width: 100vw;
+}
+
+/* Scrollbar styling for premium feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted-gray);
+}
+
+/* Remove number input spinners (up/down arrows) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
