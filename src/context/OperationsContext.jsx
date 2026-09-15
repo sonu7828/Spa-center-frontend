@@ -223,7 +223,9 @@ export function OperationsProvider({ children }) {
   // Check if an appointment was already closed
   const isAppointmentClosed = useCallback(
     (appointmentId) =>
-      completedServices.some((s) => s.appointmentId === Number(appointmentId)),
+      appointmentId !== undefined && appointmentId !== null
+        ? completedServices.some((s) => String(s.appointmentId) === String(appointmentId))
+        : false,
     [completedServices]
   );
 
@@ -231,10 +233,10 @@ export function OperationsProvider({ children }) {
   const isServiceClosed = useCallback(
     (appointmentServiceId, appointmentId) => {
       if (appointmentServiceId) {
-        return completedServices.some((s) => s.appointmentServiceId === String(appointmentServiceId));
+        return completedServices.some((s) => String(s.appointmentServiceId) === String(appointmentServiceId));
       }
       return appointmentId !== undefined && appointmentId !== null
-        ? completedServices.some((s) => s.appointmentId === Number(appointmentId))
+        ? completedServices.some((s) => String(s.appointmentId) === String(appointmentId))
         : false;
     },
     [completedServices]
@@ -623,7 +625,12 @@ export function OperationsProvider({ children }) {
         return false;
       }
 
-      const aptIdNum = appointmentId !== undefined && appointmentId !== null ? Number(appointmentId) : null;
+      const aptIdClean =
+        appointmentId !== undefined && appointmentId !== null
+          ? (typeof appointmentId === 'number' || !isNaN(Number(appointmentId))
+              ? Number(appointmentId)
+              : String(appointmentId))
+          : null;
 
       const matchedRuleConfig = consumptionRules.find(
         (r) => r.serviceName.toLowerCase() === service?.toLowerCase()
@@ -645,7 +652,7 @@ export function OperationsProvider({ children }) {
                 quantity: rule.quantity,
                 unit: p.unit,
                 date: date || 'Today',
-                appointmentId: aptIdNum,
+                appointmentId: aptIdClean,
               });
               return {
                 ...p,
@@ -666,7 +673,7 @@ export function OperationsProvider({ children }) {
                 quantity: 1,
                 unit: p.unit,
                 date: date || 'Today',
-                appointmentId: aptIdNum,
+                appointmentId: aptIdClean,
               });
               return {
                 ...p,
@@ -727,9 +734,19 @@ export function OperationsProvider({ children }) {
 
       const record = {
         id: completedServices.length + 1,
-        appointmentId: appointmentId !== undefined && appointmentId !== null ? Number(appointmentId) : null,
+        appointmentId:
+          appointmentId !== undefined && appointmentId !== null
+            ? (typeof appointmentId === 'number' || !isNaN(Number(appointmentId))
+                ? Number(appointmentId)
+                : String(appointmentId))
+            : null,
         appointmentServiceId: svcKey,
-        clientId: Number(clientId),
+        clientId:
+          clientId !== undefined && clientId !== null
+            ? (typeof clientId === 'number' || !isNaN(Number(clientId))
+                ? Number(clientId)
+                : String(clientId))
+            : null,
         clientName,
         service,
         technician,

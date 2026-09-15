@@ -949,13 +949,6 @@ export default function Dashboard() {
             >
               {managerShowAllIntroduced ? 'Hide Clients' : 'View Introduced Clients'}
             </button>
-            <button
-              onClick={() => setShowAcquisitionModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-[10px] bg-sage hover:bg-sage-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-[0.98]"
-            >
-              <Plus size={15} strokeWidth={2.5} />
-              Add Client
-            </button>
           </div>
         </div>
 
