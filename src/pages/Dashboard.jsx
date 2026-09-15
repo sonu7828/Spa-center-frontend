@@ -137,7 +137,7 @@ export default function Dashboard() {
         a.date === todayStr &&
         a.status !== 'cancelled' &&
         (a.technicianName?.toLowerCase() === user?.name?.toLowerCase() ||
-          Number(a.technicianId) === Number(user?.id))
+          String(a.technicianId) === String(user?.id))
     )
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
@@ -154,14 +154,14 @@ export default function Dashboard() {
   const myIntroducedClients = clients.filter(
     (c) =>
       c.introducedBy?.toLowerCase() === user?.name?.toLowerCase() ||
-      Number(c.introducedById) === Number(user?.id)
+      String(c.introducedById) === String(user?.id)
   );
 
   // Current user's created/introduced appointments
   const myIntroducedAppointments = appointments.filter(
     (a) =>
       a.introducedBy?.toLowerCase() === user?.name?.toLowerCase() ||
-      Number(a.introducedById) === Number(user?.id)
+      String(a.introducedById) === String(user?.id)
   );
 
   // Active technicians for manager summary
@@ -177,12 +177,12 @@ export default function Dashboard() {
     const introducedClients = clients.filter(
       (c) =>
         c.introducedBy?.toLowerCase() === tech.name.toLowerCase() ||
-        Number(c.introducedById) === Number(tech.id)
+        String(c.introducedById) === String(tech.id)
     );
     const createdAppts = appointments.filter(
       (a) =>
         a.introducedBy?.toLowerCase() === tech.name.toLowerCase() ||
-        Number(a.introducedById) === Number(tech.id)
+        String(a.introducedById) === String(tech.id)
     );
     const commSummary = getEmployeeCommissionSummary(tech.name);
     return {

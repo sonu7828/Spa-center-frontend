@@ -95,7 +95,7 @@ export default function AppointmentCalendar() {
   const visibleTechnicians =
     selectedTechFilter === 'all' || isTechnician
       ? availableTechnicians
-      : availableTechnicians.filter((t) => t.id === Number(selectedTechFilter));
+      : availableTechnicians.filter((t) => String(t.id) === String(selectedTechFilter));
 
   // Reception/Manager can create appointments; technician cannot
   const canCreateAppointment = user?.role === 'manager' || user?.role === 'reception';
