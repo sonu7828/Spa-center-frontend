@@ -93,6 +93,7 @@ export default function Staff() {
       setSpecialtyError('');
       await deleteSpecialty(id);
       setConfirmDeleteSpecId(null);
+      if (refreshUsers) await refreshUsers();
     } catch (err) {
       setSpecialtyError(err.message || 'Failed to delete specialty.');
     }
@@ -122,12 +123,29 @@ export default function Staff() {
 
   const openEditModal = (u) => {
     setEditingUser(u);
+
+    // Normalize specialties:
+    // If active specialties has 'Body Massage' and user has 'Massage', map to 'Body Massage'
+    // Filter against active specialties to prevent orphaned/ghost selections
+    const activeNames = activeSpecialties.map((s) => s.name);
+    const rawSpecs = Array.isArray(u.specialties) ? u.specialties : [];
+    const mappedSpecs = rawSpecs.map((s) => {
+      if (s === 'Massage' && activeNames.some((n) => n.toLowerCase() === 'body massage')) {
+        return activeNames.find((n) => n.toLowerCase() === 'body massage');
+      }
+      return s;
+    });
+
+    const validSpecs = mappedSpecs
+      .map((s) => activeNames.find((n) => n.toLowerCase() === s.toLowerCase()))
+      .filter(Boolean);
+
     setForm({
       name: u.name,
       username: u.username || u.email?.split('@')[0] || '',
       role: u.role,
       password: '',
-      specialties: u.specialties || [],
+      specialties: Array.from(new Set(validSpecs)),
     });
     setFormError('');
     setShowPw(false);
@@ -249,6 +267,7 @@ export default function Staff() {
       await editSpecialty(id, trimmed);
       setEditingSpecId(null);
       setEditingSpecName('');
+      if (refreshUsers) await refreshUsers();
     } catch (err) {
       setSpecialtyError(err.message || 'Failed to update specialty.');
     }
@@ -442,14 +461,17 @@ export default function Staff() {
                   <td className="px-5 py-3.5">
                     {u.specialties?.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {u.specialties.map((s) => (
-                          <span
-                            key={s}
-                            className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-soft-cream text-charcoal border border-border"
-                          >
-                            {s}
-                          </span>
-                        ))}
+                        {u.specialties.map((s) => {
+                          const displayName = s === 'Massage' ? 'Body Massage' : s;
+                          return (
+                            <span
+                              key={displayName}
+                              className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-soft-cream text-charcoal border border-border"
+                            >
+                              {displayName}
+                            </span>
+                          );
+                        })}
                       </div>
                     ) : (
                       <span className="text-sm text-muted-gray">—</span>
@@ -502,14 +524,17 @@ export default function Staff() {
 
               {u.specialties?.length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {u.specialties.map((s) => (
-                    <span
-                      key={s}
-                      className="inline-block px-2 py-0.5 rounded-[5px] text-[10px] font-medium bg-soft-cream text-charcoal border border-border"
-                    >
-                      {s}
-                    </span>
-                  ))}
+                  {u.specialties.map((s) => {
+                    const displayName = s === 'Massage' ? 'Body Massage' : s;
+                    return (
+                      <span
+                        key={displayName}
+                        className="inline-block px-2 py-0.5 rounded-[5px] text-[10px] font-medium bg-soft-cream text-charcoal border border-border"
+                      >
+                        {displayName}
+                      </span>
+                    );
+                  })}
                 </div>
               )}
 

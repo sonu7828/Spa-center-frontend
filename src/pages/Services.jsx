@@ -22,6 +22,7 @@ const categoryBadgeStyles = {
   Nails: 'bg-dusty-rose-soft text-dusty-rose border-dusty-rose/20',
   Facial: 'bg-[#E8EFF8] text-[#4A6B8A] border-[#4A6B8A]/20',
   Massage: 'bg-sage-soft text-sage border-sage/20',
+  'Body Massage': 'bg-sage-soft text-sage border-sage/20',
 };
 
 export default function Services() {

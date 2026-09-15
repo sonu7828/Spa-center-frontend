@@ -18,7 +18,7 @@ export const DEMO_USERS = [
   { id: 'mgr-1', name: 'Manager',   email: 'manager@gmail.com',   username: 'manager',   role: 'manager',    specialties: [], active: true },
   { id: 'rec-1', name: 'Reception', email: 'reception@gmail.com', username: 'reception', role: 'reception',  specialties: [], active: true },
   { id: 'tech-1', name: 'Amina',     email: 'amina@gmail.com',     username: 'amina',     role: 'technician', specialties: ['Nails'], active: true },
-  { id: 'tech-2', name: 'Bella',     email: 'bella@gmail.com',     username: 'bella',     role: 'technician', specialties: ['Facial', 'Massage'], active: true },
+  { id: 'tech-2', name: 'Bella',     email: 'bella@gmail.com',     username: 'bella',     role: 'technician', specialties: ['Facial', 'Body Massage'], active: true },
   { id: 'cln-1', name: 'Sarah',     email: 'cleaner@gmail.com',   username: 'cleaner',   role: 'cleaner',    specialties: [], active: true },
 ];
 
@@ -125,11 +125,13 @@ export function AuthProvider({ children }) {
           email: u.email || '',
           username: u.username || u.phone || u.email?.split('@')[0] || '',
           role: (u.role?.name || u.role || 'technician').toLowerCase(),
-          specialties: Array.isArray(u.specialties)
-            ? u.specialties
-            : Array.isArray(u.staffProfile?.specialties)
-            ? u.staffProfile.specialties
-            : [],
+          specialties: (
+            Array.isArray(u.specialties)
+              ? u.specialties
+              : Array.isArray(u.staffProfile?.specialties)
+              ? u.staffProfile.specialties
+              : []
+          ).map((s) => (s === 'Massage' ? 'Body Massage' : s)),
           active: u.isActive !== undefined ? u.isActive : u.active !== false,
         }));
         setAllUsers(normalized);
