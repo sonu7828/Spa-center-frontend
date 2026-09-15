@@ -123,7 +123,8 @@ export function formatBackendClient(c) {
 }
 
 export function ClientsProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const isManager = user?.role === 'manager' || user?.role === 'MANAGER';
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -138,55 +139,44 @@ export function ClientsProvider({ children }) {
     try {
       setLoading(true);
       setError(null);
-      const res = await clientsApi.getAll({ limit: 500, status: 'ALL' });
-      const apiList = res?.data || [];
-      if (Array.isArray(apiList)) {
-        const formattedApiList = apiList.map(formatBackendClient).filter(Boolean);
-        setClients(formattedApiList);
+      const res = await clientsApi.getAll({ limit: 100, isActive: 'all' });
+      const backendClients = res?.data || [];
+      if (Array.isArray(backendClients)) {
+        const formatted = backendClients.map(formatBackendClient);
+        setClients(formatted);
       }
     } catch (err) {
-      console.warn('Backend clients fetch error:', err.message);
-      setError(err.message || 'Unable to connect to server');
+      console.warn('Backend clients fetch error, using local fallback:', err.message);
+      setError(err.message || 'Failed to connect to backend server');
     } finally {
       setLoading(false);
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      refreshClients();
-    } else {
-      setClients([]);
-      setLoading(false);
-    }
-  }, [isAuthenticated, refreshClients]);
+    refreshClients();
+  }, [refreshClients]);
 
   const getClient = useCallback(
     (id) => {
       if (!id) return null;
-      return clients.find(
-        (c) =>
-          c.id === id ||
-          String(c.id) === String(id) ||
-          (typeof c.id === 'number' && Number(c.id) === Number(id))
+      return (
+        clients.find((c) => String(c.id) === String(id) || String(c.phone) === String(id)) ||
+        null
       );
     },
     [clients]
   );
 
   const fetchClientFull = useCallback(async (id) => {
+    if (!id) return null;
     try {
       const res = await clientsApi.getById(id);
-      const data = res?.data;
-      if (data) {
-        const formatted = formatBackendClient(data);
-        setClients((prev) =>
-          prev.map((c) => (String(c.id) === String(id) ? { ...c, ...formatted } : c))
-        );
-        return formatted;
+      if (res?.data) {
+        return formatBackendClient(res.data);
       }
     } catch (err) {
-      console.warn('Failed to fetch full client details:', err.message);
+      console.warn('Could not fetch full client from backend:', err.message);
     }
     return null;
   }, []);
@@ -199,6 +189,12 @@ export function ClientsProvider({ children }) {
         year: 'numeric',
       });
 
+      // Manager client creation: strictly normal DIRECT client with no referral attribution
+      const isClientFromManager =
+        isManager ||
+        clientData.source === 'DIRECT' ||
+        (clientData.clientSource === 'Direct' && !clientData.introducedBy);
+
       // Try backend creation first
       try {
         const payload = {
@@ -208,20 +204,33 @@ export function ClientsProvider({ children }) {
           quartier: (clientData.quartier || '').trim() || null,
           birthday: clientData.birthday || null,
           anniversary: clientData.anniversary || null,
-          source: clientData.source || (clientData.introducedBy ? 'STAFF_REFERRAL' : 'DIRECT'),
-          introducedByEmployeeId: clientData.introducedById && typeof clientData.introducedById === 'string' && clientData.introducedById.includes('-')
-            ? clientData.introducedById
-            : null,
-          recommendedByName: clientData.recommendedBy?.name || null,
-          recommendedByPhone: clientData.recommendedBy?.phone || null,
+          source: isClientFromManager
+            ? 'DIRECT'
+            : clientData.source || (clientData.introducedBy ? 'STAFF_REFERRAL' : 'DIRECT'),
+          introducedByEmployeeId:
+            !isClientFromManager &&
+            clientData.introducedById &&
+            typeof clientData.introducedById === 'string' &&
+            clientData.introducedById.includes('-')
+              ? clientData.introducedById
+              : null,
+          recommendedByName: isClientFromManager ? null : clientData.recommendedBy?.name || null,
+          recommendedByPhone: isClientFromManager ? null : clientData.recommendedBy?.phone || null,
         };
 
         const res = await clientsApi.create(payload);
         const created = res?.data;
         if (created && created.id) {
           const formatted = formatBackendClient(created);
-          // Retain client-provided extra properties
-          if (clientData.introducedBy) formatted.introducedBy = clientData.introducedBy;
+          // Retain client-provided extra properties (only for eligible non-manager staff)
+          if (!isClientFromManager && clientData.introducedBy) {
+            formatted.introducedBy = clientData.introducedBy;
+          }
+          if (isClientFromManager) {
+            formatted.introducedBy = null;
+            formatted.introducedById = null;
+            formatted.clientSource = 'Direct';
+          }
           if (clientData.firstAppointmentService) formatted.firstAppointmentService = clientData.firstAppointmentService;
           setClients((prev) => [formatted, ...prev]);
           return formatted.id;
@@ -242,17 +251,22 @@ export function ClientsProvider({ children }) {
         quartier: clientData.quartier || '',
         birthday: clientData.birthday || '',
         anniversary: clientData.anniversary || '',
-        recommendedBy: clientData.recommendedBy
+        recommendedBy: isClientFromManager
+          ? null
+          : clientData.recommendedBy
           ? {
               name: clientData.recommendedBy.name || '',
               phone: clientData.recommendedBy.phone || '',
               date: clientData.recommendedBy.date || today,
             }
           : null,
-        introducedBy: clientData.introducedBy || null,
-        introducedById: clientData.introducedById || null,
+        introducedBy: isClientFromManager ? null : clientData.introducedBy || null,
+        introducedById: isClientFromManager ? null : clientData.introducedById || null,
         firstAppointmentService: clientData.firstAppointmentService || null,
-        clientSource: clientData.clientSource || (clientData.introducedBy ? 'Staff Referral' : 'Direct'),
+        clientSource: isClientFromManager
+          ? 'Direct'
+          : clientData.clientSource || (clientData.introducedBy ? 'Staff Referral' : 'Direct'),
+        source: isClientFromManager ? 'DIRECT' : clientData.source || (clientData.introducedBy ? 'STAFF_REFERRAL' : 'DIRECT'),
         lastService: clientData.firstAppointmentService || '—',
         lastVisit: '—',
         status: 'ACTIVE',
@@ -265,7 +279,7 @@ export function ClientsProvider({ children }) {
       setClients((prev) => [newClient, ...prev]);
       return newId;
     },
-    [clients]
+    [clients, isManager]
   );
 
   const updateClient = useCallback(async (id, updates) => {

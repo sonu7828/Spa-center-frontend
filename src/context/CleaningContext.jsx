@@ -13,12 +13,19 @@ import { useAuth } from './AuthContext';
 const CleaningContext = createContext();
 
 export function CleaningProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const role = (user?.role || '').toLowerCase();
+  const canAccessCleaning = isAuthenticated && (role === 'cleaner' || role === 'manager');
+
   const refreshRecords = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!canAccessCleaning) {
+      setRecords([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const res = await mediaApi.getCleaningRecords();
@@ -26,11 +33,13 @@ export function CleaningProvider({ children }) {
         setRecords(res.data);
       }
     } catch (err) {
-      console.warn('Could not fetch persistent cleaning records:', err.message);
+      if (err?.status !== 403) {
+        console.warn('Could not fetch persistent cleaning records:', err.message);
+      }
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [canAccessCleaning]);
 
   useEffect(() => {
     refreshRecords();

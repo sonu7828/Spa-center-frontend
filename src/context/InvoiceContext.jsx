@@ -728,7 +728,9 @@ export function InvoiceProvider({ children }) {
     ({ appointmentId, clientId, clientName, items }) => {
       const targetAptId =
         appointmentId !== undefined && appointmentId !== null
-          ? Number(appointmentId)
+          ? (typeof appointmentId === 'number' || !isNaN(Number(appointmentId))
+              ? Number(appointmentId)
+              : String(appointmentId))
           : null;
 
       if (!targetAptId) {
@@ -764,8 +766,8 @@ export function InvoiceProvider({ children }) {
       setInvoices((prev) => {
         const existingIdx = prev.findIndex(
           (inv) =>
-            inv.appointmentId === targetAptId ||
-            inv.items?.some((it) => it.appointmentId === targetAptId)
+            String(inv.appointmentId) === String(targetAptId) ||
+            inv.items?.some((it) => String(it.appointmentId) === String(targetAptId))
         );
 
         if (existingIdx >= 0) {
@@ -811,11 +813,133 @@ export function InvoiceProvider({ children }) {
           submittedAt: new Date().toISOString(),
         };
 
-        return [...prev, newInvoice];
+        return [newInvoice, ...prev];
       });
+
       return true;
     },
     []
+  );
+
+  // Submit completed single-technician appointment invoice to Reception
+  const submitAppointmentInvoice = useCallback(
+    async ({ appointmentId, clientId, clientName, items, total, introducedBy, introducedById }) => {
+      const targetAptId =
+        appointmentId !== undefined && appointmentId !== null
+          ? String(appointmentId)
+          : null;
+      const today = new Date().toISOString().slice(0, 10);
+      const isBackendApt = Boolean(targetAptId && targetAptId.includes('-'));
+
+      // 1. Try Backend Invoice Creation if UUID
+      if (isBackendApt) {
+        try {
+          const res = await invoicesApi.create({
+            appointmentId: targetAptId,
+            discount: 0,
+            status: 'PENDING_PAYMENT',
+          });
+          if (res?.data && res.data.id) {
+            const formatted = formatBackendInvoice(res.data);
+            setInvoices((prev) => [
+              formatted,
+              ...prev.filter((i) => String(i.id) !== String(formatted.id)),
+            ]);
+            return formatted.id;
+          }
+        } catch (err) {
+          console.warn('Backend invoice creation note:', err.message);
+          if (err.status === 409 || err.message?.includes('already exists')) {
+            refreshInvoices();
+          }
+        }
+      }
+
+      // 2. Prepare standardized invoice items
+      const cleanItems = (items || []).map((it, idx) => ({
+        id: it.id || `item-${Date.now()}-${idx}`,
+        appointmentServiceId: it.appointmentServiceId || `asvc-${Date.now()}-${idx}`,
+        serviceId: it.serviceId || null,
+        service: it.service || 'Service',
+        technician: it.technician || 'Technician',
+        technicianId: it.technicianId || null,
+        product: it.product || null,
+        price:
+          typeof it.price === 'number'
+            ? it.price
+            : parseInt(String(it.price || '0').replace(/[^0-9]/g, ''), 10) || 15000,
+        appointmentId: targetAptId,
+      }));
+
+      const finalTotalNum =
+        typeof total === 'number'
+          ? total
+          : cleanItems.reduce((sum, it) => sum + it.price, 0);
+
+      // 3. Update or insert into local state with PENDING_PAYMENT status
+      setInvoices((prev) => {
+        const existingIdx = targetAptId
+          ? prev.findIndex(
+              (inv) =>
+                String(inv.appointmentId) === String(targetAptId) ||
+                inv.items?.some((it) => String(it.appointmentId) === String(targetAptId))
+            )
+          : -1;
+
+        if (existingIdx >= 0) {
+          const existing = prev[existingIdx];
+          if (existing.status === 'PAID') return prev;
+
+          const updated = [...prev];
+          updated[existingIdx] = {
+            ...existing,
+            appointmentId: targetAptId,
+            clientId: clientId || existing.clientId || null,
+            clientName: clientName || existing.clientName || 'Client',
+            items: cleanItems.length > 0 ? cleanItems : existing.items,
+            total: finalTotalNum,
+            finalTotal: finalTotalNum,
+            remainingAmount: finalTotalNum,
+            status: 'PENDING_PAYMENT',
+            submittedAt: new Date().toISOString(),
+            introducedBy: existing.introducedBy || introducedBy || null,
+            introducedById: existing.introducedById || introducedById || null,
+          };
+          return updated;
+        }
+
+        const newId = 'inv-' + Date.now();
+        const newInvoice = {
+          id: newId,
+          invoiceNumber: formatInvoiceNumber(Date.now()),
+          appointmentId: targetAptId,
+          clientId: clientId || null,
+          clientName: clientName || 'Client Visit',
+          status: 'PENDING_PAYMENT',
+          date: today,
+          items: cleanItems,
+          total: finalTotalNum,
+          finalTotal: finalTotalNum,
+          paidAmount: 0,
+          remainingAmount: finalTotalNum,
+          discount: 0,
+          paymentMethod: null,
+          paidAt: null,
+          paidTime: null,
+          payments: [],
+          pointsEarned: 0,
+          pointsRedeemed: 0,
+          createdAt: new Date().toISOString(),
+          submittedAt: new Date().toISOString(),
+          introducedBy: introducedBy || null,
+          introducedById: introducedById || null,
+        };
+        return [newInvoice, ...prev];
+      });
+
+      return true;
+    },
+    [refreshInvoices]
   );
 
   return (
@@ -829,6 +953,7 @@ export function InvoiceProvider({ children }) {
         createOrAddToInvoice,
         submitInvoice,
         submitInvoiceByClient,
+        submitAppointmentInvoice,
         markInvoicePaid,
         recordPartialPayment,
         getInvoice,

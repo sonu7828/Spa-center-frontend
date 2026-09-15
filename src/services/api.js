@@ -193,6 +193,11 @@ export const appointmentsApi = {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
+  changeStatus: (id, data) =>
+    apiRequest('/appointments/' + id + '/status', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
   reschedule: (id, data) =>
     apiRequest('/appointments/' + id + '/reschedule', {
       method: 'PATCH',

@@ -32,6 +32,7 @@ import { useServices } from '../context/ServicesContext';
 
 export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
   const { user, allUsers } = useAuth();
+  const isManager = user?.role === 'manager' || user?.role === 'MANAGER';
   const { addClient } = useClients();
   const { addAppointment } = useAppointments();
   const { getActiveServices } = useServices();
@@ -75,7 +76,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
     return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -115,14 +116,15 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       (s) => s.name === interestedService
     );
 
-    // 1. Add client to ClientsContext with acquisition tracking
-    const newClientId = addClient({
+    // 1. Add client to ClientsContext with acquisition tracking (disabled for Manager)
+    const newClientId = await addClient({
       name: trimmedName,
       phone: trimmedPhone,
-      introducedBy: user?.name || 'Staff',
-      introducedById: user?.id || null,
+      introducedBy: isManager ? null : (user?.name || 'Staff'),
+      introducedById: isManager ? null : (user?.id || null),
       firstAppointmentService: interestedService,
-      clientSource: 'Staff Referral',
+      clientSource: isManager ? 'Direct' : 'Staff Referral',
+      source: isManager ? 'DIRECT' : undefined,
     });
 
     // 2. Create appointment in AppointmentsContext with acquisition tracking
@@ -149,8 +151,8 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       technicianId: Number(assignedTech.id),
       technicianName: assignedTech.name,
       status: 'scheduled',
-      introducedBy: user?.name || 'Staff',
-      introducedById: user?.id || null,
+      introducedBy: isManager ? null : (user?.name || 'Staff'),
+      introducedById: isManager ? null : (user?.id || null),
     });
 
     onSuccess?.({
@@ -181,7 +183,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
             </div>
             <div>
               <h3 className="text-sm font-bold text-charcoal">Add New Client & Book</h3>
-              <p className="text-[10px] text-muted-gray">Client Acquisition & Appointment</p>
+              <p className="text-[10px] text-muted-gray">{isManager ? 'Client & Appointment' : 'Client Acquisition & Appointment'}</p>
             </div>
           </div>
           <button
@@ -201,23 +203,25 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
             </div>
           )}
 
-          {/* Auto-filled Introduced By Employee Banner */}
-          <div className="bg-sage-soft/70 rounded-[10px] border border-sage/25 p-2.5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <UserCheck size={14} className="text-sage-hover shrink-0" />
-              <div>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-gray block">
-                  Introduced By
-                </span>
-                <span className="text-xs font-bold text-charcoal">
-                  {user?.name || 'Staff'} <span className="text-muted-gray font-normal">({user?.role})</span>
-                </span>
+          {/* Auto-filled Introduced By Employee Banner (Hidden for Manager) */}
+          {!isManager && (
+            <div className="bg-sage-soft/70 rounded-[10px] border border-sage/25 p-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UserCheck size={14} className="text-sage-hover shrink-0" />
+                <div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted-gray block">
+                    Introduced By
+                  </span>
+                  <span className="text-xs font-bold text-charcoal">
+                    {user?.name || 'Staff'} <span className="text-muted-gray font-normal">({user?.role})</span>
+                  </span>
+                </div>
               </div>
+              <span className="text-[9px] font-bold text-sage-hover bg-white px-2 py-0.5 rounded-[5px] border border-sage/20">
+                ✓ Auto-filled
+              </span>
             </div>
-            <span className="text-[9px] font-bold text-sage-hover bg-white px-2 py-0.5 rounded-[5px] border border-sage/20">
-              ✓ Auto-filled
-            </span>
-          </div>
+          )}
 
           {/* Client Name */}
           <div>

@@ -42,7 +42,13 @@ export default function CloseService() {
   const { isAppointmentClosed, deductServiceStock } = useOperations();
   const { getClientLoyalty, calculateEarnedPoints } = useLoyalty();
   const { getActiveServices } = useServices();
-  const { createOrAddToInvoice, submitInvoiceByClient, isAppointmentInvoiced, getInvoiceByAppointment } = useInvoices();
+  const {
+    createOrAddToInvoice,
+    submitInvoiceByClient,
+    submitAppointmentInvoice,
+    isAppointmentInvoiced,
+    getInvoiceByAppointment,
+  } = useInvoices();
 
   const activeServices = getActiveServices ? getActiveServices() : [];
   const apt = getAppointment(id);
@@ -80,6 +86,7 @@ export default function CloseService() {
   const [serviceNotes, setServiceNotes] = useState('');
   const [attachedPhotoUrl, setAttachedPhotoUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
 
   // Total amount for this visit
   const totalVisitPrice = servicesList.reduce((sum, s) => {
@@ -126,75 +133,96 @@ export default function CloseService() {
   const handleSubmitInvoice = async () => {
     if (alreadyClosed || alreadyInvoiced || submittedSuccess || servicesList.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
+    setSubmitError(null);
 
-    // Call backend service completion for any UUID service lines
-    for (const svc of servicesList) {
-      if (svc.appointmentServiceId && typeof svc.appointmentServiceId === 'string' && svc.appointmentServiceId.includes('-') && !svc.appointmentServiceId.startsWith('asvc-')) {
+    try {
+      const isBackendApt = typeof id === 'string' && id.includes('-');
+
+      // 1. If appointment is SCHEDULED or LATE on backend, transition to IN_PROGRESS
+      // so backend completeService and invoice creation accept the appointment
+      if (isBackendApt && apt.status !== 'in-progress' && apt.status !== 'in_progress') {
         try {
-          const mediaPayload = attachedPhotoUrl ? [{ mediaType: 'AFTER', fileUrl: attachedPhotoUrl, note: svc.name }] : [];
-          await appointmentsApi.completeService(svc.appointmentServiceId, {
-            notes: serviceNotes.trim() || `Completed ${svc.name}`,
-            media: mediaPayload,
-          });
-        } catch (err) {
-          console.warn('Backend completeService call error:', err.message);
+          await appointmentsApi.updateStatus(id, { status: 'IN_PROGRESS' });
+        } catch (statusErr) {
+          console.warn('Could not pre-transition appointment to IN_PROGRESS:', statusErr.message);
         }
       }
-    }
 
-    // Add every performed service to the SAME combined invoice
-    servicesList.forEach((svc) => {
-      const svcPrice = pricesByServiceId[svc.appointmentServiceId] !== undefined
-        ? pricesByServiceId[svc.appointmentServiceId]
-        : (typeof svc.price === 'number' ? svc.price : parseInt(String(svc.price || '0').replace(/[^0-9]/g, ''), 10) || 15000);
+      // 2. Call backend service completion for any UUID service lines
+      for (const svc of servicesList) {
+        if (svc.appointmentServiceId && typeof svc.appointmentServiceId === 'string' && svc.appointmentServiceId.includes('-') && !svc.appointmentServiceId.startsWith('asvc-')) {
+          try {
+            const mediaPayload = attachedPhotoUrl ? [{ mediaType: 'AFTER', fileUrl: attachedPhotoUrl, note: svc.name }] : [];
+            await appointmentsApi.completeService(svc.appointmentServiceId, {
+              notes: serviceNotes.trim() || `Completed ${svc.name}`,
+              media: mediaPayload,
+            });
+          } catch (err) {
+            console.warn('Backend completeService call error:', err.message);
+          }
+        }
+      }
 
-      createOrAddToInvoice({
-        clientId: targetClientId,
-        clientName: apt.clientName,
-        item: {
-          appointmentId: Number(id),
+      // 3. Automatically trigger service stock deduction per service via consumption rules
+      if (deductServiceStock) {
+        servicesList.forEach((svc) => {
+          deductServiceStock({
+            appointmentId: id,
+            appointmentServiceId: svc.appointmentServiceId,
+            service: svc.name,
+            date: 'Today',
+          });
+        });
+      }
+
+      // 4. Submit the combined invoice (status: PENDING_PAYMENT)
+      const invoiceItems = servicesList.map((svc) => {
+        const svcPrice = pricesByServiceId[svc.appointmentServiceId] !== undefined
+          ? pricesByServiceId[svc.appointmentServiceId]
+          : (typeof svc.price === 'number' ? svc.price : parseInt(String(svc.price || '0').replace(/[^0-9]/g, ''), 10) || 15000);
+        return {
+          appointmentId: id,
           appointmentServiceId: svc.appointmentServiceId,
           service: svc.name,
           serviceId: svc.serviceId || null,
           technician: apt.technicianName,
           technicianId: apt.technicianId,
           price: svcPrice,
-        },
+        };
+      });
+
+      await submitAppointmentInvoice({
+        appointmentId: id,
+        clientId: targetClientId,
+        clientName: apt.clientName,
+        items: invoiceItems,
+        total: totalVisitPrice,
         introducedBy: apt.introducedBy || linkedClient?.introducedBy || null,
         introducedById: apt.introducedById || linkedClient?.introducedById || null,
       });
 
-      // Automatically trigger service stock deduction per service via consumption rules (Idempotent per appointmentServiceId)
-      if (deductServiceStock) {
-        deductServiceStock({
-          appointmentId: Number(id),
-          appointmentServiceId: svc.appointmentServiceId,
-          service: svc.name,
-          date: 'Today',
-        });
-      }
-    });
+      // 5. Mark appointment as service-completed (not payment-completed)
+      await updateAppointment(id, {
+        status: 'completed',
+        services: servicesList.map((svc) => ({
+          ...svc,
+          price:
+            pricesByServiceId[svc.appointmentServiceId] !== undefined
+              ? pricesByServiceId[svc.appointmentServiceId]
+              : (typeof svc.price === 'number'
+                  ? svc.price
+                  : parseInt(String(svc.price || '0').replace(/[^0-9]/g, ''), 10) || 15000),
+        })),
+        service: servicesList.map((s) => s.name).join(', '),
+      });
 
-    // Submit invoice to reception (specifically for this appointment visit)
-    submitInvoiceByClient(targetClientId, apt.clientName, apt.id);
-
-    // Mark appointment as service-completed (not payment-completed)
-    updateAppointment(id, {
-      status: 'completed',
-      services: servicesList.map((svc) => ({
-        ...svc,
-        price:
-          pricesByServiceId[svc.appointmentServiceId] !== undefined
-            ? pricesByServiceId[svc.appointmentServiceId]
-            : (typeof svc.price === 'number'
-                ? svc.price
-                : parseInt(String(svc.price || '0').replace(/[^0-9]/g, ''), 10) || 15000),
-      })),
-      service: servicesList.map((s) => s.name).join(', '),
-    });
-
-    setSubmittedSuccess(true);
-    setIsSubmitting(false);
+      setSubmittedSuccess(true);
+    } catch (err) {
+      console.error('Failed to submit invoice to reception:', err);
+      setSubmitError(err.message || 'Failed to submit invoice to Reception. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Already invoiced or closed — show confirmation
@@ -299,6 +327,15 @@ export default function CloseService() {
             >
               Calendar
             </Button>
+            {user?.role === 'technician' && (
+              <Button
+                variant="secondary"
+                onClick={() => navigate('/technicians/daily')}
+                className="w-full sm:w-auto h-10 text-xs sm:text-sm"
+              >
+                My Daily Summary
+              </Button>
+            )}
             <Button
               variant="primary"
               onClick={() => navigate(`/clients/${targetClientId}`)}
@@ -536,6 +573,13 @@ export default function CloseService() {
             {user?.role === 'technician' && ' You will not handle payment.'}
           </span>
         </div>
+
+        {/* Error message banner */}
+        {submitError && (
+          <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-[12px] text-xs text-rose-700 font-medium">
+            {submitError}
+          </div>
+        )}
 
         {/* Action Buttons — Single-Tech Submit OR Switch to Shared Work */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 border-t border-border/50">
