@@ -75,20 +75,25 @@ export default function CreateAppointment() {
       category: s.category || '',
     }));
 
-    addAppointment({
-      clientId: form.clientId,
-      clientName: selectedClient?.name || '',
-      services: servicesData,
-      service: servicesData.map((s) => s.name).join(', '),
-      category: selectedServices[0]?.category || '',
-      technicianId: form.technicianId,
-      technicianName: selectedTech?.name || '',
-      date: form.date,
-      time: form.time,
-    });
+    try {
+      await addAppointment({
+        clientId: form.clientId,
+        clientName: selectedClient?.name || '',
+        services: servicesData,
+        service: servicesData.map((s) => s.name).join(', '),
+        category: selectedServices[0]?.category || '',
+        technicianId: form.technicianId,
+        technicianName: selectedTech?.name || '',
+        date: form.date,
+        time: form.time,
+      });
 
-    setSaved(true);
-    setTimeout(() => navigate('/appointments'), 1200);
+      setSaved(true);
+      setTimeout(() => navigate('/appointments'), 1200);
+    } catch (err) {
+      console.error('Failed to create appointment:', err);
+      setIsSaving(false);
+    }
   };
 
   if (saved) {

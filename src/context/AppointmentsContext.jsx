@@ -94,7 +94,7 @@ export function AppointmentsProvider({ children }) {
     try {
       setLoading(true);
       setError(null);
-      const res = await appointmentsApi.getAll({ limit: 100 });
+      const res = await appointmentsApi.getAll({ limit: 500 });
       const apiList = res?.data || [];
       if (Array.isArray(apiList)) {
         const formattedApiList = apiList.map(formatBackendAppointment).filter(Boolean);
@@ -164,11 +164,9 @@ export function AppointmentsProvider({ children }) {
           const res = await appointmentsApi.create(payload);
           const created = res?.data;
           if (created && created.id) {
-            const formatted = formatBackendAppointment(created);
-            if (data.clientName) formatted.clientName = data.clientName;
-            if (data.technicianName) formatted.technicianName = data.technicianName;
-            setAppointments((prev) => [formatted, ...prev]);
-            return formatted.id;
+            // Full refresh from backend to ensure calendar sync
+            await refreshAppointments();
+            return created.id;
           }
         }
       } catch (err) {
@@ -199,7 +197,7 @@ export function AppointmentsProvider({ children }) {
       setAppointments((prev) => [apt, ...prev]);
       return newId;
     },
-    [appointments]
+    [appointments, refreshAppointments]
   );
 
   const getAppointment = useCallback(
