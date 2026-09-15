@@ -18,10 +18,13 @@ import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import { useClients } from '../context/ClientsContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function AddClient() {
   const navigate = useNavigate();
   const { clients, addClient } = useClients();
+  const { user } = useAuth();
+  const isManager = user?.role === 'manager' || user?.role === 'MANAGER';
 
   const [form, setForm] = useState({
     name: '',
@@ -36,8 +39,9 @@ export default function AddClient() {
   const update = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-  // Simple referral detection for UI demonstration
+  // Simple referral detection for UI demonstration (only active when not manager)
   const referralFound =
+    !isManager &&
     form.recommendedByName.trim().length > 0 &&
     clients.some((c) =>
       c.name.toLowerCase().includes(form.recommendedByName.toLowerCase())
@@ -53,30 +57,33 @@ export default function AddClient() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-    // Build recommendedBy as { name, phone } if provided
-    let recommendedBy = null;
-    if (matchedReferrer) {
-      recommendedBy = {
-        name: matchedReferrer.name,
-        phone: matchedReferrer.phone,
-      };
-    } else if (form.recommendedByName.trim()) {
-      recommendedBy = {
-        name: form.recommendedByName.trim(),
-        phone: form.recommendedByPhone.trim() || '',
-      };
-    }
+      // Build recommendedBy as { name, phone } if provided by non-manager
+      let recommendedBy = null;
+      if (!isManager) {
+        if (matchedReferrer) {
+          recommendedBy = {
+            name: matchedReferrer.name,
+            phone: matchedReferrer.phone,
+          };
+        } else if (form.recommendedByName.trim()) {
+          recommendedBy = {
+            name: form.recommendedByName.trim(),
+            phone: form.recommendedByPhone.trim() || '',
+          };
+        }
+      }
 
-    const newId = await addClient({
-      name: form.name,
-      phone: form.phone,
-      quartier: form.quartier,
-      birthday: form.birthday,
-      anniversary: form.anniversary,
-      recommendedBy,
-    });
+      const newId = await addClient({
+        name: form.name,
+        phone: form.phone,
+        quartier: form.quartier,
+        birthday: form.birthday,
+        anniversary: form.anniversary,
+        recommendedBy,
+        source: isManager ? 'DIRECT' : undefined,
+      });
 
-    navigate(`/clients/${newId}`);
+      navigate(`/clients/${newId}`);
     } catch (err) {
       console.error(err);
     } finally {
@@ -139,24 +146,26 @@ export default function AddClient() {
           />
         </div>
 
-        {/* Row 3: Recommended By — Name + Phone */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4">
-          <Input
-            label="Recommended By — Name"
-            value={form.recommendedByName}
-            onChange={update('recommendedByName')}
-            placeholder="Referrer name"
-          />
-          <Input
-            label="Recommended By — Phone"
-            value={form.recommendedByPhone}
-            onChange={update('recommendedByPhone')}
-            placeholder="Referrer phone"
-          />
-        </div>
+        {/* Row 3: Recommended By — Name + Phone (Hidden for Manager) */}
+        {!isManager && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4">
+            <Input
+              label="Recommended By — Name"
+              value={form.recommendedByName}
+              onChange={update('recommendedByName')}
+              placeholder="Referrer name"
+            />
+            <Input
+              label="Recommended By — Phone"
+              value={form.recommendedByPhone}
+              onChange={update('recommendedByPhone')}
+              placeholder="Referrer phone"
+            />
+          </div>
+        )}
 
-        {/* Referral detection panel */}
-        {referralFound && matchedReferrer && (
+        {/* Referral detection panel (Hidden for Manager) */}
+        {!isManager && referralFound && matchedReferrer && (
           <div className="bg-success-soft border border-success/20 rounded-[12px] p-3.5 sm:p-4 mb-4">
             <div className="flex items-center gap-2 mb-2">
               <Check size={16} className="text-success" />

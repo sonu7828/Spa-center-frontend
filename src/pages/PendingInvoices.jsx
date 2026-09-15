@@ -201,7 +201,7 @@ function renderCategorizedItems(items = [], options = {}) {
 
 export default function PendingInvoices() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, allUsers } = useAuth();
   const canSellRetail = user?.role === 'manager' || user?.role === 'reception';
 
   const {
@@ -603,8 +603,18 @@ export default function PendingInvoices() {
     const referralEmployee = invoice.introducedBy || linkedApt?.introducedBy || linkedClient?.introducedBy || null;
     const referralEmployeeId = invoice.introducedById || linkedApt?.introducedById || linkedClient?.introducedById || null;
 
+    // Verify referral employee is not a Manager (Manager client creation must never receive referral commission)
+    const isManagerEmployee =
+      allUsers?.some(
+        (u) =>
+          (u.role === 'manager' || u.role === 'MANAGER') &&
+          (String(u.id) === String(referralEmployeeId) ||
+            (referralEmployee && u.name?.toLowerCase() === referralEmployee.toLowerCase()))
+      ) ||
+      (referralEmployee && referralEmployee.toLowerCase() === 'manager');
+
     let generatedCommissions = [];
-    if (referralEmployee) {
+    if (referralEmployee && !isManagerEmployee) {
       serviceItems.forEach((item) => {
         const itemPriceNum =
           typeof item.price === 'number'
