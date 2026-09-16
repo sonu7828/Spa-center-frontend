@@ -20,10 +20,22 @@ import { useAppointments } from '../context/AppointmentsContext';
 import { useServices } from '../context/ServicesContext';
 import { useAuth } from '../context/AuthContext';
 
+function timeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function minutesToTime(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 export default function CreateAppointment() {
   const navigate = useNavigate();
   const { clients } = useClients();
-  const { addAppointment } = useAppointments();
+  const { appointments, addAppointment } = useAppointments();
   const { getActiveServices } = useServices();
   const { allUsers } = useAuth();
   const activeServices = getActiveServices();
@@ -42,37 +54,113 @@ export default function CreateAppointment() {
   const [selectedServices, setSelectedServices] = useState([]);
   const [serviceToAdd, setServiceToAdd] = useState('');
   const [saved, setSaved] = useState(false);
+  const [serverError, setServerError] = useState('');
 
-  const update = (field) => (e) =>
+  const update = (field) => (e) => {
+    setServerError('');
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
 
   const selectedClient = clients.find((c) => String(c.id) === String(form.clientId));
   const selectedTech = allTechnicians.find((t) => String(t.id) === String(form.technicianId));
+
+  const totalDurationMinutes = selectedServices.reduce((sum, s) => {
+    const d = s.numericDuration || parseInt(s.duration, 10) || 30;
+    return sum + (Number(d) || 30);
+  }, 0);
+
+  const newStartMins = form.time ? timeToMinutes(form.time) : 0;
+  const newEndMins = form.time ? newStartMins + (totalDurationMinutes || 30) : 0;
+  const newEndTime = form.time ? minutesToTime(newEndMins) : '';
+
+  // Check if currently selected technician has a conflict
+  const conflictingAppointment =
+    form.date && form.time && form.technicianId && totalDurationMinutes > 0
+      ? appointments.find((apt) => {
+          if (apt.date !== form.date) return false;
+          if (String(apt.technicianId) !== String(form.technicianId)) return false;
+          if (apt.status === 'no-show' || apt.status === 'cancelled') return false;
+
+          const aptStartMins = timeToMinutes(apt.time);
+          const aptDur =
+            apt.totalDuration ||
+            apt.duration ||
+            apt.services?.reduce((acc, s) => acc + (Number(s.duration) || 30), 0) ||
+            30;
+          const aptEndMins = aptStartMins + aptDur;
+
+          return newStartMins < aptEndMins && newEndMins > aptStartMins;
+        })
+      : null;
+
+  const conflictStart = conflictingAppointment?.time;
+  const conflictDur =
+    conflictingAppointment?.totalDuration ||
+    conflictingAppointment?.duration ||
+    30;
+  const conflictEnd = conflictStart ? minutesToTime(timeToMinutes(conflictStart) + conflictDur) : '';
+
+  // Get conflict info for any technician in the dropdown
+  const getTechConflictInfo = (techId) => {
+    if (!form.date || !form.time || totalDurationMinutes <= 0) return null;
+    const conflict = appointments.find((apt) => {
+      if (apt.date !== form.date) return false;
+      if (String(apt.technicianId) !== String(techId)) return false;
+      if (apt.status === 'no-show' || apt.status === 'cancelled') return false;
+
+      const aStart = timeToMinutes(apt.time);
+      const aDur =
+        apt.totalDuration ||
+        apt.duration ||
+        apt.services?.reduce((acc, s) => acc + (Number(s.duration) || 30), 0) ||
+        30;
+      const aEnd = aStart + aDur;
+
+      return newStartMins < aEnd && newEndMins > aStart;
+    });
+
+    if (!conflict) return null;
+    const cStart = conflict.time;
+    const cDur = conflict.totalDuration || conflict.duration || 30;
+    const cEnd = minutesToTime(timeToMinutes(cStart) + cDur);
+    return { conflict, cStart, cEnd };
+  };
 
   const handleAddService = (serviceName) => {
     if (!serviceName) return;
     const found = activeServices.find((s) => s.name === serviceName);
     if (found) {
+      setServerError('');
       setSelectedServices((prev) => [...prev, found]);
       setServiceToAdd('');
     }
   };
 
   const handleRemoveService = (indexToRemove) => {
+    setServerError('');
     setSelectedServices((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const [isSaving, setIsSaving] = useState(false);
   const handleSave = async () => {
-    setIsSaving(true);
+    setServerError('');
     if (!form.clientId || selectedServices.length === 0 || !form.technicianId || !form.date || !form.time) return;
 
+    if (conflictingAppointment) {
+      setServerError(
+        `Technician ${selectedTech?.name || ''} is busy during this time (${conflictStart} – ${conflictEnd}). Please select another time or technician.`
+      );
+      return;
+    }
+
+    setIsSaving(true);
     const servicesData = selectedServices.map((s, idx) => ({
       appointmentServiceId: `asvc-new-${Date.now()}-${idx}`,
       serviceId: s.id || null,
       name: s.name,
       price: typeof s.price === 'number' ? s.price : parseInt(String(s.price || '0').replace(/[^0-9]/g, ''), 10) || 15000,
       category: s.category || '',
+      duration: s.numericDuration || parseInt(s.duration, 10) || 30,
     }));
 
     try {
@@ -86,12 +174,15 @@ export default function CreateAppointment() {
         technicianName: selectedTech?.name || '',
         date: form.date,
         time: form.time,
+        totalDuration: totalDurationMinutes,
+        duration: totalDurationMinutes,
       });
 
       setSaved(true);
       setTimeout(() => navigate('/appointments'), 1200);
     } catch (err) {
       console.error('Failed to create appointment:', err);
+      setServerError(err.message || 'Failed to create appointment. Please check technician availability.');
       setIsSaving(false);
     }
   };
@@ -162,6 +253,27 @@ export default function CreateAppointment() {
           </div>
         )}
 
+        {/* Technician Schedule Conflict / Server Error Alert */}
+        {(conflictingAppointment || serverError) && (
+          <div className="bg-error-soft border border-error/20 rounded-[12px] p-3.5 sm:p-4 mb-4 flex items-start gap-3">
+            <TriangleAlert size={18} className="text-error shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-charcoal">
+                Technician Schedule Conflict
+              </p>
+              <p className="text-xs sm:text-sm text-error mt-0.5 leading-relaxed">
+                {serverError || (
+                  <>
+                    <strong>{selectedTech?.name}</strong> is already booked from{' '}
+                    <strong>{conflictStart}</strong> to <strong>{conflictEnd}</strong> ({conflictingAppointment?.service || 'Appointment'}).
+                    Please select another time or technician.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Services (Multiple allowed) */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-1.5">
@@ -227,11 +339,15 @@ export default function CreateAppointment() {
             className="w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150 cursor-pointer appearance-none"
           >
             <option value="">Select Main Technician</option>
-            {allTechnicians.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} — {(t.specialties || []).join(', ') || 'Technician'}
-              </option>
-            ))}
+            {allTechnicians.map((t) => {
+              const conflictInfo = getTechConflictInfo(t.id);
+              return (
+                <option key={t.id} value={t.id}>
+                  {t.name} — {(t.specialties || []).join(', ') || 'Technician'}
+                  {conflictInfo ? ` ⚠️ (Busy ${conflictInfo.cStart}–${conflictInfo.cEnd})` : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -251,6 +367,11 @@ export default function CreateAppointment() {
           <div>
             <label className="block text-[13px] font-medium text-muted-gray mb-1.5">
               Time
+              {form.time && totalDurationMinutes > 0 && (
+                <span className="text-[11px] font-normal text-sage ml-1.5">
+                  ({totalDurationMinutes} min · until {newEndTime})
+                </span>
+              )}
             </label>
             <input
               type="time"
@@ -265,10 +386,18 @@ export default function CreateAppointment() {
         <div className="flex flex-col sm:flex-row sm:justify-end gap-2 pt-2">
           <Button
             onClick={handleSave}
-            disabled={!form.clientId || selectedServices.length === 0 || !form.technicianId || !form.date || !form.time}
+            disabled={
+              !form.clientId ||
+              selectedServices.length === 0 ||
+              !form.technicianId ||
+              !form.date ||
+              !form.time ||
+              Boolean(conflictingAppointment) ||
+              isSaving
+            }
             className="w-full sm:w-auto h-11 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save Appointment
+            {isSaving ? 'Saving...' : 'Save Appointment'}
           </Button>
         </div>
       </div>

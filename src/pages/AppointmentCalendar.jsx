@@ -100,15 +100,75 @@ export default function AppointmentCalendar() {
   // Reception/Manager can create appointments; technician cannot
   const canCreateAppointment = user?.role === 'manager' || user?.role === 'reception';
 
-  // Build a lookup: technicianId → { time → appointment }
+  // Helpers for time/minutes conversion
+  function timeToMinutes(timeStr) {
+    if (!timeStr) return 0;
+    const [h, m] = timeStr.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  }
+
+  function minutesToTime(mins) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  // Snap a time string (HH:MM) to the nearest floor 30-min slot
+  function snapToSlot(timeStr) {
+    if (!timeStr) return '08:00';
+    const [h, m] = timeStr.split(':').map(Number);
+    const slotMin = m < 30 ? '00' : '30';
+    return `${String(h).padStart(2, '0')}:${slotMin}`;
+  }
+
+  // Build a lookup: technicianId → { slotTime → [items] }
+  // Handles multi-slot duration: an appointment occupies its start slot + all continuation 30-min slots
   const grid = {};
   availableTechnicians.forEach((t) => {
     grid[t.id] = {};
   });
+
   dayAppointments.forEach((apt) => {
-    if (grid[apt.technicianId]) {
-      grid[apt.technicianId][apt.time] = apt;
+    if (!grid[apt.technicianId]) return;
+    if (apt.status === 'no-show') return; // No-show appointments do not block future slot views
+
+    const startSlot = snapToSlot(apt.time);
+    const startMins = timeToMinutes(apt.time);
+    const totalDuration =
+      apt.totalDuration ||
+      apt.duration ||
+      apt.services?.reduce((acc, s) => acc + (Number(s.duration) || 30), 0) ||
+      30;
+    const endMins = startMins + totalDuration;
+    const endTimeStr = minutesToTime(endMins);
+
+    // Primary slot (appointment starts here)
+    if (!grid[apt.technicianId][startSlot]) {
+      grid[apt.technicianId][startSlot] = [];
     }
+    grid[apt.technicianId][startSlot].push({
+      isStart: true,
+      appointment: apt,
+      endTime: endTimeStr,
+      duration: totalDuration,
+    });
+
+    // Continuation slots: any subsequent 30-min slot up to endMins
+    const startSlotMins = timeToMinutes(startSlot);
+    timeSlots.forEach((slot) => {
+      const slotMins = timeToMinutes(slot);
+      if (slotMins > startSlotMins && slotMins < endMins) {
+        if (!grid[apt.technicianId][slot]) {
+          grid[apt.technicianId][slot] = [];
+        }
+        grid[apt.technicianId][slot].push({
+          isStart: false,
+          appointment: apt,
+          endTime: endTimeStr,
+          duration: totalDuration,
+        });
+      }
+    });
   });
 
   return (
@@ -264,7 +324,7 @@ export default function AppointmentCalendar() {
 
             <tbody>
               {timeSlots.map((slot) => {
-                const hasAny = visibleTechnicians.some((t) => grid[t.id][slot]);
+                const hasAny = visibleTechnicians.some((t) => grid[t.id][slot]?.length > 0);
 
                 return (
                   <tr
@@ -280,8 +340,8 @@ export default function AppointmentCalendar() {
 
                     {/* Technician Appointment Slots */}
                     {visibleTechnicians.map((tech) => {
-                      const apt = grid[tech.id][slot];
-                      if (!apt) {
+                      const items = grid[tech.id][slot];
+                      if (!items || items.length === 0) {
                         return (
                           <td
                             key={tech.id}
@@ -292,36 +352,86 @@ export default function AppointmentCalendar() {
                       return (
                         <td
                           key={tech.id}
-                          className="px-1.5 sm:px-2 py-1 border-r border-border/30 last:border-r-0"
+                          className="px-1.5 sm:px-2 py-1 border-r border-border/30 last:border-r-0 align-top"
                         >
-                          <button
-                            onClick={() => navigate(`/appointments/${apt.id}`)}
-                            className={`w-full text-left px-2.5 sm:px-3 py-2 rounded-[10px] border cursor-pointer transition-all hover:scale-[1.01] shadow-2xs ${
-                              categoryStyles[apt.category] || 'bg-soft-cream border-border'
-                            }`}
-                          >
-                            <p className="text-xs sm:text-sm font-semibold text-charcoal leading-snug">
-                              {apt.clientName}
-                            </p>
-                            <p className="text-[11px] text-muted-gray mt-0.5">
-                              {apt.service}
-                            </p>
-                            {apt.introducedBy && (
-                              <p className="text-[9px] font-bold text-[#4F6748] bg-sage-soft/90 px-1.5 py-0.5 rounded-[4px] mt-1 inline-block">
-                                By {apt.introducedBy}
-                              </p>
-                            )}
-                            {apt.status === 'late' && (
-                              <span className="inline-block mt-1 px-1.5 py-0.5 rounded-[4px] bg-warning-soft border border-warning/20 text-[9px] font-bold text-warning uppercase tracking-wide">
-                                Late
-                              </span>
-                            )}
-                            {apt.status === 'no-show' && (
-                              <span className="inline-block mt-1 px-1.5 py-0.5 rounded-[4px] bg-error-soft border border-error/20 text-[9px] font-bold text-error uppercase tracking-wide">
-                                No-Show
-                              </span>
-                            )}
-                          </button>
+                          <div className="flex flex-col gap-1">
+                            {items.map((item, idx) => {
+                              const apt = item.appointment;
+                              if (item.isStart) {
+                                return (
+                                  <button
+                                    key={`${apt.id}-${slot}-${idx}`}
+                                    onClick={() => navigate(`/appointments/${apt.id}`)}
+                                    className={`w-full text-left px-2.5 sm:px-3 py-2 rounded-[10px] border cursor-pointer transition-all hover:scale-[1.01] shadow-2xs ${
+                                      categoryStyles[apt.category] || 'bg-soft-cream border-border'
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-1">
+                                      <p className="text-xs sm:text-sm font-semibold text-charcoal leading-snug truncate">
+                                        {apt.time !== slot && (
+                                          <span className="text-[10px] font-bold text-muted-gray mr-1">{apt.time}</span>
+                                        )}
+                                        {apt.clientName}
+                                      </p>
+                                      <span className="text-[10px] font-semibold text-muted-gray shrink-0 bg-white/70 px-1.5 py-0.5 rounded border border-border/40">
+                                        {item.duration}m
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-muted-gray mt-0.5 truncate">
+                                      {apt.service}
+                                    </p>
+                                    <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                      <span className="text-[10px] text-muted-gray font-medium">
+                                        {apt.time}–{item.endTime}
+                                      </span>
+                                      {apt.introducedBy && (
+                                        <p className="text-[9px] font-bold text-[#4F6748] bg-sage-soft/90 px-1.5 py-0.5 rounded-[4px] inline-block">
+                                          By {apt.introducedBy}
+                                        </p>
+                                      )}
+                                      {apt.status === 'late' && (
+                                        <span className="inline-block px-1.5 py-0.5 rounded-[4px] bg-warning-soft border border-warning/20 text-[9px] font-bold text-warning uppercase tracking-wide">
+                                          Late
+                                        </span>
+                                      )}
+                                      {apt.status === 'no-show' && (
+                                        <span className="inline-block px-1.5 py-0.5 rounded-[4px] bg-error-soft border border-error/20 text-[9px] font-bold text-error uppercase tracking-wide">
+                                          No-Show
+                                        </span>
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              }
+
+                              // Continuation slot
+                              return (
+                                <button
+                                  key={`${apt.id}-cont-${slot}-${idx}`}
+                                  onClick={() => navigate(`/appointments/${apt.id}`)}
+                                  className={`w-full text-left px-2.5 sm:px-3 py-1.5 rounded-[10px] border border-dashed cursor-pointer transition-all hover:scale-[1.01] shadow-2xs opacity-90 ${
+                                    categoryStyles[apt.category] || 'bg-soft-cream border-border'
+                                  }`}
+                                  title={`${tech.name} occupied with ${apt.clientName} until ${item.endTime}`}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-[#4F6748] shrink-0" />
+                                      <p className="text-[11px] sm:text-xs font-semibold text-charcoal leading-tight truncate">
+                                        ↳ {apt.clientName}
+                                      </p>
+                                    </div>
+                                    <span className="text-[9px] font-medium text-muted-gray shrink-0 bg-white/70 px-1 py-0.5 rounded border border-border/40">
+                                      Until {item.endTime}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] text-muted-gray mt-0.5 truncate pl-3">
+                                    {apt.service}
+                                  </p>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </td>
                       );
                     })}

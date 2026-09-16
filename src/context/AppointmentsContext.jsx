@@ -37,8 +37,12 @@ export function formatBackendAppointment(apt) {
     name: s.service?.name || s.name || 'Service',
     price: Number(s.price || s.service?.price || 15000),
     category: s.service?.category || '',
+    duration: Number(s.service?.duration || s.duration || 30),
     status: s.status,
   }));
+
+  const totalDuration =
+    mappedServices.reduce((sum, s) => sum + (Number(s.duration) || 30), 0) || 30;
 
   const serviceSummary =
     apt.serviceSummary ||
@@ -61,6 +65,8 @@ export function formatBackendAppointment(apt) {
     notes: apt.notes || '',
     lateMinutes: apt.lateMinutes || null,
     noShowReason: apt.noShowReason || null,
+    totalDuration,
+    duration: totalDuration,
     services:
       mappedServices.length > 0
         ? mappedServices
@@ -71,6 +77,7 @@ export function formatBackendAppointment(apt) {
               name: serviceSummary,
               price: 15000,
               category: '',
+              duration: 30,
             },
           ],
     introducedBy: apt.client?.introducedByEmployee?.name || '',
@@ -135,7 +142,11 @@ export function AppointmentsProvider({ children }) {
             ? s.price
             : parseInt(String(s.price || '0').replace(/[^0-9]/g, ''), 10) || 15000,
         category: s.category || data.category || '',
+        duration: Number(s.numericDuration || s.duration || 30),
       }));
+
+      const totalDuration =
+        normalizedServices.reduce((sum, s) => sum + (Number(s.duration) || 30), 0) || 30;
 
       const derivedServiceSummary =
         normalizedServices.map((s) => s.name).join(', ') || data.service || '';
@@ -170,7 +181,8 @@ export function AppointmentsProvider({ children }) {
           }
         }
       } catch (err) {
-        console.warn('Backend appointment create error, saving in local state:', err.message);
+        console.warn('Backend appointment create error:', err.message);
+        throw err;
       }
 
       // Local fallback
@@ -188,6 +200,8 @@ export function AppointmentsProvider({ children }) {
         technicianName: data.technicianName || '',
         date: data.date || '',
         time: data.time || '',
+        totalDuration,
+        duration: totalDuration,
         status: data.status || 'scheduled',
         rawStatus: (data.status || 'scheduled').toUpperCase().replace(/-/g, '_'),
         introducedBy: data.introducedBy || '',
@@ -262,6 +276,7 @@ export function AppointmentsProvider({ children }) {
         }
       } catch (err) {
         console.warn('Backend appointment update error:', err.message);
+        throw err;
       }
     }
   }, []);
