@@ -334,6 +334,31 @@ export function AppointmentsProvider({ children }) {
     [appointments]
   );
 
+  const cancelAppointment = useCallback(
+    async (id) => {
+      if (typeof id === 'string' && id.includes('-')) {
+        try {
+          await appointmentsApi.cancel(id);
+          await refreshAppointments();
+          return true;
+        } catch (err) {
+          console.warn('Backend appointment cancel error:', err.message);
+          throw err;
+        }
+      }
+      // Local fallback — mark as cancelled
+      setAppointments((prev) =>
+        prev.map((a) =>
+          String(a.id) === String(id) || a.id === id
+            ? { ...a, status: 'cancelled', rawStatus: 'CANCELLED' }
+            : a
+        )
+      );
+      return true;
+    },
+    [refreshAppointments]
+  );
+
   return (
     <AppointmentsContext.Provider
       value={{
@@ -344,6 +369,7 @@ export function AppointmentsProvider({ children }) {
         addAppointment,
         getAppointment,
         updateAppointment,
+        cancelAppointment,
         addServiceToAppointment,
         removeServiceFromAppointment,
         getAppointmentsForDate,

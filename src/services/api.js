@@ -208,6 +208,10 @@ export const appointmentsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  cancel: (id) =>
+    apiRequest('/appointments/' + id + '/cancel', {
+      method: 'PATCH',
+    }),
 };
 
 export const invoicesApi = {

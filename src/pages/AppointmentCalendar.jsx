@@ -130,7 +130,7 @@ export default function AppointmentCalendar() {
 
   dayAppointments.forEach((apt) => {
     if (!grid[apt.technicianId]) return;
-    if (apt.status === 'no-show') return; // No-show appointments do not block future slot views
+    if (apt.status === 'no-show' || apt.status === 'cancelled') return; // No-show/cancelled appointments do not block slots
 
     const startSlot = snapToSlot(apt.time);
     const startMins = timeToMinutes(apt.time);
