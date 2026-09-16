@@ -103,6 +103,10 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       setError('Please select a preferred time.');
       return;
     }
+    if (preferredTime < '10:00' || preferredTime > '21:00') {
+      setError('Preferred time must be between 10:00 AM and 9:00 PM (10:00 – 21:00).');
+      return;
+    }
 
     const assignedTech = allTechnicians.find(
       (t) => String(t.id) === String(assignedTechnicianId)
@@ -291,10 +295,12 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
             <div>
               <label className="text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1 flex items-center gap-1">
                 <Clock size={11} className="text-sage" />
-                Preferred Time *
+                Preferred Time (10:00 – 21:00) *
               </label>
               <input
                 type="time"
+                min="10:00"
+                max="21:00"
                 value={preferredTime}
                 onChange={(e) => setPreferredTime(e.target.value)}
                 className="w-full px-2.5 py-1.5 rounded-[9px] border border-border bg-white text-xs text-charcoal focus:outline-none focus:border-sage transition-colors font-medium"

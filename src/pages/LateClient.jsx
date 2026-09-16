@@ -37,18 +37,30 @@ export default function LateClient() {
     );
   }
 
+  const [rescheduleError, setRescheduleError] = useState('');
+  const isTimeOutOfRange = newTime ? newTime < '10:00' || newTime > '21:00' : false;
+
   const handleReschedule = async () => {
-    await updateAppointment(apt.id, { date: newDate, time: newTime, lateMinutes: 20, status: "late" });
+    setRescheduleError('');
     if (!newDate || !newTime) return;
 
-    // Update the EXACT same appointment record (same ID, no duplicate)
-    updateAppointment(id, {
-      date: newDate,
-      time: newTime,
-      status: 'scheduled',
-    });
+    if (newTime < '10:00' || newTime > '21:00') {
+      setRescheduleError('Appointments can only be rescheduled between 10:00 AM and 9:00 PM (10:00 – 21:00).');
+      return;
+    }
 
-    navigate('/appointments');
+    try {
+      await updateAppointment(apt.id, { date: newDate, time: newTime, lateMinutes: 20, status: "late" });
+      // Update the EXACT same appointment record (same ID, no duplicate)
+      await updateAppointment(id, {
+        date: newDate,
+        time: newTime,
+        status: 'scheduled',
+      });
+      navigate('/appointments');
+    } catch (err) {
+      setRescheduleError(err?.message || 'Failed to reschedule appointment');
+    }
   };
 
   return (
@@ -86,6 +98,15 @@ export default function LateClient() {
           </div>
         </div>
 
+        {/* Error / Out of Hours Alert */}
+        {(rescheduleError || isTimeOutOfRange) && (
+          <div className="bg-error-soft border border-error/20 rounded-[12px] p-3.5 sm:p-4 mb-4">
+            <p className="text-xs sm:text-sm text-error leading-relaxed">
+              {rescheduleError || 'Appointments can only be rescheduled between 10:00 AM and 9:00 PM (10:00 – 21:00).'}
+            </p>
+          </div>
+        )}
+
         {/* Reschedule Date & Time Selection */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-5">
           <div>
@@ -102,9 +123,14 @@ export default function LateClient() {
           <div>
             <label className="block text-[13px] font-medium text-muted-gray mb-1.5">
               New Time
+              <span className="text-[11px] font-normal text-muted-gray ml-1.5">
+                (10:00 – 21:00)
+              </span>
             </label>
             <input
               type="time"
+              min="10:00"
+              max="21:00"
               value={newTime}
               onChange={(e) => setNewTime(e.target.value)}
               className="w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150"
@@ -116,7 +142,11 @@ export default function LateClient() {
           <Button variant="secondary" onClick={() => navigate(`/appointments/${id}`)} className="w-full sm:w-auto h-11">
             Cancel
           </Button>
-          <Button onClick={handleReschedule} className="w-full sm:w-auto h-11">
+          <Button
+            onClick={handleReschedule}
+            disabled={!newDate || !newTime || isTimeOutOfRange}
+            className="w-full sm:w-auto h-11 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             Reschedule
           </Button>
         </div>
