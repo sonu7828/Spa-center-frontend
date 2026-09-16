@@ -33,22 +33,64 @@ export function formatBackendClient(c) {
   // Map backend history to UI rows
   const rawHistory = c.history || [];
   const mappedHistory = rawHistory
-    .filter((h) => ['SERVICE_COMPLETED', 'PAYMENT_RECEIVED', 'APPOINTMENT_CREATED', 'STATUS_CHANGED'].includes(h.action))
+    .filter((h) => ['SERVICE_COMPLETED', 'PAYMENT_RECEIVED', 'APPOINTMENT_CREATED', 'STATUS_CHANGED', 'APPOINTMENT_CANCELLED', 'APPOINTMENT_UPDATED'].includes(h.action))
     .map((h, idx) => {
       const dateStr = h.createdAt
         ? new Date(h.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
         : '—';
+      const isCancelled = h.action === 'APPOINTMENT_CANCELLED';
       return {
         id: h.id || `hist-${idx}`,
         date: dateStr,
-        service: h.details || h.action.replace(/_/g, ' '),
-        technician: h.action === 'SERVICE_COMPLETED' ? 'Technician' : 'Front Desk',
-        product: 'Spa Service',
+        service: h.details || (isCancelled ? 'Cancelled Appointment' : h.action.replace(/_/g, ' ')),
+        technician: isCancelled ? 'Front Desk' : (h.action === 'SERVICE_COMPLETED' ? 'Technician' : 'Front Desk'),
+        product: isCancelled ? 'Cancelled' : 'Spa Service',
         price: '—',
+        status: isCancelled ? 'cancelled' : 'completed',
         rawAction: h.action,
         rawDetails: h.details,
       };
     });
+
+  // Map backend appointments to UI rows if present
+  const rawAppointments = c.appointments || [];
+  const mappedApptHistory = rawAppointments.map((a, idx) => {
+    const dateStr = a.appointmentDate
+      ? new Date(a.appointmentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '—';
+    const serviceName =
+      a.serviceSummary ||
+      a.appointmentServices?.map((s) => s.service?.name || s.name).filter(Boolean).join(', ') ||
+      'Spa Service';
+    const techName =
+      a.mainTechnician?.staffProfile?.name ||
+      a.appointmentServices?.[0]?.technician?.staffProfile?.name ||
+      'Technician';
+    const totalPrice =
+      a.appointmentServices?.reduce((sum, s) => sum + (Number(s.price) || 0), 0) || 0;
+    const lowerStatus = String(a.status || 'scheduled').toLowerCase().replace(/_/g, '-');
+    return {
+      id: a.id || `apt-${idx}`,
+      appointmentId: a.id,
+      date: dateStr,
+      time: a.appointmentTime || '',
+      service: serviceName,
+      technician: techName,
+      product: lowerStatus === 'cancelled' ? 'Cancelled' : 'Spa Service',
+      price: totalPrice > 0 ? totalPrice.toLocaleString('en-US') : '—',
+      status: lowerStatus,
+      rawStatus: a.status,
+      notes: a.notes,
+    };
+  });
+
+  // Combined service history: prioritize mappedApptHistory, then mappedHistory
+  const combinedHistory = [...mappedApptHistory];
+  for (const h of mappedHistory) {
+    if (!combinedHistory.some((item) => item.date === h.date && item.status === h.status)) {
+      combinedHistory.push(h);
+    }
+  }
 
   // Group backend media into cohesive Before / After session cards
   const rawMedia = c.media || [];
@@ -117,7 +159,8 @@ export function formatBackendClient(c) {
     status: c.status ? c.status.toUpperCase() : (c.isActive === false ? 'INACTIVE' : 'ACTIVE'),
     isActive: c.isActive !== false && (c.status ? c.status.toUpperCase() === 'ACTIVE' : true),
     lastServiceDate: c.lastServiceDate || null,
-    serviceHistory: mappedHistory.length > 0 ? mappedHistory : (c.serviceHistory || []),
+    serviceHistory: combinedHistory.length > 0 ? combinedHistory : (c.serviceHistory || []),
+    appointments: c.appointments || [],
     photos: mappedPhotos.length > 0 ? mappedPhotos : (c.photos || []),
   };
 }
@@ -173,7 +216,17 @@ export function ClientsProvider({ children }) {
     try {
       const res = await clientsApi.getById(id);
       if (res?.data) {
-        return formatBackendClient(res.data);
+        const formatted = formatBackendClient(res.data);
+        setClients((prev) => {
+          const index = prev.findIndex((c) => String(c.id) === String(id));
+          if (index >= 0) {
+            const copy = [...prev];
+            copy[index] = { ...copy[index], ...formatted };
+            return copy;
+          }
+          return [formatted, ...prev];
+        });
+        return formatted;
       }
     } catch (err) {
       console.warn('Could not fetch full client from backend:', err.message);

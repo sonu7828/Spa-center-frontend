@@ -131,7 +131,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       ? parseInt(String(selectedServiceObj.price).replace(/[^0-9]/g, ''), 10) || 15000
       : 15000;
 
-    addAppointment({
+    await addAppointment({
       clientId: newClientId,
       clientName: trimmedName,
       service: interestedService,
@@ -147,7 +147,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       category: selectedServiceObj?.category || 'facial',
       date: preferredDate,
       time: handleTimeFormat(preferredTime),
-      technicianId: Number(assignedTech.id),
+      technicianId: assignedTech.id,
       technicianName: assignedTech.name,
       status: 'scheduled',
       introducedBy: isManager ? null : (user?.name || 'Staff'),
