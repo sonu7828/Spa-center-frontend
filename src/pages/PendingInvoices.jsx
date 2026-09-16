@@ -729,7 +729,7 @@ export default function PendingInvoices() {
           canSellRetail ? (
             <Button onClick={openNewRetailSaleModal}>
               <Plus size={16} strokeWidth={2.5} />
-              + New Retail Sale
+              New Retail Sale
             </Button>
           ) : null
         }

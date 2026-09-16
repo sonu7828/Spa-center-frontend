@@ -65,7 +65,7 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
   const handlePrint = () => window.print();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-charcoal/50 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-charcoal/50 backdrop-blur-xs overflow-hidden">
       {/* ── Print-only CSS ── */}
       <style>{`
         @media print {
@@ -127,7 +127,7 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
         }
       `}</style>
 
-      <div className="bg-white rounded-[20px] max-w-[520px] w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto">
+      <div className="bg-white rounded-[20px] max-w-[520px] w-full shadow-2xl flex flex-col" style={{ maxHeight: 'min(92vh, 92dvh)', height: 'min(92vh, 92dvh)' }}>
         {/* ── Modal Chrome (hidden on print) ── */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-border no-print shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -148,11 +148,11 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
         </div>
 
         {/* ── Receipt Content (scrollable in preview, full in print) ── */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-5 bg-warm-ivory/40 flex justify-center">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-5 bg-warm-ivory/40 flex justify-center items-start">
           <div
             id="omega-receipt-print"
             style={{ fontFamily: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif" }}
-            className="bg-white border border-border rounded-[14px] w-full max-w-[460px] shadow-card overflow-hidden"
+            className="bg-white border border-border rounded-[14px] w-full max-w-[460px] shadow-card"
           >
 
             {/* ═══════ TOP BAR ═══════ */}
