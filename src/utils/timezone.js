@@ -51,3 +51,21 @@ export function formatDoualaDateDisplay(dateStr) {
     year: 'numeric',
   });
 }
+
+/**
+ * All allowed appointment booking slots between 10:00 AM and 09:00 PM (10:00 - 21:00)
+ * 15-minute increments
+ */
+export const BOOKING_TIME_SLOTS = (() => {
+  const slots = [];
+  for (let mins = 10 * 60; mins <= 21 * 60; mins += 15) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    const time24 = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    const label = `${time24} (${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period})`;
+    slots.push({ value: time24, label });
+  }
+  return slots;
+})();

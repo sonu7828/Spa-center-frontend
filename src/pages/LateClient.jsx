@@ -15,6 +15,7 @@ import { ArrowLeft, Clock } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useAppointments } from '../context/AppointmentsContext';
+import { BOOKING_TIME_SLOTS } from '../utils/timezone';
 
 export default function LateClient() {
   const { id } = useParams();
@@ -124,17 +125,21 @@ export default function LateClient() {
             <label className="block text-[13px] font-medium text-muted-gray mb-1.5">
               New Time
               <span className="text-[11px] font-normal text-muted-gray ml-1.5">
-                (10:00 – 21:00)
+                (10:00 AM – 09:00 PM)
               </span>
             </label>
-            <input
-              type="time"
-              min="10:00"
-              max="21:00"
+            <select
               value={newTime}
               onChange={(e) => setNewTime(e.target.value)}
-              className="w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150"
-            />
+              className="w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150 cursor-pointer appearance-none"
+            >
+              <option value="">Select Time (10:00 AM – 09:00 PM)</option>
+              {BOOKING_TIME_SLOTS.map((slot) => (
+                <option key={slot.value} value={slot.value}>
+                  {slot.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

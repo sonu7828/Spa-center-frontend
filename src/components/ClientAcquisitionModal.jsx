@@ -29,7 +29,7 @@ import { useAuth } from '../context/AuthContext';
 import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
 import { useServices } from '../context/ServicesContext';
-import { getDoualaTodayStr } from '../utils/timezone';
+import { getDoualaTodayStr, BOOKING_TIME_SLOTS } from '../utils/timezone';
 
 export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
   const { user, allUsers } = useAuth();
@@ -290,17 +290,20 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
             <div>
               <label className="text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1 flex items-center gap-1">
                 <Clock size={11} className="text-sage" />
-                Preferred Time (10:00 – 21:00) *
+                Preferred Time (10:00 AM – 09:00 PM) *
               </label>
-              <input
-                type="time"
-                min="10:00"
-                max="21:00"
+              <select
                 value={preferredTime}
                 onChange={(e) => setPreferredTime(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-[9px] border border-border bg-white text-xs text-charcoal focus:outline-none focus:border-sage transition-colors font-medium"
+                className="w-full px-2.5 py-1.5 rounded-[9px] border border-border bg-white text-xs text-charcoal focus:outline-none focus:border-sage transition-colors font-medium cursor-pointer"
                 required
-              />
+              >
+                {BOOKING_TIME_SLOTS.map((slot) => (
+                  <option key={slot.value} value={slot.value}>
+                    {slot.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
