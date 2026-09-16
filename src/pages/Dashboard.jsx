@@ -48,6 +48,7 @@ import { useAppointments } from '../context/AppointmentsContext';
 import { useAuth } from '../context/AuthContext';
 import { useCommission } from '../context/CommissionContext';
 import { useReports } from '../context/ReportsContext';
+import { getDoualaTodayStr } from '../utils/timezone';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -88,18 +89,13 @@ export default function Dashboard() {
   }
 
   const today = new Date().toLocaleDateString('en-GB', {
+    timeZone: 'Africa/Douala',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
 
-  const todayStr = (() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  })();
+  const todayStr = getDoualaTodayStr();
 
   // =========================================================================
   // CLEANER ACCESS DENIED VIEW (RBAC: CLEANER BLOCKED FROM REPORTS)

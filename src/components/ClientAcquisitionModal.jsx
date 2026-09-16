@@ -29,6 +29,7 @@ import { useAuth } from '../context/AuthContext';
 import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
 import { useServices } from '../context/ServicesContext';
+import { getDoualaTodayStr } from '../utils/timezone';
 
 export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
   const { user, allUsers } = useAuth();
@@ -42,14 +43,8 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
     (u) => u.role === 'technician' && u.active !== false
   );
 
-  // Default date: today in YYYY-MM-DD
-  const todayStr = (() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  })();
+  // Default date: today in Africa/Douala timezone
+  const todayStr = getDoualaTodayStr();
 
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('+237 ');

@@ -19,6 +19,7 @@ import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
 import { useServices } from '../context/ServicesContext';
 import { useAuth } from '../context/AuthContext';
+import { getDoualaTodayStr } from '../utils/timezone';
 
 function timeToMinutes(timeStr) {
   if (!timeStr) return 0;
@@ -46,7 +47,7 @@ export default function CreateAppointment() {
   const [form, setForm] = useState({
     clientId: '',
     technicianId: '',
-    date: '',
+    date: getDoualaTodayStr(),
     time: '',
   });
 

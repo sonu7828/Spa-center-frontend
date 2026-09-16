@@ -26,6 +26,7 @@ import Button from '../components/Button';
 import ClientAcquisitionModal from '../components/ClientAcquisitionModal';
 import { useAppointments } from '../context/AppointmentsContext';
 import { useAuth } from '../context/AuthContext';
+import { getDoualaTodayStr, formatDoualaDateDisplay } from '../utils/timezone';
 
 const categoryStyles = {
   nails: 'bg-dusty-rose-soft border-dusty-rose/30 hover:border-dusty-rose',
@@ -49,23 +50,11 @@ const timeSlots = [
 ];
 
 function formatDateDisplay(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  return date.toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDoualaDateDisplay(dateStr);
 }
 
 function todayStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return getDoualaTodayStr();
 }
 
 function shiftDate(dateStr, days) {
