@@ -219,12 +219,34 @@ export const invoicesApi = {
     const query = new URLSearchParams(params).toString();
     return apiRequest('/invoices' + (query ? '?' + query : ''));
   },
+  getPending: () => apiRequest('/invoices/pending'),
   getById: (id) => apiRequest('/invoices/' + id),
-  create: (appointmentId) =>
-    apiRequest('/invoices', {
+  create: (data) => {
+    let payload;
+    if (typeof data === 'string') {
+      payload = { appointmentId: data };
+    } else if (data && typeof data === 'object') {
+      const rawAptId = data.appointmentId !== undefined ? data.appointmentId : data.id;
+      const aptId =
+        rawAptId && typeof rawAptId === 'object'
+          ? rawAptId.appointmentId || rawAptId.id || String(rawAptId)
+          : rawAptId;
+
+      payload = {
+        appointmentId: aptId,
+        discount: typeof data.discount === 'number' ? data.discount : 0,
+        status: data.status || 'PENDING_PAYMENT',
+        ...(data.retailProducts ? { retailProducts: data.retailProducts } : {}),
+      };
+    } else {
+      payload = data;
+    }
+
+    return apiRequest('/invoices', {
       method: 'POST',
-      body: JSON.stringify({ appointmentId }),
-    }),
+      body: JSON.stringify(payload),
+    });
+  },
   addRetailItem: (invoiceId, data) =>
     apiRequest('/invoices/' + invoiceId + '/retail-items', {
       method: 'POST',

@@ -15,7 +15,7 @@
  *   - [ Send / Resend WhatsApp Receipt ] → Structure ready for WhatsApp API
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -36,6 +36,7 @@ import {
   ShoppingBag,
   Coffee,
   X,
+  RotateCcw,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -206,6 +207,7 @@ export default function PendingInvoices() {
 
   const {
     invoices,
+    refreshInvoices,
     getPendingInvoices,
     getPaidTodayInvoices,
     getHistoryInvoices,
@@ -269,6 +271,12 @@ export default function PendingInvoices() {
   const [newSaleQuantities, setNewSaleQuantities] = useState({});
   const [newSalePaymentMethod, setNewSalePaymentMethod] = useState('CASH');
   const [newSaleNotice, setNewSaleNotice] = useState('');
+
+  useEffect(() => {
+    if (typeof refreshInvoices === 'function') {
+      refreshInvoices();
+    }
+  }, [refreshInvoices, activeTab]);
 
   const pendingInvoices = typeof getPendingInvoices === 'function' ? getPendingInvoices() : [];
   const paidTodayInvoices = typeof getPaidTodayInvoices === 'function' ? getPaidTodayInvoices() : [];
@@ -726,12 +734,22 @@ export default function PendingInvoices() {
       <PageHeader
         title="Invoices"
         action={
-          canSellRetail ? (
-            <Button onClick={openNewRetailSaleModal}>
-              <Plus size={16} strokeWidth={2.5} />
-              New Retail Sale
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => refreshInvoices && refreshInvoices()}
+              title="Refresh Invoices"
+            >
+              <RotateCcw size={15} strokeWidth={2} />
+              <span>Refresh</span>
             </Button>
-          ) : null
+            {canSellRetail && (
+              <Button onClick={openNewRetailSaleModal}>
+                <Plus size={16} strokeWidth={2.5} />
+                New Retail Sale
+              </Button>
+            )}
+          </div>
         }
       />
 

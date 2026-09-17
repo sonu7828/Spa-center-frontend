@@ -179,13 +179,18 @@ export function InvoiceProvider({ children }) {
             discount: 0,
             status: 'PENDING_PAYMENT',
           });
-          if (res?.data && res.data.id) {
-            const formatted = formatBackendInvoice(res.data);
+          const invoiceObj = res?.data?.invoice || res?.data || res;
+          if (invoiceObj && invoiceObj.id) {
+            const formatted = formatBackendInvoice(invoiceObj);
             setInvoices((prev) => [formatted, ...prev.filter((i) => String(i.id) !== String(formatted.id))]);
+            await refreshInvoices();
             return formatted.id;
           }
         } catch (err) {
-          console.warn('Backend invoice creation error, using local merge:', err.message);
+          console.warn('Backend invoice creation note:', err.message);
+          if (err.status === 409 || err.message?.includes('already exists')) {
+            await refreshInvoices();
+          }
         }
       }
 
@@ -725,7 +730,7 @@ export function InvoiceProvider({ children }) {
 
   // Shared Work: Submit completed Shared Work invoice to Reception
   const submitSharedWorkInvoice = useCallback(
-    ({ appointmentId, clientId, clientName, items }) => {
+    async ({ appointmentId, clientId, clientName, items }) => {
       const targetAptId =
         appointmentId !== undefined && appointmentId !== null
           ? (typeof appointmentId === 'number' || !isNaN(Number(appointmentId))
@@ -733,11 +738,30 @@ export function InvoiceProvider({ children }) {
               : String(appointmentId))
           : null;
 
-      if (!targetAptId) {
-        console.error(
-          'Validation Failure: Shared Work appointment invoice requires appointmentId.'
-        );
-        return false;
+      const isBackendApt = Boolean(targetAptId && typeof targetAptId === 'string' && String(targetAptId).includes('-'));
+      if (isBackendApt) {
+        try {
+          const res = await invoicesApi.create({
+            appointmentId: String(targetAptId),
+            discount: 0,
+            status: 'PENDING_PAYMENT',
+          });
+          const invoiceObj = res?.data?.invoice || res?.data || res;
+          if (invoiceObj && invoiceObj.id) {
+            const formatted = formatBackendInvoice(invoiceObj);
+            setInvoices((prev) => [
+              formatted,
+              ...prev.filter((i) => String(i.id) !== String(formatted.id)),
+            ]);
+            await refreshInvoices();
+            return formatted.id;
+          }
+        } catch (err) {
+          console.warn('Backend shared work invoice creation note:', err.message);
+          if (err.status === 409 || err.message?.includes('already exists')) {
+            await refreshInvoices();
+          }
+        }
       }
 
       if (!items || items.length === 0) {
@@ -839,18 +863,20 @@ export function InvoiceProvider({ children }) {
             discount: 0,
             status: 'PENDING_PAYMENT',
           });
-          if (res?.data && res.data.id) {
-            const formatted = formatBackendInvoice(res.data);
+          const invoiceObj = res?.data?.invoice || res?.data || res;
+          if (invoiceObj && invoiceObj.id) {
+            const formatted = formatBackendInvoice(invoiceObj);
             setInvoices((prev) => [
               formatted,
               ...prev.filter((i) => String(i.id) !== String(formatted.id)),
             ]);
+            await refreshInvoices();
             return formatted.id;
           }
         } catch (err) {
           console.warn('Backend invoice creation note:', err.message);
           if (err.status === 409 || err.message?.includes('already exists')) {
-            refreshInvoices();
+            await refreshInvoices();
           }
         }
       }
