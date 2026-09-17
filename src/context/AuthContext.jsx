@@ -221,11 +221,13 @@ export function AuthProvider({ children }) {
   }, []);
 
   const addUser = useCallback(async (userData) => {
-    const rawPhone = userData.phone ? userData.phone.trim() : (userData.username ? userData.username.trim() : undefined);
+    const rawEmail = (userData.email || '').trim().toLowerCase();
+    const rawPhone = userData.phone ? userData.phone.trim() : null;
     const payload = {
       name: userData.name?.trim(),
-      username: (userData.username || userData.name || '').trim().toLowerCase().replace(/\s+/g, ''),
+      email: rawEmail,
       phone: rawPhone,
+      username: rawEmail.split('@')[0],
       role: userData.role,
       specialties: userData.role === 'technician' ? (userData.specialties || []) : [],
       password: userData.password || '123456',
@@ -237,11 +239,13 @@ export function AuthProvider({ children }) {
   }, [refreshUsers]);
 
   const editUser = useCallback(async (userId, updates) => {
-    const rawPhone = updates.phone ? updates.phone.trim() : (updates.username ? updates.username.trim() : undefined);
+    const rawEmail = updates.email !== undefined ? updates.email.trim().toLowerCase() : undefined;
+    const rawPhone = updates.phone !== undefined ? (updates.phone ? updates.phone.trim() : null) : undefined;
     const payload = {
       name: updates.name?.trim(),
-      username: updates.username ? updates.username.trim().toLowerCase().replace(/\s+/g, '') : undefined,
+      email: rawEmail,
       phone: rawPhone,
+      username: rawEmail ? rawEmail.split('@')[0] : undefined,
       role: updates.role,
       specialties: updates.role === 'technician' ? (updates.specialties || []) : [],
       ...(updates.password ? { password: updates.password.trim() } : {}),
@@ -257,6 +261,7 @@ export function AuthProvider({ children }) {
         return {
           ...curr,
           ...updates,
+          email: rawEmail !== undefined ? rawEmail : curr.email,
           phone: rawPhone !== undefined ? rawPhone : curr.phone,
           specialties: updates.specialties !== undefined ? updates.specialties : curr.specialties,
         };
