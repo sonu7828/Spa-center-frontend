@@ -168,7 +168,10 @@ export default function Staff() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.username.trim()) return;
+    if (!form.name?.trim() || !form.email?.trim()) {
+      setFormError('Please enter both Full Name and Email Address.');
+      return;
+    }
 
     if (form.role === 'technician' && (!form.specialties || form.specialties.length === 0)) {
       setFormError('Please select at least one specialty.');
@@ -177,8 +180,8 @@ export default function Staff() {
     setFormError('');
 
     try {
-      const emailVal = form.email.trim().toLowerCase();
-      const phoneVal = form.phone.trim();
+      const emailVal = form.email ? form.email.trim().toLowerCase() : '';
+      const phoneVal = form.phone ? form.phone.trim() : '';
       if (editingUser) {
         const updates = {
           name: form.name.trim(),
