@@ -7,7 +7,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { attendanceApi } from '../services/api';
 import { useAuth } from './AuthContext';
-import { getCompanyTodayDateStr } from '../utils/timezone';
+import { getDoualaTodayStr } from '../utils/timezone';
 
 const AttendanceContext = createContext(null);
 
@@ -25,10 +25,6 @@ function dataUrlToFile(dataUrl, filename = 'attendance.jpg') {
   } catch {
     return null;
   }
-}
-
-function todayDateStr() {
-  return getCompanyTodayDateStr();
 }
 
 export function AttendanceProvider({ children }) {
@@ -72,7 +68,10 @@ export function AttendanceProvider({ children }) {
       if (!currentUser) return { success: false, error: 'No user provided.' };
       if (!photo) return { success: false, error: 'Verification photo is required.' };
 
-      const today = todayDateStr();
+      const today = getDoualaTodayStr();
+      const browserIso = new Date().toISOString();
+      console.log('[Attendance Clock In] Browser current ISO time:', browserIso);
+      console.log('[Attendance Clock In] UTC timestamp / date sent to API:', today);
 
       try {
         const file = typeof photo === 'string' && photo.startsWith('data:')
@@ -96,6 +95,12 @@ export function AttendanceProvider({ children }) {
 
         const savedRecord = res?.data || res;
         if (savedRecord) {
+          console.log('[Attendance Clock In] Formatted Africa/Douala time received:', {
+            clockIn: savedRecord.clockIn,
+            clockInRaw: savedRecord.clockInRaw,
+            workingHours: savedRecord.workingHours,
+            date: savedRecord.date,
+          });
           await refreshAttendance();
           return { success: true, record: savedRecord };
         }
@@ -114,7 +119,10 @@ export function AttendanceProvider({ children }) {
       if (!currentUser) return { success: false, error: 'No user provided.' };
       if (!photo) return { success: false, error: 'Verification photo is required for Clock Out.' };
 
-      const today = todayDateStr();
+      const today = getDoualaTodayStr();
+      const browserIso = new Date().toISOString();
+      console.log('[Attendance Clock Out] Browser current ISO time:', browserIso);
+      console.log('[Attendance Clock Out] UTC timestamp / date sent to API:', today);
 
       try {
         const file = typeof photo === 'string' && photo.startsWith('data:')
@@ -138,6 +146,12 @@ export function AttendanceProvider({ children }) {
 
         const updatedRecord = res?.data || res;
         if (updatedRecord) {
+          console.log('[Attendance Clock Out] Formatted Africa/Douala time received:', {
+            clockOut: updatedRecord.clockOut,
+            clockOutRaw: updatedRecord.clockOutRaw,
+            workingHours: updatedRecord.workingHours,
+            date: updatedRecord.date,
+          });
           await refreshAttendance();
           return { success: true, record: updatedRecord };
         }
@@ -167,7 +181,15 @@ export function AttendanceProvider({ children }) {
       if (!reason?.trim()) return { success: false, error: 'Reason for manual entry is required.' };
       if (!clockInTime) return { success: false, error: 'Clock In time is required.' };
 
-      const dateVal = date || todayDateStr();
+      const dateVal = date || getDoualaTodayStr();
+      const browserIso = new Date().toISOString();
+      console.log('[Attendance Manual Entry] Browser current ISO time:', browserIso);
+      console.log('[Attendance Manual Entry] UTC timestamp / payload sent to API:', {
+        employeeId: employee.id,
+        date: dateVal,
+        clockInTime,
+        clockOutTime,
+      });
 
       try {
         const file = typeof photo === 'string' && photo.startsWith('data:')
@@ -201,6 +223,14 @@ export function AttendanceProvider({ children }) {
 
         const savedRecord = res?.data || res;
         if (savedRecord) {
+          console.log('[Attendance Manual Entry] Formatted Africa/Douala time received:', {
+            clockIn: savedRecord.clockIn,
+            clockInRaw: savedRecord.clockInRaw,
+            clockOut: savedRecord.clockOut,
+            clockOutRaw: savedRecord.clockOutRaw,
+            workingHours: savedRecord.workingHours,
+            date: savedRecord.date,
+          });
           await refreshAttendance();
           return { success: true, record: savedRecord };
         }
@@ -222,7 +252,7 @@ export function AttendanceProvider({ children }) {
   const getTodayRecord = useCallback(
     (employeeId) => {
       if (!employeeId) return null;
-      const today = todayDateStr();
+      const today = getDoualaTodayStr();
       return records.find((r) => r.employeeId === employeeId && r.date === today) || null;
     },
     [records]
@@ -241,7 +271,7 @@ export function AttendanceProvider({ children }) {
 
   // Get today's attendance for all employees (Manager view)
   const todayAllRecords = useMemo(() => {
-    const today = todayDateStr();
+    const today = getDoualaTodayStr();
     return records.filter((r) => r.date === today);
   }, [records]);
 

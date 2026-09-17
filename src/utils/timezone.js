@@ -1,14 +1,15 @@
 /**
  * Timezone utilities for OMEGA SPA POS
  * Business Location: Douala, Cameroon
- * Standard Timezone: Africa/Douala (WAT, UTC+1)
+ * Standard Timezone: Africa/Douala (WAT, UTC+1, no DST)
  */
 
 export const DOUALA_TIMEZONE = 'Africa/Douala';
+export const COMPANY_TIMEZONE = DOUALA_TIMEZONE;
 
 /**
  * Returns today's date in Africa/Douala timezone formatted as YYYY-MM-DD
- * @returns {string} e.g. "2026-09-16"
+ * @returns {string} e.g. "2026-09-17"
  */
 export function getDoualaTodayStr() {
   return new Intl.DateTimeFormat('en-CA', {
@@ -33,39 +34,56 @@ export function getDoualaCurrentTimeStr() {
 }
 
 /**
- * Format date string (YYYY-MM-DD) for display in Africa/Douala timezone
- * e.g., "Wednesday, 16 Sept 2026"
- * @param {string} dateStr YYYY-MM-DD
- * @returns {string}
+ * Returns the current time in Africa/Douala timezone formatted as hh:mm AM/PM (12-hour)
+ * @returns {string} e.g. "02:30 PM"
  */
-export function formatDoualaDateDisplay(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-').map(Number);
-  // Using noon UTC ensures no date rollover regardless of browser location
-  const date = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
-  return date.toLocaleDateString('en-GB', {
+export function getDoualaCurrentTime12Str() {
+  return new Intl.DateTimeFormat('en-US', {
     timeZone: DOUALA_TIMEZONE,
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(new Date());
 }
 
-// Aliases for company attendance module compatibility
-export const COMPANY_TIMEZONE = DOUALA_TIMEZONE;
-export const getCompanyTodayDateStr = getDoualaTodayStr;
-export const getCompanyCurrentTimeStr = getDoualaCurrentTimeStr;
+/**
+ * Format date string (YYYY-MM-DD) for display in Africa/Douala timezone
+ * e.g., "Thursday, 17 Sep 2026"
+ * @param {string} dateStr YYYY-MM-DD
+ * @param {Intl.DateTimeFormatOptions} [options]
+ * @returns {string}
+ */
+export function formatDoualaDateDisplay(dateStr, options = {}) {
+  if (!dateStr) return '—';
+  const parts = String(dateStr).slice(0, 10).split('-');
+  if (parts.length === 3) {
+    // Noon UTC ensures no date rollover regardless of browser location
+    const date = new Date(Date.UTC(+parts[0], +parts[1] - 1, +parts[2], 12, 0, 0));
+    const defaultOptions = {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      ...options,
+    };
+    return date.toLocaleDateString('en-GB', {
+      timeZone: DOUALA_TIMEZONE,
+      ...defaultOptions,
+    });
+  }
+  return dateStr;
+}
 
 /**
- * Formats a Date or ISO string into 24-hour "HH:mm" in Cameroon (Africa/Douala)
+ * Formats a Date or ISO string into 24-hour "HH:mm" in Africa/Douala
+ * @param {Date|string} dateOrIso
+ * @returns {string}
  */
-export function formatCompanyTime24(dateOrIso) {
+export function formatDoualaTime24(dateOrIso) {
   if (!dateOrIso) return '';
   const d = typeof dateOrIso === 'string' ? new Date(dateOrIso) : dateOrIso;
   if (isNaN(d.getTime())) return '';
   return new Intl.DateTimeFormat('en-GB', {
-    timeZone: COMPANY_TIMEZONE,
+    timeZone: DOUALA_TIMEZONE,
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -73,15 +91,36 @@ export function formatCompanyTime24(dateOrIso) {
 }
 
 /**
- * Converts a formatted 12-hour or 24-hour time or ISO date string to "HH:mm" in Cameroon timezone.
+ * Formats a Date or ISO string into 12-hour "hh:mm AM/PM" in Africa/Douala
+ * @param {Date|string} dateOrIso
+ * @returns {string}
  */
-export function parseToCompany24Hour(formattedTime, rawDate) {
-  // Priority 1: If rawDate (UTC ISO string) exists, format directly in Cameroon time
+export function formatDoualaTime12(dateOrIso) {
+  if (!dateOrIso) return '';
+  const d = typeof dateOrIso === 'string' ? new Date(dateOrIso) : dateOrIso;
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: DOUALA_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(d);
+}
+
+/**
+ * Converts a formatted 12-hour/24-hour time or raw UTC ISO string into "HH:mm" in Africa/Douala
+ * Priority 1: Format rawDate (UTC ISO string) directly in Douala timezone
+ * Priority 2: Parse formatted string (e.g. "09:00 AM", "9:00 AM", "14:30")
+ * @param {string} formattedTime
+ * @param {string|Date} [rawDate]
+ * @returns {string} "HH:mm"
+ */
+export function parseToDouala24Hour(formattedTime, rawDate) {
   if (rawDate) {
     try {
       const d = new Date(rawDate);
       if (!isNaN(d.getTime())) {
-        const str24 = formatCompanyTime24(d);
+        const str24 = formatDoualaTime24(d);
         if (str24) return str24;
       }
     } catch {
@@ -89,7 +128,6 @@ export function parseToCompany24Hour(formattedTime, rawDate) {
     }
   }
 
-  // Priority 2: Parse formatted string (e.g. "11:15 AM", "11:15", with standard or narrow space)
   if (typeof formattedTime === 'string') {
     const trimmed = formattedTime.trim();
     // 12-hour AM/PM format (e.g., "06:57 PM", "6:57 PM", "11:15 AM")
@@ -117,26 +155,11 @@ export function parseToCompany24Hour(formattedTime, rawDate) {
 }
 
 /**
- * Formats a date string (YYYY-MM-DD) into display string e.g. "17 Sep 2026"
- * Prevents timezone offset day shifts.
- */
-export function formatCompanyDateDisplay(dateStr) {
-  if (!dateStr) return '—';
-  const parts = String(dateStr).slice(0, 10).split('-');
-  if (parts.length === 3) {
-    const d = new Date(Date.UTC(+parts[0], +parts[1] - 1, +parts[2]));
-    return d.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      timeZone: 'UTC',
-    });
-  }
-  return dateStr;
-}
-
-/**
  * Calculates duration in minutes and formats as "Xh Ym"
+ * @param {Date|string} clockIn
+ * @param {Date|string} clockOut
+ * @param {string|number} [fallbackWorkingHours]
+ * @returns {string|null}
  */
 export function calculateDurationFromTimestamps(clockIn, clockOut, fallbackWorkingHours) {
   if (clockIn && clockOut) {
@@ -149,11 +172,24 @@ export function calculateDurationFromTimestamps(clockIn, clockOut, fallbackWorki
       return `${h}h ${m}m`;
     }
   }
-  if (fallbackWorkingHours) {
-    return fallbackWorkingHours;
+  if (fallbackWorkingHours !== null && fallbackWorkingHours !== undefined) {
+    const num = Number(fallbackWorkingHours);
+    if (!isNaN(num)) {
+      const h = Math.floor(num);
+      const m = Math.round((num - h) * 60);
+      return `${h}h ${m}m`;
+    }
+    return String(fallbackWorkingHours);
   }
   return null;
 }
+
+// Aliases for company attendance module compatibility
+export const getCompanyTodayDateStr = getDoualaTodayStr;
+export const getCompanyCurrentTimeStr = getDoualaCurrentTimeStr;
+export const formatCompanyTime24 = formatDoualaTime24;
+export const parseToCompany24Hour = parseToDouala24Hour;
+export const formatCompanyDateDisplay = formatDoualaDateDisplay;
 
 /**
  * All allowed appointment booking slots between 10:00 AM and 09:00 PM (10:00 - 21:00)

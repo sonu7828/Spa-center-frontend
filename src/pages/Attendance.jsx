@@ -34,7 +34,7 @@ import {
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../context/AuthContext';
 import { useAttendance } from '../context/AttendanceContext';
-import { COMPANY_TIMEZONE, formatCompanyDateDisplay } from '../utils/timezone';
+import { getDoualaTodayStr, formatDoualaDateDisplay } from '../utils/timezone';
 
 export default function Attendance() {
   const { user } = useAuth();
@@ -83,7 +83,7 @@ export default function Attendance() {
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
+          videoRef.current.play().catch(() => { });
         }
       }, 100);
     } catch (err) {
@@ -134,11 +134,11 @@ export default function Attendance() {
   const todayRecord = getTodayRecord(user?.id);
   const history = getEmployeeRecords(user?.id);
 
-  const todayFormatted = new Date().toLocaleDateString('en-GB', {
+  const todayFormatted = formatDoualaDateDisplay(getDoualaTodayStr(), {
+    weekday: 'short',
     day: '2-digit',
     month: 'short',
     year: 'numeric',
-    timeZone: COMPANY_TIMEZONE,
   });
 
   const status = todayRecord?.status || 'not_started';
@@ -226,7 +226,7 @@ export default function Attendance() {
   };
 
   const formatDateDisplay = (dateStr) => {
-    return formatCompanyDateDisplay(dateStr);
+    return formatDoualaDateDisplay(dateStr);
   };
 
   const tabs = [
@@ -247,11 +247,10 @@ export default function Attendance() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] text-xs sm:text-sm font-medium transition-all duration-150 cursor-pointer ${
-                    activeTab === tab.id
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] text-xs sm:text-sm font-medium transition-all duration-150 cursor-pointer ${activeTab === tab.id
                       ? 'bg-white text-charcoal shadow-sm border border-border/60'
                       : 'text-muted-gray hover:text-charcoal hover:bg-white/40'
-                  }`}
+                    }`}
                 >
                   <TabIcon size={14} strokeWidth={activeTab === tab.id ? 2.2 : 1.6} />
                   <span>{tab.label}</span>
@@ -265,11 +264,10 @@ export default function Attendance() {
       {/* Feedback Toast */}
       {feedback && (
         <div
-          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] text-xs sm:text-sm font-medium border transition-all duration-300 ${
-            feedback.type === 'success'
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] text-xs sm:text-sm font-medium border transition-all duration-300 ${feedback.type === 'success'
               ? 'bg-success-soft text-[#4F6748] border-success/30'
               : 'bg-error-soft text-error border-error/30'
-          }`}
+            }`}
         >
           {feedback.type === 'success' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
           {feedback.message}
@@ -287,10 +285,10 @@ export default function Attendance() {
                 <div className="flex items-center justify-between pb-3 border-b border-border/60">
                   <div>
                     <h3 className="text-sm sm:text-base font-bold text-charcoal">Today's Shift</h3>
-                    <p className="text-[11px] text-muted-gray mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <p className="text-[11px] text-muted-gray mt-0.5 flex items-center gap-1.5">
                       <Calendar size={12} />
                       <span>{todayFormatted}</span>
-                      <span className="text-[10px] text-sage font-medium bg-sage-soft px-1.5 py-0.5 rounded-[5px] border border-sage/20">
+                      <span className="text-[9px] font-semibold text-[#4F6748] bg-success-soft px-1.5 py-0.2 rounded border border-success/20">
                         Cameroon (UTC+1)
                       </span>
                     </p>
@@ -431,9 +429,8 @@ export default function Attendance() {
               {/* Header Title for Current Step */}
               <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-8 h-8 rounded-[9px] flex items-center justify-center ${
-                    status === 'working' ? 'bg-dusty-rose/20 text-dusty-rose' : 'bg-sage-soft text-sage-hover'
-                  }`}>
+                  <div className={`w-8 h-8 rounded-[9px] flex items-center justify-center ${status === 'working' ? 'bg-dusty-rose/20 text-dusty-rose' : 'bg-sage-soft text-sage-hover'
+                    }`}>
                     {status === 'completed' ? <CheckCircle size={16} /> : <Camera size={16} />}
                   </div>
                   <div>
@@ -475,9 +472,8 @@ export default function Attendance() {
                       </div>
                       <button
                         onClick={handleOpenCamera}
-                        className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[10px] text-white text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer shadow-sm active:scale-[0.98] ${
-                          status === 'working' ? 'bg-[#4F6748] hover:bg-[#3E5339]' : 'bg-[#4F6748] hover:bg-[#3E5339]'
-                        }`}
+                        className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[10px] text-white text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer shadow-sm active:scale-[0.98] ${status === 'working' ? 'bg-[#4F6748] hover:bg-[#3E5339]' : 'bg-[#4F6748] hover:bg-[#3E5339]'
+                          }`}
                       >
                         <Video size={15} strokeWidth={2.2} />
                         {status === 'not_started' ? 'Open Camera & Take Photo' : 'Open Camera for Departure Photo'}
@@ -596,11 +592,10 @@ export default function Attendance() {
                   <button
                     onClick={handleClockIn}
                     disabled={!photoConfirmed || isSubmitting}
-                    className={`w-full flex items-center justify-center gap-2 px-5 py-3 rounded-[11px] text-sm font-semibold transition-all duration-150 shadow-sm ${
-                      photoConfirmed && !isSubmitting
+                    className={`w-full flex items-center justify-center gap-2 px-5 py-3 rounded-[11px] text-sm font-semibold transition-all duration-150 shadow-sm ${photoConfirmed && !isSubmitting
                         ? 'bg-sage hover:bg-sage-hover text-white cursor-pointer active:scale-[0.98]'
                         : 'bg-border text-muted-gray cursor-not-allowed opacity-60'
-                    }`}
+                      }`}
                   >
                     <LogIn size={16} strokeWidth={2.2} />
                     {isSubmitting ? 'Clocking In...' : photoConfirmed ? 'Clock In' : 'Take Photo to Clock In'}
@@ -611,11 +606,10 @@ export default function Attendance() {
                   <button
                     onClick={handleClockOut}
                     disabled={isSubmitting}
-                    className={`w-full flex items-center justify-center gap-2 px-5 py-3 rounded-[11px] text-sm font-semibold transition-all duration-150 shadow-sm active:scale-[0.98] ${
-                      photoConfirmed
+                    className={`w-full flex items-center justify-center gap-2 px-5 py-3 rounded-[11px] text-sm font-semibold transition-all duration-150 shadow-sm active:scale-[0.98] ${photoConfirmed
                         ? 'bg-dusty-rose hover:bg-[#D4A399] text-white cursor-pointer'
                         : 'bg-dusty-rose/85 hover:bg-dusty-rose text-white cursor-pointer'
-                    } ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                      } ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                   >
                     <LogOut size={16} strokeWidth={2.2} />
                     {isSubmitting ? 'Clocking Out...' : photoConfirmed ? 'Clock Out' : 'Take Photo to Clock Out'}
@@ -865,11 +859,10 @@ export default function Attendance() {
                   <span className="text-xs font-bold text-charcoal">
                     {selectedManualDetails.employeeName || user?.name}
                   </span>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[10px] font-semibold ${
-                    selectedManualDetails.status === 'completed'
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[10px] font-semibold ${selectedManualDetails.status === 'completed'
                       ? 'bg-[#DCE7D7] text-[#4F6748] border border-[#4F6748]/20'
                       : 'bg-success-soft text-[#4F6748] border border-success/30'
-                  }`}>
+                    }`}>
                     <span className="w-1.5 h-1.5 rounded-full bg-success" />
                     {selectedManualDetails.status === 'completed' ? 'Completed' : 'Working'}
                   </span>

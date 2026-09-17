@@ -45,11 +45,11 @@ import PageHeader from '../components/PageHeader';
 import { useAuth } from '../context/AuthContext';
 import { useAttendance } from '../context/AttendanceContext';
 import {
-  COMPANY_TIMEZONE,
-  getCompanyTodayDateStr,
-  getCompanyCurrentTimeStr,
-  parseToCompany24Hour,
-  formatCompanyDateDisplay,
+  DOUALA_TIMEZONE,
+  getDoualaTodayStr,
+  getDoualaCurrentTimeStr,
+  parseToDouala24Hour,
+  formatDoualaDateDisplay,
 } from '../utils/timezone';
 
 const QUICK_REASONS = [
@@ -58,9 +58,6 @@ const QUICK_REASONS = [
   'Forgot to clock in',
   'Emergency situation',
 ];
-
-const parseTo24Hour = parseToCompany24Hour;
-const getCurrentTimeStr = getCompanyCurrentTimeStr;
 
 export default function AttendanceManager() {
   const { user, allUsers } = useAuth();
@@ -72,11 +69,11 @@ export default function AttendanceManager() {
   const [selectedManualDetails, setSelectedManualDetails] = useState(null);
   const [feedback, setFeedback] = useState(null);
 
-  // Manual form state
+  // Manual form state — strictly initialized in Africa/Douala timezone
   const [manualEmployee, setManualEmployee] = useState('');
-  const [manualDate, setManualDate] = useState(getCompanyTodayDateStr());
-  const [manualClockIn, setManualClockIn] = useState(getCompanyCurrentTimeStr());
-  const [manualClockOut, setManualClockOut] = useState(getCompanyCurrentTimeStr());
+  const [manualDate, setManualDate] = useState(getDoualaTodayStr());
+  const [manualClockIn, setManualClockIn] = useState(getDoualaCurrentTimeStr());
+  const [manualClockOut, setManualClockOut] = useState(getDoualaCurrentTimeStr());
   const [manualStatus, setManualStatus] = useState('completed');
   const [manualReason, setManualReason] = useState('');
   const [manualPhoto, setManualPhoto] = useState(null);
@@ -93,11 +90,11 @@ export default function AttendanceManager() {
   const [filterEmployee, setFilterEmployee] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
-  const todayFormatted = new Date().toLocaleDateString('en-GB', {
+  const todayFormatted = formatDoualaDateDisplay(getDoualaTodayStr(), {
+    weekday: 'short',
     day: '2-digit',
     month: 'short',
     year: 'numeric',
-    timeZone: COMPANY_TIMEZONE,
   });
 
   // Get all active employees who track attendance (excluding manager and cleaner)
@@ -142,18 +139,18 @@ export default function AttendanceManager() {
         setManualDate(empRec.date);
       }
       // Pre-load the exact time when employee clocked in
-      const preloadedIn = parseTo24Hour(empRec.clockIn, empRec.clockInRaw);
+      const preloadedIn = parseToDouala24Hour(empRec.clockIn, empRec.clockInRaw);
       if (preloadedIn) {
         setManualClockIn(preloadedIn);
       }
       setCanOverrideRecord(true);
 
       if (targetStatus === 'completed') {
-        setManualClockOut(getCurrentTimeStr());
+        setManualClockOut(getDoualaCurrentTimeStr());
         setManualReason('Manager recorded employee clock out');
       }
     } else {
-      setManualClockIn(getCurrentTimeStr());
+      setManualClockIn(getDoualaCurrentTimeStr());
       setCanOverrideRecord(false);
       if (targetStatus === 'working') {
         setManualReason('Manual clock-in recorded by manager');
@@ -212,7 +209,7 @@ export default function AttendanceManager() {
   }, [allRecordsSorted, filterDate, filterEmployee, filterStatus]);
 
   const formatDateDisplay = (dateStr) => {
-    return formatCompanyDateDisplay(dateStr);
+    return formatDoualaDateDisplay(dateStr);
   };
 
   const tabs = [
@@ -225,10 +222,9 @@ export default function AttendanceManager() {
   // Manual entry handlers
   const resetManualForm = () => {
     setManualEmployee('');
-    setManualDate(getCompanyTodayDateStr());
-    const currentCameroonTime = getCompanyCurrentTimeStr();
-    setManualClockIn(currentCameroonTime);
-    setManualClockOut(currentCameroonTime);
+    setManualDate(getDoualaTodayStr());
+    setManualClockIn(getDoualaCurrentTimeStr());
+    setManualClockOut(getDoualaCurrentTimeStr());
     setManualStatus('completed');
     setManualReason('');
     setManualPhoto(null);
@@ -294,8 +290,8 @@ export default function AttendanceManager() {
           message: wasClockOut
             ? `Clock out recorded successfully for ${emp.name}.`
             : shouldOverride
-            ? `Attendance updated successfully for ${emp.name}.`
-            : `Manual attendance added for ${emp.name}.`,
+              ? `Attendance updated successfully for ${emp.name}.`
+              : `Manual attendance added for ${emp.name}.`,
         });
         setShowManualForm(false);
         resetManualForm();
@@ -358,8 +354,8 @@ export default function AttendanceManager() {
           <div className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] bg-white border border-border text-xs font-semibold text-charcoal shadow-xs">
             <Calendar size={14} className="text-sage" />
             <span>{todayFormatted}</span>
-            <span className="text-[10px] text-sage font-medium bg-sage-soft px-1.5 py-0.5 rounded-[5px] border border-sage/20">
-              Cameroon (WAT)
+            <span className="text-[10px] font-medium text-[#4F6748] bg-success-soft px-1.5 py-0.5 rounded-[5px] border border-success/20">
+              Cameroon (WAT, UTC+1)
             </span>
           </div>
 
@@ -380,11 +376,10 @@ export default function AttendanceManager() {
       {/* Feedback Toast */}
       {feedback && (
         <div
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-[12px] text-xs sm:text-sm font-medium border transition-all duration-300 ${
-            feedback.type === 'success'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-[12px] text-xs sm:text-sm font-medium border transition-all duration-300 ${feedback.type === 'success'
               ? 'bg-success-soft text-[#4F6748] border-success/30'
               : 'bg-error-soft text-error border-error/30'
-          }`}
+            }`}
         >
           {feedback.type === 'success' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
           {feedback.message}
@@ -421,17 +416,15 @@ export default function AttendanceManager() {
                     <button
                       key={f.id}
                       onClick={() => setTodayFilter(f.id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap ${
-                        isActive
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap ${isActive
                           ? 'bg-charcoal text-white shadow-xs'
                           : 'bg-white text-muted-gray hover:text-charcoal hover:bg-warm-ivory border border-border/70'
-                      }`}
+                        }`}
                     >
                       <span>{f.label}</span>
                       <span
-                        className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                          isActive ? 'bg-white/20 text-white' : 'bg-[#F3F0EC] text-charcoal'
-                        }`}
+                        className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-[#F3F0EC] text-charcoal'
+                          }`}
                       >
                         {f.count}
                       </span>
@@ -461,11 +454,10 @@ export default function AttendanceManager() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap ${
-                    isActive
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap ${isActive
                       ? 'bg-white text-charcoal shadow-xs border border-border/50'
                       : 'text-muted-gray hover:text-charcoal hover:bg-white/50'
-                  }`}
+                    }`}
                 >
                   <TabIcon
                     size={13}
@@ -684,9 +676,8 @@ export default function AttendanceManager() {
                               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-[11px] font-semibold ${sc.bg} ${sc.color} border ${sc.border}`}
                             >
                               <span
-                                className={`w-1.5 h-1.5 rounded-full ${sc.dot} ${
-                                  status === 'working' ? 'animate-pulse' : ''
-                                }`}
+                                className={`w-1.5 h-1.5 rounded-full ${sc.dot} ${status === 'working' ? 'animate-pulse' : ''
+                                  }`}
                               />
                               {status === 'not_started' ? 'Absent' : sc.label}
                             </span>
@@ -1025,9 +1016,8 @@ export default function AttendanceManager() {
             {/* Header */}
             <div className="flex items-center justify-between p-5 border-b border-border">
               <div className="flex items-center gap-2.5">
-                <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center ${
-                  isClockOutAction ? 'bg-[#DCE7D7]' : 'bg-warning-soft'
-                }`}>
+                <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center ${isClockOutAction ? 'bg-[#DCE7D7]' : 'bg-warning-soft'
+                  }`}>
                   {isClockOutAction ? (
                     <LogOut size={16} className="text-[#4F6748]" />
                   ) : (
@@ -1112,8 +1102,8 @@ export default function AttendanceManager() {
                     type="button"
                     onClick={() => setManualStatus('completed')}
                     className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-[10px] text-xs font-semibold border transition-all cursor-pointer ${manualStatus === 'completed'
-                        ? 'bg-[#DCE7D7] text-[#4F6748] border-[#4F6748]/30 shadow-xs'
-                        : 'bg-warm-ivory text-muted-gray border-border hover:border-sage/40'
+                      ? 'bg-[#DCE7D7] text-[#4F6748] border-[#4F6748]/30 shadow-xs'
+                      : 'bg-warm-ivory text-muted-gray border-border hover:border-sage/40'
                       }`}
                   >
                     <CheckCircle size={14} />
@@ -1123,8 +1113,8 @@ export default function AttendanceManager() {
                     type="button"
                     onClick={() => setManualStatus('working')}
                     className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-[10px] text-xs font-semibold border transition-all cursor-pointer ${manualStatus === 'working'
-                        ? 'bg-success-soft text-[#4F6748] border-success/30 shadow-xs'
-                        : 'bg-warm-ivory text-muted-gray border-border hover:border-sage/40'
+                      ? 'bg-success-soft text-[#4F6748] border-success/30 shadow-xs'
+                      : 'bg-warm-ivory text-muted-gray border-border hover:border-sage/40'
                       }`}
                   >
                     <Timer size={14} />
@@ -1160,7 +1150,7 @@ export default function AttendanceManager() {
                     </label>
                     {isClockOutAction && (
                       <span className="text-[10px] font-medium text-muted-gray bg-warm-ivory px-1.5 py-0.5 rounded-[4px] border border-border/60">
-                        Current Cameroon Time
+                        Current Time
                       </span>
                     )}
                   </div>
@@ -1324,8 +1314,8 @@ export default function AttendanceManager() {
                   onClick={() => handleManualSubmit(false)}
                   disabled={!manualEmployee || !manualClockIn || !manualReason.trim() || isSubmitting}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-[11px] text-sm font-semibold transition-all ${manualEmployee && manualClockIn && manualReason.trim() && !isSubmitting
-                      ? 'bg-sage hover:bg-sage-hover text-white cursor-pointer active:scale-[0.98]'
-                      : 'bg-border text-muted-gray cursor-not-allowed opacity-60'
+                    ? 'bg-sage hover:bg-sage-hover text-white cursor-pointer active:scale-[0.98]'
+                    : 'bg-border text-muted-gray cursor-not-allowed opacity-60'
                     }`}
                 >
                   <Plus size={15} />
@@ -1376,8 +1366,8 @@ export default function AttendanceManager() {
                     <p className="text-[10px] text-muted-gray capitalize">{selectedManualDetails.employeeRole}</p>
                   </div>
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-[10px] font-semibold ${selectedManualDetails.status === 'completed'
-                      ? 'bg-[#DCE7D7] text-[#4F6748] border border-[#4F6748]/20'
-                      : 'bg-success-soft text-[#4F6748] border border-success/30'
+                    ? 'bg-[#DCE7D7] text-[#4F6748] border border-[#4F6748]/20'
+                    : 'bg-success-soft text-[#4F6748] border border-success/30'
                     }`}>
                     <span className="w-1.5 h-1.5 rounded-full bg-success" />
                     {selectedManualDetails.status === 'completed' ? 'Completed' : 'Working'}
