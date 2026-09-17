@@ -21,7 +21,6 @@ import {
   MapPin,
   Cake,
   Heart,
-  UserRoundPlus,
   UserPlus,
   TriangleAlert,
   ImageIcon,
@@ -100,8 +99,6 @@ export default function ClientFile() {
       quartier: client.quartier || '',
       birthday: client.birthday || '',
       anniversary: client.anniversary || '',
-      recommendedByName: client.recommendedBy?.name || '',
-      recommendedByPhone: client.recommendedBy?.phone || '',
     });
     setIsEditing(true);
     setEditSaved(false);
@@ -115,24 +112,12 @@ export default function ClientFile() {
   const handleSaveEdit = () => {
     if (!editForm) return;
 
-    let recommendedBy = client.recommendedBy;
-    if (editForm.recommendedByName.trim()) {
-      recommendedBy = {
-        name: editForm.recommendedByName.trim(),
-        phone: editForm.recommendedByPhone.trim() || '',
-        date: client.recommendedBy?.date || '',
-      };
-    } else {
-      recommendedBy = null;
-    }
-
     updateClient(client.id, {
       name: editForm.name.trim() || client.name,
       phone: editForm.phone.trim() || client.phone,
       quartier: editForm.quartier.trim(),
       birthday: editForm.birthday,
       anniversary: editForm.anniversary,
-      recommendedBy,
     });
 
     setIsEditing(false);
@@ -253,20 +238,7 @@ export default function ClientFile() {
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-              <Input
-                label="Recommended By — Name"
-                value={editForm.recommendedByName}
-                onChange={updateField('recommendedByName')}
-                placeholder="Referrer name"
-              />
-              <Input
-                label="Recommended By — Phone"
-                value={editForm.recommendedByPhone}
-                onChange={updateField('recommendedByPhone')}
-                placeholder="Referrer phone"
-              />
-            </div>
+
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="secondary" onClick={handleCancelEdit}>
@@ -358,17 +330,7 @@ export default function ClientFile() {
                   </span>
                 </div>
               )}
-              {client.recommendedBy && (
-                <div className="flex items-center gap-2.5">
-                  <UserRoundPlus size={16} className="text-sage shrink-0" />
-                  <span className="text-sm text-muted-gray">
-                    Recommended By: {client.recommendedBy.name}
-                    {client.recommendedBy.phone
-                      ? ` — ${client.recommendedBy.phone}`
-                      : ''}
-                  </span>
-                </div>
-              )}
+
               {client.introducedBy && (
                 <div className="col-span-1 sm:col-span-2 bg-sage-soft/60 rounded-[12px] p-3.5 border border-sage/30">
                   <div className="flex items-center gap-2 mb-2 pb-2 border-b border-sage/20">
