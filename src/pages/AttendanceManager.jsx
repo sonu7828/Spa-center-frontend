@@ -44,6 +44,13 @@ import {
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../context/AuthContext';
 import { useAttendance } from '../context/AttendanceContext';
+import {
+  COMPANY_TIMEZONE,
+  getCompanyTodayDateStr,
+  getCompanyCurrentTimeStr,
+  parseToCompany24Hour,
+  formatCompanyDateDisplay,
+} from '../utils/timezone';
 
 const QUICK_REASONS = [
   'Employee device issue',
@@ -52,57 +59,8 @@ const QUICK_REASONS = [
   'Emergency situation',
 ];
 
-/**
- * Converts formatted time strings ("06:57 PM", "6:57 PM") or ISO strings to 24-hour "HH:mm" format for <input type="time" />
- */
-const parseTo24Hour = (formattedTime, rawDate) => {
-  if (typeof formattedTime === 'string') {
-    const trimmed = formattedTime.trim();
-    // 12-hour AM/PM format (e.g., "06:57 PM", "6:57 PM")
-    const ampmMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i);
-    if (ampmMatch) {
-      let h = parseInt(ampmMatch[1], 10);
-      const m = ampmMatch[2];
-      const meridiem = ampmMatch[3].toUpperCase();
-      if (meridiem === 'PM' && h < 12) h += 12;
-      if (meridiem === 'AM' && h === 12) h = 0;
-      return `${String(h).padStart(2, '0')}:${m}`;
-    }
-    // 24-hour military format (e.g., "18:57")
-    const militaryMatch = trimmed.match(/^(\d{1,2}):(\d{2})/);
-    if (militaryMatch) {
-      const h = parseInt(militaryMatch[1], 10);
-      const m = militaryMatch[2];
-      if (h >= 0 && h < 24) {
-        return `${String(h).padStart(2, '0')}:${m}`;
-      }
-    }
-  }
-
-  // Fallback to raw ISO date string if present
-  if (rawDate) {
-    try {
-      const d = new Date(rawDate);
-      if (!isNaN(d.getTime())) {
-        const h = String(d.getHours()).padStart(2, '0');
-        const m = String(d.getMinutes()).padStart(2, '0');
-        return `${h}:${m}`;
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  return '';
-};
-
-/**
- * Returns current local time in 24-hour "HH:mm" format
- */
-const getCurrentTimeStr = () => {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-};
+const parseTo24Hour = parseToCompany24Hour;
+const getCurrentTimeStr = getCompanyCurrentTimeStr;
 
 export default function AttendanceManager() {
   const { user, allUsers } = useAuth();
@@ -116,9 +74,9 @@ export default function AttendanceManager() {
 
   // Manual form state
   const [manualEmployee, setManualEmployee] = useState('');
-  const [manualDate, setManualDate] = useState(new Date().toISOString().slice(0, 10));
-  const [manualClockIn, setManualClockIn] = useState('09:00');
-  const [manualClockOut, setManualClockOut] = useState('17:00');
+  const [manualDate, setManualDate] = useState(getCompanyTodayDateStr());
+  const [manualClockIn, setManualClockIn] = useState(getCompanyCurrentTimeStr());
+  const [manualClockOut, setManualClockOut] = useState(getCompanyCurrentTimeStr());
   const [manualStatus, setManualStatus] = useState('completed');
   const [manualReason, setManualReason] = useState('');
   const [manualPhoto, setManualPhoto] = useState(null);
@@ -139,6 +97,7 @@ export default function AttendanceManager() {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: COMPANY_TIMEZONE,
   });
 
   // Get all active employees who track attendance (excluding manager and cleaner)
@@ -253,9 +212,7 @@ export default function AttendanceManager() {
   }, [allRecordsSorted, filterDate, filterEmployee, filterStatus]);
 
   const formatDateDisplay = (dateStr) => {
-    if (!dateStr) return '—';
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    return formatCompanyDateDisplay(dateStr);
   };
 
   const tabs = [
@@ -268,9 +225,10 @@ export default function AttendanceManager() {
   // Manual entry handlers
   const resetManualForm = () => {
     setManualEmployee('');
-    setManualDate(new Date().toISOString().slice(0, 10));
-    setManualClockIn('09:00');
-    setManualClockOut('17:00');
+    setManualDate(getCompanyTodayDateStr());
+    const currentCameroonTime = getCompanyCurrentTimeStr();
+    setManualClockIn(currentCameroonTime);
+    setManualClockOut(currentCameroonTime);
     setManualStatus('completed');
     setManualReason('');
     setManualPhoto(null);
@@ -400,6 +358,9 @@ export default function AttendanceManager() {
           <div className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] bg-white border border-border text-xs font-semibold text-charcoal shadow-xs">
             <Calendar size={14} className="text-sage" />
             <span>{todayFormatted}</span>
+            <span className="text-[10px] text-sage font-medium bg-sage-soft px-1.5 py-0.5 rounded-[5px] border border-sage/20">
+              Cameroon (WAT)
+            </span>
           </div>
 
           {/* Add Manual Attendance Button */}
@@ -1177,7 +1138,7 @@ export default function AttendanceManager() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[10px] font-semibold text-muted-gray uppercase tracking-wider block">
-                      Clock In Time *
+                      Clock In Time (Cameroon) *
                     </label>
                     {existingEmpRec?.clockIn && (
                       <span className="text-[10px] font-semibold text-[#4F6748] flex items-center gap-1 bg-success-soft px-1.5 py-0.5 rounded-[5px] border border-success/20" title={`Clocked in at ${existingEmpRec.clockIn}`}>
@@ -1195,11 +1156,11 @@ export default function AttendanceManager() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[10px] font-semibold text-muted-gray uppercase tracking-wider block">
-                      Clock Out Time {manualStatus === 'working' && <span className="text-muted-gray normal-case font-normal">(optional)</span>}
+                      Clock Out Time (Cameroon) {manualStatus === 'working' && <span className="text-muted-gray normal-case font-normal">(optional)</span>}
                     </label>
                     {isClockOutAction && (
                       <span className="text-[10px] font-medium text-muted-gray bg-warm-ivory px-1.5 py-0.5 rounded-[4px] border border-border/60">
-                        Current Time
+                        Current Cameroon Time
                       </span>
                     )}
                   </div>

@@ -7,6 +7,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { attendanceApi } from '../services/api';
 import { useAuth } from './AuthContext';
+import { getCompanyTodayDateStr } from '../utils/timezone';
 
 const AttendanceContext = createContext(null);
 
@@ -27,8 +28,7 @@ function dataUrlToFile(dataUrl, filename = 'attendance.jpg') {
 }
 
 function todayDateStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return getCompanyTodayDateStr();
 }
 
 export function AttendanceProvider({ children }) {

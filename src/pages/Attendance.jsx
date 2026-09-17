@@ -34,6 +34,7 @@ import {
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../context/AuthContext';
 import { useAttendance } from '../context/AttendanceContext';
+import { COMPANY_TIMEZONE, formatCompanyDateDisplay } from '../utils/timezone';
 
 export default function Attendance() {
   const { user } = useAuth();
@@ -137,6 +138,7 @@ export default function Attendance() {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: COMPANY_TIMEZONE,
   });
 
   const status = todayRecord?.status || 'not_started';
@@ -224,9 +226,7 @@ export default function Attendance() {
   };
 
   const formatDateDisplay = (dateStr) => {
-    if (!dateStr) return '—';
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    return formatCompanyDateDisplay(dateStr);
   };
 
   const tabs = [
@@ -287,9 +287,12 @@ export default function Attendance() {
                 <div className="flex items-center justify-between pb-3 border-b border-border/60">
                   <div>
                     <h3 className="text-sm sm:text-base font-bold text-charcoal">Today's Shift</h3>
-                    <p className="text-[11px] text-muted-gray mt-0.5 flex items-center gap-1.5">
+                    <p className="text-[11px] text-muted-gray mt-0.5 flex items-center gap-1.5 flex-wrap">
                       <Calendar size={12} />
-                      {todayFormatted}
+                      <span>{todayFormatted}</span>
+                      <span className="text-[10px] text-sage font-medium bg-sage-soft px-1.5 py-0.5 rounded-[5px] border border-sage/20">
+                        Cameroon (UTC+1)
+                      </span>
                     </p>
                   </div>
                   <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] ${sc.bg} ${sc.border} border`}>
