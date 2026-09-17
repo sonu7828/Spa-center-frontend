@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -32,54 +32,21 @@ export default function AddClient() {
     quartier: '',
     birthday: '',
     anniversary: '',
-    recommendedByName: '',
-    recommendedByPhone: '',
   });
 
   const update = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-  // Simple referral detection for UI demonstration (only active when not manager)
-  const referralFound =
-    !isManager &&
-    form.recommendedByName.trim().length > 0 &&
-    clients.some((c) =>
-      c.name.toLowerCase().includes(form.recommendedByName.toLowerCase())
-    );
-
-  const matchedReferrer = referralFound
-    ? clients.find((c) =>
-        c.name.toLowerCase().includes(form.recommendedByName.toLowerCase())
-      )
-    : null;
-
   const [isSaving, setIsSaving] = useState(false);
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Build recommendedBy as { name, phone } if provided by non-manager
-      let recommendedBy = null;
-      if (!isManager) {
-        if (matchedReferrer) {
-          recommendedBy = {
-            name: matchedReferrer.name,
-            phone: matchedReferrer.phone,
-          };
-        } else if (form.recommendedByName.trim()) {
-          recommendedBy = {
-            name: form.recommendedByName.trim(),
-            phone: form.recommendedByPhone.trim() || '',
-          };
-        }
-      }
-
       const newId = await addClient({
         name: form.name,
         phone: form.phone,
         quartier: form.quartier,
         birthday: form.birthday,
         anniversary: form.anniversary,
-        recommendedBy,
         source: isManager ? 'DIRECT' : undefined,
       });
 
@@ -146,41 +113,7 @@ export default function AddClient() {
           />
         </div>
 
-        {/* Row 3: Recommended By — Name + Phone (Hidden for Manager) */}
-        {!isManager && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4">
-            <Input
-              label="Recommended By — Name"
-              value={form.recommendedByName}
-              onChange={update('recommendedByName')}
-              placeholder="Referrer name"
-            />
-            <Input
-              label="Recommended By — Phone"
-              value={form.recommendedByPhone}
-              onChange={update('recommendedByPhone')}
-              placeholder="Referrer phone"
-            />
-          </div>
-        )}
 
-        {/* Referral detection panel (Hidden for Manager) */}
-        {!isManager && referralFound && matchedReferrer && (
-          <div className="bg-success-soft border border-success/20 rounded-[12px] p-3.5 sm:p-4 mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Check size={16} className="text-success" />
-              <span className="text-sm font-semibold text-charcoal">
-                Referral Found
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-muted-gray">
-              Recommended By: {matchedReferrer.name} — {matchedReferrer.phone}
-            </p>
-            <p className="text-xs sm:text-sm font-medium text-charcoal mt-1">
-              New Client Discount: -15%
-            </p>
-          </div>
-        )}
 
         {/* Save & Cancel */}
         <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end sm:gap-3 pt-3 border-t border-border/50">

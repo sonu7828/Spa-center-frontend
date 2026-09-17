@@ -100,6 +100,7 @@ export default function Stock() {
   const [adjustReason, setAdjustReason] = useState('Wastage');
   const [adjustNote, setAdjustNote] = useState('');
   const [adjustError, setAdjustError] = useState('');
+  const [isAdjusting, setIsAdjusting] = useState(false);
 
   const selectedAdjustProductObj = serviceStock.find(
     (p) => p.name.toLowerCase() === adjustProduct.toLowerCase()
@@ -148,7 +149,7 @@ export default function Stock() {
   };
 
   // Handle Adjustment Submit (Known non-service reductions)
-  const handleAdjustSubmit = (e) => {
+  const handleAdjustSubmit = async (e) => {
     e?.preventDefault();
     setAdjustError('');
     const qty = parseInt(adjustQuantity, 10);
@@ -157,24 +158,31 @@ export default function Stock() {
       return;
     }
 
-    const res = adjustStock({
-      productName: adjustProduct,
-      quantity: qty,
-      reason: adjustReason,
-      note: adjustNote,
-      performedBy: user?.name || 'Manager',
-    });
+    setIsAdjusting(true);
+    try {
+      const res = await adjustStock({
+        productName: adjustProduct,
+        quantity: qty,
+        reason: adjustReason,
+        note: adjustNote,
+        performedBy: user?.name || 'Manager',
+      });
 
-    if (!res.success) {
-      setAdjustError(res.error || 'Failed to adjust stock.');
-      return;
+      if (!res || !res.success) {
+        setAdjustError(res?.error || 'Failed to adjust stock.');
+        return;
+      }
+
+      setActiveModal(null);
+      setAdjustQuantity('');
+      setAdjustNote('');
+      setAdjustReason('Wastage');
+      showToast(`Stock adjusted: -${qty} ${selectedAdjustProductObj?.unit || ''} (${adjustReason})`);
+    } catch (err) {
+      setAdjustError(err.message || 'Failed to adjust stock.');
+    } finally {
+      setIsAdjusting(false);
     }
-
-    setActiveModal(null);
-    setAdjustQuantity('');
-    setAdjustNote('');
-    setAdjustReason('Wastage');
-    showToast(`Stock adjusted: -${qty} ${selectedAdjustProductObj?.unit || ''} (${adjustReason})`);
   };
 
   // Open Consumption Rules Modal (Dynamic Services from ServicesContext)
@@ -1449,9 +1457,10 @@ export default function Stock() {
               <Button
                 type="submit"
                 form="adjust-form"
-                className="w-full h-11 text-xs sm:text-sm"
+                disabled={isAdjusting}
+                className="w-full h-11 text-xs sm:text-sm disabled:opacity-60"
               >
-                Confirm Adjustment
+                {isAdjusting ? 'Adjusting...' : 'Confirm Adjustment'}
               </Button>
             </div>
           </div>

@@ -73,7 +73,7 @@ export default function Staff() {
   const [resetSuccess, setResetSuccess] = useState(false);
 
   // Form state
-  const [form, setForm] = useState({ name: '', username: '', role: 'technician', password: '123456', specialties: [] });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'technician', password: '123456', specialties: [] });
   const [formError, setFormError] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -109,7 +109,7 @@ export default function Staff() {
   };
 
   const resetForm = () => {
-    setForm({ name: '', username: '', role: 'technician', password: '123456', specialties: [] });
+    setForm({ name: '', email: '', phone: '', role: 'technician', password: '123456', specialties: [] });
     setFormError('');
     setShowPw(false);
     setSaved(false);
@@ -141,8 +141,9 @@ export default function Staff() {
       .filter(Boolean);
 
     setForm({
-      name: u.name,
-      username: u.username || u.email?.split('@')[0] || '',
+      name: u.name || '',
+      email: u.email || '',
+      phone: u.phone || '',
       role: u.role,
       password: '',
       specialties: Array.from(new Set(validSpecs)),
@@ -176,10 +177,13 @@ export default function Staff() {
     setFormError('');
 
     try {
+      const emailVal = form.email.trim().toLowerCase();
+      const phoneVal = form.phone.trim();
       if (editingUser) {
         const updates = {
           name: form.name.trim(),
-          username: form.username.trim().toLowerCase().replace(/\s+/g, ''),
+          email: emailVal,
+          phone: phoneVal || null,
           role: form.role,
           specialties: form.role === 'technician' ? form.specialties : [],
         };
@@ -190,7 +194,8 @@ export default function Staff() {
       } else {
         await addUser({
           name: form.name.trim(),
-          username: form.username.trim().toLowerCase().replace(/\s+/g, ''),
+          email: emailVal,
+          phone: phoneVal || null,
           role: form.role,
           password: form.password || '123456',
           specialties: form.role === 'technician' ? form.specialties : [],
@@ -341,11 +346,10 @@ export default function Staff() {
             {specialties.map((spec) => (
               <div
                 key={spec.id}
-                className={`flex items-center justify-between px-3.5 py-2.5 rounded-[10px] border transition-all ${
-                  spec.active
+                className={`flex items-center justify-between px-3.5 py-2.5 rounded-[10px] border transition-all ${spec.active
                     ? 'bg-white border-border'
                     : 'bg-soft-cream/40 border-border/50 opacity-60'
-                }`}
+                  }`}
               >
                 {editingSpecId === spec.id ? (
                   <div className="flex items-center gap-2 flex-1">
@@ -387,11 +391,10 @@ export default function Staff() {
                       </button>
                       <button
                         onClick={() => handleToggleSpecialtyActive(spec.id)}
-                        className={`h-[26px] px-2 rounded-[6px] text-[10px] font-medium border transition-all cursor-pointer ${
-                          spec.active
+                        className={`h-[26px] px-2 rounded-[6px] text-[10px] font-medium border transition-all cursor-pointer ${spec.active
                             ? 'text-muted-gray bg-white border-border hover:bg-soft-cream'
                             : 'text-success bg-success-soft border-success/20 hover:bg-success/15'
-                        }`}
+                          }`}
                       >
                         {spec.active ? 'Deactivate' : 'Activate'}
                       </button>
@@ -442,7 +445,8 @@ export default function Staff() {
             <thead>
               <tr className="border-b border-border bg-soft-cream/40">
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Name</th>
-                <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Username</th>
+                <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Email</th>
+                <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Phone</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Role</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Specialties</th>
                 <th className="text-right px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Actions</th>
@@ -452,7 +456,8 @@ export default function Staff() {
               {activeUsers.map((u) => (
                 <tr key={u.id} className="border-b border-border/40 last:border-b-0 hover:bg-soft-cream/30 transition-colors">
                   <td className="px-5 py-3.5 text-sm font-semibold text-charcoal">{u.name}</td>
-                  <td className="px-5 py-3.5 text-sm text-muted-gray">{u.email || u.username}</td>
+                  <td className="px-5 py-3.5 text-sm text-muted-gray">{u.email}</td>
+                  <td className="px-5 py-3.5 text-sm text-charcoal font-medium">{u.phone || '—'}</td>
                   <td className="px-5 py-3.5">
                     <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize ${roleBadgeStyles[u.role] || 'bg-soft-cream text-charcoal border-border'}`}>
                       {u.role}
@@ -515,7 +520,7 @@ export default function Staff() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h4 className="text-sm font-bold text-charcoal">{u.name}</h4>
-                  <p className="text-xs text-muted-gray mt-0.5">@{u.email || u.username}</p>
+                  <p className="text-xs text-muted-gray mt-0.5">{u.email} {u.phone ? `· ${u.phone}` : ''}</p>
                 </div>
                 <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize shrink-0 ${roleBadgeStyles[u.role] || 'bg-soft-cream text-charcoal border-border'}`}>
                   {u.role}
@@ -579,7 +584,8 @@ export default function Staff() {
                 {deactivatedUsers.map((u) => (
                   <tr key={u.id} className="border-b border-border/40 last:border-b-0 opacity-60">
                     <td className="px-5 py-3 text-sm text-muted-gray line-through">{u.name}</td>
-                    <td className="px-5 py-3 text-sm text-muted-gray">{u.email || u.username}</td>
+                    <td className="px-5 py-3 text-sm text-muted-gray">{u.email}</td>
+                    <td className="px-5 py-3 text-sm text-muted-gray">{u.phone || '—'}</td>
                     <td className="px-5 py-3">
                       <span className="inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize bg-soft-cream text-muted-gray border-border">
                         {u.role}
@@ -606,7 +612,7 @@ export default function Staff() {
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h4 className="text-sm font-semibold text-muted-gray line-through">{u.name}</h4>
-                    <p className="text-xs text-muted-gray">@{u.email || u.username} · {u.role}</p>
+                    <p className="text-xs text-muted-gray">{u.email} {u.phone ? `· ${u.phone}` : ''} · {u.role}</p>
                   </div>
                   <button
                     onClick={() => activateUser(u.id)}
@@ -658,19 +664,31 @@ export default function Staff() {
                     type="text"
                     value={form.name}
                     onChange={update('name')}
-                    placeholder="e.g. Sophie"
+                    placeholder="Enter name"
                     className="w-full h-[42px] px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors"
                   />
                 </div>
 
-                {/* Username / Phone */}
+                {/* Email Address */}
                 <div>
-                  <label className="block text-[12px] font-medium text-muted-gray mb-1">Username / Phone *</label>
+                  <label className="block text-[12px] font-medium text-muted-gray mb-1">Email Address (Login) *</label>
                   <input
-                    type="text"
-                    value={form.username}
-                    onChange={update('username')}
-                    placeholder="e.g. sophie or 655123456"
+                    type="email"
+                    value={form.email}
+                    onChange={update('email')}
+                    placeholder="e.g. staff@gmail.com"
+                    className="w-full h-[42px] px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors"
+                  />
+                </div>
+
+                {/* Phone Number */}
+                <div>
+                  <label className="block text-[12px] font-medium text-muted-gray mb-1">Phone Number (WhatsApp / SMS)</label>
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={update('phone')}
+                    placeholder="e.g. +237 670 000 000"
                     className="w-full h-[42px] px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors"
                   />
                 </div>
@@ -758,7 +776,7 @@ export default function Staff() {
                 {/* Save Button */}
                 <Button
                   onClick={handleSave}
-                  disabled={!form.name.trim() || !form.username.trim()}
+                  disabled={!form.name.trim() || !form.email.trim()}
                   className="w-full h-[44px] mt-2"
                 >
                   {editingUser ? 'Save Changes' : 'Create Staff Account'}

@@ -21,7 +21,6 @@ import {
   MapPin,
   Cake,
   Heart,
-  UserRoundPlus,
   UserPlus,
   TriangleAlert,
   ImageIcon,
@@ -45,6 +44,7 @@ import Button from '../components/Button';
 import Input from '../components/Input';
 import Tabs from '../components/Tabs';
 import { useClients } from '../context/ClientsContext';
+import { useAppointments } from '../context/AppointmentsContext';
 import { useLoyalty } from '../context/LoyaltyContext';
 import { useSocial } from '../context/SocialContext';
 import { useAuth } from '../context/AuthContext';
@@ -99,8 +99,6 @@ export default function ClientFile() {
       quartier: client.quartier || '',
       birthday: client.birthday || '',
       anniversary: client.anniversary || '',
-      recommendedByName: client.recommendedBy?.name || '',
-      recommendedByPhone: client.recommendedBy?.phone || '',
     });
     setIsEditing(true);
     setEditSaved(false);
@@ -114,24 +112,12 @@ export default function ClientFile() {
   const handleSaveEdit = () => {
     if (!editForm) return;
 
-    let recommendedBy = client.recommendedBy;
-    if (editForm.recommendedByName.trim()) {
-      recommendedBy = {
-        name: editForm.recommendedByName.trim(),
-        phone: editForm.recommendedByPhone.trim() || '',
-        date: client.recommendedBy?.date || '',
-      };
-    } else {
-      recommendedBy = null;
-    }
-
     updateClient(client.id, {
       name: editForm.name.trim() || client.name,
       phone: editForm.phone.trim() || client.phone,
       quartier: editForm.quartier.trim(),
       birthday: editForm.birthday,
       anniversary: editForm.anniversary,
-      recommendedBy,
     });
 
     setIsEditing(false);
@@ -142,6 +128,49 @@ export default function ClientFile() {
 
   const updateField = (field) => (e) =>
     setEditForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const { appointments: allAppointments } = useAppointments();
+
+  // Prepare merged service & appointment history for this client
+  const liveClientAppointments = (allAppointments || []).filter(
+    (a) =>
+      (a.clientId && String(a.clientId) === String(client.id)) ||
+      (client.phone && String(a.clientPhone || a.phone) === String(client.phone))
+  );
+
+  const liveRows = liveClientAppointments.map((a) => {
+    const totalPrice = a.services?.reduce((sum, s) => sum + (Number(s.price) || 0), 0) || 0;
+    const statusLower = String(a.status || 'scheduled').toLowerCase().replace(/_/g, '-');
+    return {
+      id: `appt-${a.id}`,
+      appointmentId: a.id,
+      date: a.date,
+      time: a.time,
+      service: a.service || 'Spa Service',
+      technician: a.technicianName || 'Technician',
+      product: statusLower === 'cancelled' ? 'Cancelled' : 'Spa Service',
+      price: totalPrice > 0 ? totalPrice.toLocaleString('en-US') : '—',
+      status: statusLower,
+      rawStatus: a.rawStatus || 'SCHEDULED',
+    };
+  });
+
+  const seenKeys = new Set();
+  const mergedHistory = [];
+
+  for (const row of liveRows) {
+    seenKeys.add(String(row.appointmentId));
+    seenKeys.add(String(row.id));
+    mergedHistory.push(row);
+  }
+
+  for (const row of (client.serviceHistory || [])) {
+    const key = String(row.appointmentId || row.id);
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      mergedHistory.push(row);
+    }
+  }
 
   return (
     <div>
@@ -209,20 +238,7 @@ export default function ClientFile() {
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-              <Input
-                label="Recommended By — Name"
-                value={editForm.recommendedByName}
-                onChange={updateField('recommendedByName')}
-                placeholder="Referrer name"
-              />
-              <Input
-                label="Recommended By — Phone"
-                value={editForm.recommendedByPhone}
-                onChange={updateField('recommendedByPhone')}
-                placeholder="Referrer phone"
-              />
-            </div>
+
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="secondary" onClick={handleCancelEdit}>
@@ -314,17 +330,7 @@ export default function ClientFile() {
                   </span>
                 </div>
               )}
-              {client.recommendedBy && (
-                <div className="flex items-center gap-2.5">
-                  <UserRoundPlus size={16} className="text-sage shrink-0" />
-                  <span className="text-sm text-muted-gray">
-                    Recommended By: {client.recommendedBy.name}
-                    {client.recommendedBy.phone
-                      ? ` — ${client.recommendedBy.phone}`
-                      : ''}
-                  </span>
-                </div>
-              )}
+
               {client.introducedBy && (
                 <div className="col-span-1 sm:col-span-2 bg-sage-soft/60 rounded-[12px] p-3.5 border border-sage/30">
                   <div className="flex items-center gap-2 mb-2 pb-2 border-b border-sage/20">
@@ -382,7 +388,7 @@ export default function ClientFile() {
       {/* ── Tab Content ── */}
       <div className="mt-4">
         {activeTab === 'history' && (
-          <ServiceHistoryTab history={client.serviceHistory} client={client} />
+          <ServiceHistoryTab history={mergedHistory} client={client} />
         )}
         {activeTab === 'photos' && (
           <BeforeAfterTab client={client} onUpdateClient={updateClient} onAddMedia={addClientMedia} />
@@ -551,7 +557,7 @@ function ServiceHistoryTab({ history, client }) {
       )}
       <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-3 border-b border-border/50 flex items-center justify-between">
         <h3 className="text-base sm:text-lg font-semibold text-charcoal">
-          Last 10 Services
+          Services & Appointments
         </h3>
         <span className="text-xs text-muted-gray">({history.length} records)</span>
       </div>
@@ -571,6 +577,9 @@ function ServiceHistoryTab({ history, client }) {
                 Technician
               </th>
               <th className="text-left px-5 py-3 text-xs font-medium text-muted-gray uppercase tracking-wide">
+                Status
+              </th>
+              <th className="text-left px-5 py-3 text-xs font-medium text-muted-gray uppercase tracking-wide">
                 Product
               </th>
               <th className="text-right px-5 py-3 text-xs font-medium text-muted-gray uppercase tracking-wide">
@@ -582,7 +591,7 @@ function ServiceHistoryTab({ history, client }) {
             {history.map((row) => (
               <tr key={row.id} className="border-b border-border/60 last:border-b-0 hover:bg-soft-cream/20 transition-colors">
                 <td className="px-5 py-3.5 text-sm text-charcoal whitespace-nowrap">
-                  {row.date}
+                  {row.date} {row.time ? <span className="text-xs text-muted-gray font-mono">({row.time})</span> : ''}
                 </td>
                 <td className="px-5 py-3.5 text-sm font-medium text-charcoal whitespace-nowrap">
                   {row.service}
@@ -590,11 +599,38 @@ function ServiceHistoryTab({ history, client }) {
                 <td className="px-5 py-3.5 text-sm text-muted-gray whitespace-nowrap">
                   {row.technician}
                 </td>
+                <td className="px-5 py-3.5 text-sm whitespace-nowrap">
+                  {row.status === 'cancelled' ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FAECEC] text-[#B34040] border border-[#ECCACA]">
+                      Cancelled
+                    </span>
+                  ) : row.status === 'completed' ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#EBF5EE] text-[#2D7A4D] border border-[#C3E6D0]">
+                      Completed
+                    </span>
+                  ) : row.status === 'late' ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FFF4E5] text-[#B76E00] border border-[#FFE2B8]">
+                      Late
+                    </span>
+                  ) : row.status === 'no-show' || row.status === 'no_show' ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FAECEC] text-[#B34040] border border-[#ECCACA]">
+                      No Show
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sage-soft text-sage border border-sage/30">
+                      {row.status ? row.status.charAt(0).toUpperCase() + row.status.slice(1) : 'Scheduled'}
+                    </span>
+                  )}
+                </td>
                 <td className="px-5 py-3.5 text-sm text-muted-gray whitespace-nowrap">
                   {row.product}
                 </td>
                 <td className="px-5 py-3.5 text-sm font-semibold text-charcoal text-right whitespace-nowrap font-mono">
-                  {row.price} FCFA
+                  {row.status === 'cancelled' ? (
+                    <span className="line-through text-muted-gray">{row.price} FCFA</span>
+                  ) : (
+                    <span>{row.price} FCFA</span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -607,11 +643,28 @@ function ServiceHistoryTab({ history, client }) {
         {history.map((row) => (
           <div key={row.id} className="p-3.5 space-y-1.5 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-bold text-sm text-charcoal">{row.service}</span>
-              <span className="font-bold text-sm text-charcoal font-mono">{row.price} FCFA</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold text-sm text-charcoal">{row.service}</span>
+                {row.status === 'cancelled' ? (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#FAECEC] text-[#B34040] border border-[#ECCACA]">
+                    Cancelled
+                  </span>
+                ) : row.status === 'completed' ? (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#EBF5EE] text-[#2D7A4D] border border-[#C3E6D0]">
+                    Completed
+                  </span>
+                ) : row.status ? (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-sage-soft text-sage border border-sage/30">
+                    {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                  </span>
+                ) : null}
+              </div>
+              <span className={`font-bold text-sm font-mono ${row.status === 'cancelled' ? 'line-through text-muted-gray' : 'text-charcoal'}`}>
+                {row.price} FCFA
+              </span>
             </div>
             <div className="flex items-center justify-between text-muted-gray pt-0.5">
-              <span>Date: {row.date}</span>
+              <span>Date: {row.date} {row.time ? `(${row.time})` : ''}</span>
               <span>Tech: <strong className="text-charcoal font-medium">{row.technician}</strong></span>
             </div>
             {row.product && (

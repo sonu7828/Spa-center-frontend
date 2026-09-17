@@ -29,6 +29,7 @@ import { useAuth } from '../context/AuthContext';
 import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
 import { useServices } from '../context/ServicesContext';
+import { getDoualaTodayStr, BOOKING_TIME_SLOTS } from '../utils/timezone';
 
 export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
   const { user, allUsers } = useAuth();
@@ -42,14 +43,8 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
     (u) => u.role === 'technician' && u.active !== false
   );
 
-  // Default date: today in YYYY-MM-DD
-  const todayStr = (() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  })();
+  // Default date: today in Africa/Douala timezone
+  const todayStr = getDoualaTodayStr();
 
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('+237 ');
@@ -103,6 +98,10 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       setError('Please select a preferred time.');
       return;
     }
+    if (preferredTime < '10:00' || preferredTime > '21:00') {
+      setError('Preferred time must be between 10:00 AM and 9:00 PM (10:00 – 21:00).');
+      return;
+    }
 
     const assignedTech = allTechnicians.find(
       (t) => String(t.id) === String(assignedTechnicianId)
@@ -132,7 +131,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       ? parseInt(String(selectedServiceObj.price).replace(/[^0-9]/g, ''), 10) || 15000
       : 15000;
 
-    addAppointment({
+    await addAppointment({
       clientId: newClientId,
       clientName: trimmedName,
       service: interestedService,
@@ -148,7 +147,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       category: selectedServiceObj?.category || 'facial',
       date: preferredDate,
       time: handleTimeFormat(preferredTime),
-      technicianId: Number(assignedTech.id),
+      technicianId: assignedTech.id,
       technicianName: assignedTech.name,
       status: 'scheduled',
       introducedBy: isManager ? null : (user?.name || 'Staff'),
@@ -291,15 +290,20 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
             <div>
               <label className="text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1 flex items-center gap-1">
                 <Clock size={11} className="text-sage" />
-                Preferred Time *
+                Preferred Time (10:00 AM – 09:00 PM) *
               </label>
-              <input
-                type="time"
+              <select
                 value={preferredTime}
                 onChange={(e) => setPreferredTime(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-[9px] border border-border bg-white text-xs text-charcoal focus:outline-none focus:border-sage transition-colors font-medium"
+                className="w-full px-2.5 py-1.5 rounded-[9px] border border-border bg-white text-xs text-charcoal focus:outline-none focus:border-sage transition-colors font-medium cursor-pointer"
                 required
-              />
+              >
+                {BOOKING_TIME_SLOTS.map((slot) => (
+                  <option key={slot.value} value={slot.value}>
+                    {slot.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

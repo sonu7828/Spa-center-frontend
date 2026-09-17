@@ -17,7 +17,7 @@
 
 import { useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, Clock, UserX, CheckCircle, Plus, X } from 'lucide-react';
+import { ArrowLeft, Clock, UserX, CheckCircle, Plus, X, XCircle } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -29,7 +29,7 @@ import { useAuth, ROLE_HOME } from '../context/AuthContext';
 export default function AppointmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getAppointment, addServiceToAppointment, removeServiceFromAppointment } = useAppointments();
+  const { getAppointment, addServiceToAppointment, removeServiceFromAppointment, cancelAppointment } = useAppointments();
   const { isAppointmentClosed } = useOperations();
   const { getActiveServices } = useServices();
   const { user } = useAuth();
@@ -40,6 +40,9 @@ export default function AppointmentDetail() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedServiceToAdd, setSelectedServiceToAdd] = useState(activeServices[0]?.name || '');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState(null);
 
   // Technician: block if not own appointment
   if (apt && user?.role === 'technician' && apt.technicianName !== user?.name) {
@@ -53,6 +56,21 @@ export default function AppointmentDetail() {
   const canMarkLate = role === 'manager' || role === 'reception';
   const canMarkNoShow = role === 'manager' || role === 'reception';
   const canCloseService = role === 'manager' || role === 'technician';
+  const canCancel = role === 'manager' || role === 'reception';
+
+  const handleCancelAppointment = async () => {
+    setCancelLoading(true);
+    setCancelError(null);
+    try {
+      await cancelAppointment(apt.id);
+      setShowCancelModal(false);
+      navigate('/appointments');
+    } catch (err) {
+      setCancelError(err?.message || 'Failed to cancel appointment');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   if (!apt) {
     return (
@@ -242,7 +260,7 @@ export default function AppointmentDetail() {
       )}
 
       {/* Actions — role-aware */}
-      {!isClosed && (
+      {!isClosed && apt.status !== 'cancelled' && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
           {canMarkLate && (
             <Button
@@ -276,6 +294,23 @@ export default function AppointmentDetail() {
               <span>Close Service</span>
             </Button>
           )}
+
+          {canCancel && (
+            <Button
+              variant="secondary"
+              onClick={() => setShowCancelModal(true)}
+              className="h-11 sm:h-12 w-full justify-center gap-2 text-xs sm:text-sm text-error border-error/30 hover:border-error"
+            >
+              <XCircle size={16} strokeWidth={1.8} />
+              <span>Cancel Appointment</span>
+            </Button>
+          )}
+        </div>
+      )}
+
+      {apt.status === 'cancelled' && (
+        <div className="bg-white border border-error/30 rounded-[16px] p-4 shadow-card">
+          <p className="text-sm font-semibold text-error">✕ This appointment has been cancelled</p>
         </div>
       )}
 
@@ -288,6 +323,55 @@ export default function AppointmentDetail() {
           >
             View Closed Service Summary
           </Button>
+        </div>
+      )}
+
+      {/* Cancel Appointment Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-[16px] max-w-sm w-full p-5 shadow-2xl border border-border">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-sm text-charcoal">Cancel Appointment</h3>
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                className="text-muted-gray hover:text-charcoal cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="text-xs text-muted-gray mb-1">
+              Are you sure you want to cancel this appointment?
+            </p>
+            <p className="text-xs text-muted-gray mb-4">
+              <strong>{apt.clientName}</strong> — {apt.service} at {apt.time}
+            </p>
+
+            {cancelError && (
+              <div className="text-xs text-error bg-error/10 border border-error/20 rounded-[8px] p-2 mb-3">
+                {cancelError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setShowCancelModal(false)}
+                className="text-xs h-9"
+                disabled={cancelLoading}
+              >
+                Keep Appointment
+              </Button>
+              <Button
+                onClick={handleCancelAppointment}
+                className="text-xs h-9 font-semibold bg-error hover:bg-error/90 text-white border-error"
+                disabled={cancelLoading}
+              >
+                {cancelLoading ? 'Cancelling...' : 'Cancel Appointment'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

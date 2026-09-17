@@ -48,6 +48,7 @@ import { useAppointments } from '../context/AppointmentsContext';
 import { useAuth } from '../context/AuthContext';
 import { useCommission } from '../context/CommissionContext';
 import { useReports } from '../context/ReportsContext';
+import { getDoualaTodayStr } from '../utils/timezone';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -88,18 +89,13 @@ export default function Dashboard() {
   }
 
   const today = new Date().toLocaleDateString('en-GB', {
+    timeZone: 'Africa/Douala',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
 
-  const todayStr = (() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  })();
+  const todayStr = getDoualaTodayStr();
 
   // =========================================================================
   // CLEANER ACCESS DENIED VIEW (RBAC: CLEANER BLOCKED FROM REPORTS)
@@ -198,11 +194,11 @@ export default function Dashboard() {
 
   const allIntroducedClients = clients.filter((c) => Boolean(c.introducedBy));
 
-  // Top referrer computation
+  // Top Staff Referrer computation (Employee Referral)
   const referrerCounts = {};
   clients.forEach((c) => {
-    if (c.recommendedBy?.name) {
-      const name = c.recommendedBy.name.trim();
+    if (c.introducedBy) {
+      const name = c.introducedBy.trim();
       if (name) {
         referrerCounts[name] = (referrerCounts[name] || 0) + 1;
       }
@@ -1095,7 +1091,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-gray uppercase tracking-wider">
-                  Top Referrer This Month
+                  Top Staff Referrer
                 </p>
                 <h3 className="text-lg font-bold text-charcoal mt-0.5">
                   {topReferrer ? topReferrer.name : '-'}
@@ -1113,7 +1109,7 @@ export default function Dashboard() {
 
           <div className="pt-3.5 mt-3.5 border-t border-border/60 flex items-center justify-between text-xs text-muted-gray">
             <span>Referral Program Reward:</span>
-            <span className="font-semibold text-charcoal">-15% Client Discount</span>
+            <span className="font-semibold text-charcoal">{commissionRate}% Staff Commission</span>
           </div>
         </section>
 

@@ -22,10 +22,7 @@
 
 import { useState } from 'react';
 import {
-  Award,
-  Percent,
   TrendingUp,
-  Users,
   Calendar,
   CheckCircle2,
   DollarSign,
@@ -40,12 +37,10 @@ import {
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
-import { useClients } from '../context/ClientsContext';
 import { useAuth } from '../context/AuthContext';
 import { useCommission } from '../context/CommissionContext';
 
 export default function Referrals() {
-  const { clients } = useClients();
   const { user } = useAuth();
   const {
     commissionRate,
@@ -67,9 +62,6 @@ export default function Referrals() {
   const isCleaner = role === 'cleaner';
 
   // Tabs
-  const [activeTab, setActiveTab] = useState(
-    isTechnician ? 'my-commission' : 'staff-commission'
-  );
 
   // Manager feedback toast
   const [notice, setNotice] = useState('');
@@ -107,35 +99,6 @@ export default function Referrals() {
     );
   }
 
-  // Customer referrals extraction (Screen 14 logic)
-  const referralRecords = clients
-    .filter((c) => c.recommendedBy && c.recommendedBy.name)
-    .map((c) => ({
-      id: c.id,
-      newClientName: c.name,
-      referrerName: c.recommendedBy.name,
-      referrerPhone: c.recommendedBy.phone || '—',
-      date: c.recommendedBy.date || '31 Aug 2026',
-    }))
-    .reverse();
-
-  // Top Referrer computation
-  const referrerCounts = {};
-  referralRecords.forEach((r) => {
-    const name = r.referrerName.trim();
-    if (name) {
-      referrerCounts[name] = (referrerCounts[name] || 0) + 1;
-    }
-  });
-
-  let topReferrer = null;
-  let maxCount = 0;
-  Object.entries(referrerCounts).forEach(([name, count]) => {
-    if (count > maxCount) {
-      maxCount = count;
-      topReferrer = { name, count };
-    }
-  });
 
   // Commission data
   const employeeSummaries = isTechnician
@@ -241,60 +204,19 @@ export default function Referrals() {
       <PageHeader
         title={
           isManager
-            ? 'Referrals & Commissions'
+            ? 'Employee Referrals & Commissions'
             : isTechnician
             ? 'My Commissions'
-            : 'Referrals'
+            : 'Employee Commissions'
         }
         subtitle={
           isManager
-            ? 'Employee referral commission rules, staff performance reports, and client referral tracking.'
+            ? 'Employee referral commission rules, staff performance reports, and payout ledger.'
             : isTechnician
             ? 'Your personal referral and service commission history.'
-            : 'Customer referral tracking and employee commission visibility.'
+            : 'Employee referral performance and commission visibility.'
         }
       />
-
-      {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-soft-cream/80 border border-border rounded-[12px] max-w-fit">
-        {isTechnician ? (
-          <button
-            onClick={() => setActiveTab('my-commission')}
-            className={`px-4 py-2 rounded-[10px] text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-              activeTab === 'my-commission'
-                ? 'bg-sage text-white shadow-xs'
-                : 'text-muted-gray hover:text-charcoal'
-            }`}
-          >
-            <DollarSign size={15} />
-            <span>My Commissions</span>
-          </button>
-        ) : (
-          <button
-            onClick={() => setActiveTab('staff-commission')}
-            className={`px-4 py-2 rounded-[10px] text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-              activeTab === 'staff-commission'
-                ? 'bg-sage text-white shadow-xs'
-                : 'text-muted-gray hover:text-charcoal'
-            }`}
-          >
-            <DollarSign size={15} />
-            <span>{isReception ? 'Commissions (View Only)' : 'Employee Referral Commission'}</span>
-          </button>
-        )}
-
-        <button
-          onClick={() => setActiveTab('client-referrals')}
-          className={`px-4 py-2 rounded-[10px] text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'client-referrals'
-              ? 'bg-sage text-white shadow-xs'
-              : 'text-muted-gray hover:text-charcoal'
-          }`}
-        >
-          <Users size={15} />
-          <span>Customer Referrals</span>
-        </button>
-      </div>
 
       {/* Notice Toast */}
       {notice && (
@@ -307,7 +229,7 @@ export default function Referrals() {
       {/* =========================================================================
           TAB 1A: TECHNICIAN PERSONAL COMMISSION VIEW
          ========================================================================= */}
-      {isTechnician && activeTab === 'my-commission' && (
+      {isTechnician && (
         <div className="space-y-6 animate-fade-in">
           {/* Technician Personal Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
@@ -408,7 +330,7 @@ export default function Referrals() {
       {/* =========================================================================
           TAB 1B: EMPLOYEE REFERRAL COMMISSION (MANAGER & RECEPTION)
          ========================================================================= */}
-      {!isTechnician && activeTab === 'staff-commission' && (
+      {!isTechnician && (
         <div className="space-y-6 animate-fade-in">
           {/* ── Section 1: Referral Commission Rule (Manager Settings) ── */}
           {isManager && (
@@ -673,83 +595,7 @@ export default function Referrals() {
         </div>
       )}
 
-      {/* =========================================================================
-          TAB 2: CUSTOMER REFERRALS (ACCESSIBLE TO ALL ROLES)
-         ========================================================================= */}
-      {activeTab === 'client-referrals' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* Top Referrer Card */}
-          <div className="bg-white border border-border rounded-[16px] p-4 sm:p-6 shadow-card">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="w-11 sm:w-12 h-11 sm:h-12 rounded-[14px] bg-sage-soft border border-sage/30 flex items-center justify-center text-charcoal shrink-0">
-                  <Award size={22} className="text-sage" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] sm:text-xs font-medium text-muted-gray uppercase tracking-wider">
-                    Top Referrer This Month
-                  </p>
-                  <h2 className="text-base sm:text-lg font-bold text-charcoal mt-0.5 truncate">
-                    {topReferrer
-                      ? `${topReferrer.name} (${topReferrer.count} ${topReferrer.count === 1 ? 'referral' : 'referrals'})`
-                      : '—'}
-                  </h2>
-                </div>
-              </div>
 
-              <span className="text-xs font-medium text-muted-gray bg-soft-cream px-3 py-1.5 rounded-[8px] border border-border self-start sm:self-auto shrink-0">
-                August 2026
-              </span>
-            </div>
-          </div>
-
-          {/* Recent Referrals List */}
-          <div className="bg-white border border-border rounded-[16px] p-4 sm:p-6 shadow-card">
-            <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-muted-gray mb-4">
-              Recent Customer Referrals
-            </h3>
-
-            {referralRecords.length === 0 ? (
-              <p className="text-sm text-muted-gray py-4 text-center">
-                No referral records recorded yet.
-              </p>
-            ) : (
-              <div className="divide-y divide-border/60">
-                {referralRecords.map((item) => (
-                  <div
-                    key={item.id}
-                    className="py-3.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm sm:text-base font-semibold text-charcoal">
-                          {item.newClientName}
-                        </span>
-                        <span className="text-xs text-muted-gray">←</span>
-                        <span className="text-xs sm:text-sm font-medium text-charcoal">
-                          {item.referrerName}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-gray mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-                        <span>Phone: {item.referrerPhone}</span>
-                        <span>·</span>
-                        <span>Date: {item.date}</span>
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[8px] bg-success-soft border border-success/20 text-success text-xs font-semibold">
-                        <Percent size={12} strokeWidth={2.2} />
-                        Referral Benefit: -15%
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* =========================================================================
           MODAL 1: ADD BONUS (MANAGER ONLY)
