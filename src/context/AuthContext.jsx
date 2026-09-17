@@ -96,6 +96,7 @@ function normalizeUser(rawUser) {
     id: rawUser.id || rawUser.userId,
     name: rawUser.name || rawUser.staffProfile?.name || rawUser.email?.split('@')[0] || 'User',
     email: rawUser.email || '',
+    phone: rawUser.phone || rawUser.staffProfile?.phone || '',
     role: roleLower,
     originalRole: rawRole.toUpperCase(),
     staffProfile: rawUser.staffProfile || null,
@@ -123,7 +124,8 @@ export function AuthProvider({ children }) {
           id: u.id || u.userId,
           name: u.name || u.staffProfile?.name || u.email?.split('@')[0],
           email: u.email || '',
-          username: u.username || u.phone || u.email?.split('@')[0] || '',
+          phone: u.phone || u.staffProfile?.phone || '',
+          username: u.phone || u.staffProfile?.phone || u.username || u.email?.split('@')[0] || '',
           role: (u.role?.name || u.role || 'technician').toLowerCase(),
           specialties: (
             Array.isArray(u.specialties)
@@ -219,9 +221,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const addUser = useCallback(async (userData) => {
+    const rawPhone = userData.phone ? userData.phone.trim() : (userData.username ? userData.username.trim() : undefined);
     const payload = {
       name: userData.name?.trim(),
       username: (userData.username || userData.name || '').trim().toLowerCase().replace(/\s+/g, ''),
+      phone: rawPhone,
       role: userData.role,
       specialties: userData.role === 'technician' ? (userData.specialties || []) : [],
       password: userData.password || '123456',
@@ -233,9 +237,11 @@ export function AuthProvider({ children }) {
   }, [refreshUsers]);
 
   const editUser = useCallback(async (userId, updates) => {
+    const rawPhone = updates.phone ? updates.phone.trim() : (updates.username ? updates.username.trim() : undefined);
     const payload = {
       name: updates.name?.trim(),
       username: updates.username ? updates.username.trim().toLowerCase().replace(/\s+/g, '') : undefined,
+      phone: rawPhone,
       role: updates.role,
       specialties: updates.role === 'technician' ? (updates.specialties || []) : [],
       ...(updates.password ? { password: updates.password.trim() } : {}),
@@ -251,6 +257,7 @@ export function AuthProvider({ children }) {
         return {
           ...curr,
           ...updates,
+          phone: rawPhone !== undefined ? rawPhone : curr.phone,
           specialties: updates.specialties !== undefined ? updates.specialties : curr.specialties,
         };
       }

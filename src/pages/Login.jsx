@@ -117,16 +117,16 @@ export default function Login() {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-3.5">
-            {/* Email / Username */}
+            {/* Mobile Number or Email */}
             <div>
               <label className="block text-[12px] font-medium text-muted-gray mb-1">
-                Email / Username
+                Mobile Number or Email
               </label>
               <input
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter Your Email"
+                placeholder="Enter mobile number or email"
                 autoFocus
                 disabled={isSubmitting}
                 className="w-full h-[44px] px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150"
