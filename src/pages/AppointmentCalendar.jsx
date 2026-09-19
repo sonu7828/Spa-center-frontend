@@ -19,6 +19,8 @@ import {
   User,
   Users,
   UserPlus,
+  CornerDownRight,
+  Clock,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -413,16 +415,17 @@ export default function AppointmentCalendar() {
                                 >
                                   <div className="flex items-center justify-between gap-1">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-[#4F6748] shrink-0" />
+                                      <CornerDownRight className="w-3.5 h-3.5 text-[#4F6748] shrink-0 stroke-[2.5]" />
                                       <p className="text-[11px] sm:text-xs font-semibold text-charcoal leading-tight truncate">
-                                        ↳ {apt.clientName}
+                                        {apt.clientName}
                                       </p>
                                     </div>
-                                    <span className="text-[9px] font-medium text-muted-gray shrink-0 bg-white/70 px-1 py-0.5 rounded border border-border/40">
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-medium text-muted-gray shrink-0 bg-white/80 px-1.5 py-0.5 rounded border border-border/40">
+                                      <Clock className="w-2.5 h-2.5 text-muted-gray" />
                                       Until {item.endTime}
                                     </span>
                                   </div>
-                                  <p className="text-[10px] text-muted-gray mt-0.5 truncate pl-3">
+                                  <p className="text-[10px] text-muted-gray mt-0.5 truncate pl-5">
                                     {apt.service}
                                   </p>
                                 </button>
