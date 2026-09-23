@@ -39,28 +39,6 @@ export default function Login() {
     }
   };
 
-  const handleSingleClickLogin = async (emailOrUsername, pwd = 'password') => {
-    setError('');
-    setEmail(emailOrUsername);
-    setPassword(pwd);
-    setIsSubmitting(true);
-
-    try {
-      const loggedUser = await login(emailOrUsername.trim(), pwd);
-      if (loggedUser) {
-        navigate(ROLE_HOME[loggedUser.role] || '/', { replace: true });
-      } else {
-        setError('Invalid credentials. Please try again.');
-      }
-    } catch (err) {
-      setError(err?.message || 'Authentication failed. Please verify credentials.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleFillDemo = handleSingleClickLogin;
-
   return (
     <div
       className="min-h-screen min-h-[100dvh] flex items-center justify-center p-3 sm:p-6 relative overflow-x-hidden"
@@ -186,51 +164,6 @@ export default function Login() {
               )}
             </button>
           </form>
-
-          {/* Demo Access — inside card */}
-          <div className="mt-4 pt-3 border-t border-border/50">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-bold text-muted-gray uppercase tracking-wider">
-                Demo Access (1-Click Login)
-              </p>
-              {isSubmitting && (
-                <span className="text-[10px] font-semibold text-[#3D5A40] flex items-center gap-1">
-                  <Loader2 size={11} className="animate-spin" /> Logging in...
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-5 items-center gap-1 sm:gap-1.5">
-              {[
-                { label: 'Manager', email: 'manager@gmail.com', title: '1-Click Login as Manager' },
-                { label: 'Reception', email: 'reception@gmail.com', title: '1-Click Login as Reception' },
-                { label: 'Amina', email: 'amina@gmail.com', title: '1-Click Login as Technician Amina' },
-                { label: 'Bella', email: 'bella@gmail.com', title: '1-Click Login as Technician Bella' },
-                { label: 'Cleaner', email: 'cleaner@gmail.com', title: '1-Click Login as Cleaner' },
-              ].map((item) => {
-                const isSelected = email === item.email;
-                const isThisSubmitting = isSubmitting && isSelected;
-                return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => handleSingleClickLogin(item.email, 'password')}
-                    className={`h-9 px-1 rounded-[8px] text-[10px] sm:text-[11px] font-bold border transition-all duration-150 cursor-pointer flex items-center justify-center shadow-xs truncate disabled:opacity-60 disabled:cursor-not-allowed ${isSelected
-                        ? 'bg-[#3D5A40] text-white border-[#3D5A40]'
-                        : 'bg-soft-cream text-charcoal border-border hover:bg-[#3D5A40] hover:text-white hover:border-[#3D5A40]'
-                      } active:scale-[0.97]`}
-                    title={item.title}
-                  >
-                    {isThisSubmitting ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      item.label
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </div>
       </div>
     </div>
