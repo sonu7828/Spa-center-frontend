@@ -19,7 +19,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
-  Key,
   Trash2,
   Send,
   Layers,
@@ -59,7 +58,6 @@ export default function SocialMedia() {
   const [scheduledTime, setScheduledTime] = useState('');
   const [feedbackMsg, setFeedbackMsg] = useState(null);
   const [feedbackType, setFeedbackType] = useState('success'); // 'success' | 'error' | 'info'
-  const [showConfigHelper, setShowConfigHelper] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Keep selected platforms in sync with accounts if desired
@@ -146,6 +144,21 @@ export default function SocialMedia() {
     if (postMode === 'schedule' && (!scheduledDate || !scheduledTime)) {
       setFeedbackType('error');
       setFeedbackMsg('Please select both a date and time for the scheduled post.');
+      return;
+    }
+
+    // Check if any of the selected platforms are not connected (Keys missing)
+    const unconfigured = selectedPlatforms.filter((pId) => {
+      const acc = accounts.find((a) => a.id === pId);
+      return !acc || !acc.connected;
+    });
+
+    if (unconfigured.length > 0) {
+      const platNames = unconfigured
+        .map((id) => platformBadges[id]?.name || id)
+        .join(', ');
+      setFeedbackType('error');
+      setFeedbackMsg(`Keys Missing: API keys are not configured for ${platNames}. Please configure the keys to publish or schedule posts live.`);
       return;
     }
 
@@ -258,50 +271,11 @@ export default function SocialMedia() {
         </div>
       )}
 
-      {/* 1. CONNECTED ACCOUNTS (Real Status — No Fake Badges) */}
+      {/* 1. CONNECTED ACCOUNTS */}
       <div className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card w-full">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-semibold text-charcoal uppercase tracking-wider">
-            Connected Accounts
-          </h3>
-          <button
-            type="button"
-            onClick={() => setShowConfigHelper(!showConfigHelper)}
-            className="text-[11px] font-semibold text-sage hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <Key size={13} />
-            {showConfigHelper ? 'Hide Key Setup' : 'API Key Setup Guide'}
-          </button>
-        </div>
-
-        {/* Expandable Key Setup Helper */}
-        {showConfigHelper && (
-          <div className="mb-4 p-3.5 rounded-[12px] bg-soft-cream/60 border border-border text-xs text-charcoal space-y-2 animate-in fade-in">
-            <p className="font-semibold text-xs flex items-center gap-1.5 text-sage-hover">
-              <Key size={14} /> How Live Social Media Publishing Works:
-            </p>
-            <p className="text-muted-gray text-[11px] leading-relaxed">
-              When you paste your credentials into <code className="bg-white px-1.5 py-0.5 rounded border text-charcoal">backend/.env</code>, the status above will automatically turn to <strong className="text-success font-semibold">Connected</strong>. Everything else (upload, scheduling, Graph API posting) is 100% pre-built and active!
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
-              <div className="p-2 bg-white rounded-[8px] border border-border/80">
-                <span className="font-semibold text-[#1877F2]">Facebook Page & Instagram:</span>
-                <ul className="list-disc pl-4 text-muted-gray mt-1 space-y-0.5">
-                  <li><code>META_PAGE_ACCESS_TOKEN</code></li>
-                  <li><code>META_PAGE_ID</code></li>
-                  <li><code>INSTAGRAM_ACCOUNT_ID</code></li>
-                </ul>
-              </div>
-              <div className="p-2 bg-white rounded-[8px] border border-border/80">
-                <span className="font-semibold text-charcoal">TikTok Posting:</span>
-                <ul className="list-disc pl-4 text-muted-gray mt-1 space-y-0.5">
-                  <li><code>TIKTOK_ACCESS_TOKEN</code></li>
-                  <li><code>TIKTOK_BUSINESS_ID</code></li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
+        <h3 className="text-xs font-semibold text-charcoal uppercase tracking-wider mb-3">
+          Connected Accounts
+        </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {accounts.map((acc) => (
@@ -312,7 +286,7 @@ export default function SocialMedia() {
               <div className="flex items-center gap-2.5 min-w-0">
                 <span
                   className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                    acc.connected ? 'bg-success' : 'bg-warning'
+                    acc.connected ? 'bg-success' : 'bg-muted-gray/50'
                   }`}
                 />
                 <div className="min-w-0">
@@ -321,18 +295,15 @@ export default function SocialMedia() {
                 </div>
               </div>
 
-              {/* Status Badge (Authentic — No Fake Connected) */}
+              {/* Status Badge */}
               <div className="shrink-0 ml-2">
                 {acc.connected ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-[6px] bg-success-soft text-success border border-success/30">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-[6px] bg-success-soft text-success border border-success/30">
                     <Check size={11} strokeWidth={2.5} /> Connected
                   </span>
                 ) : (
-                  <span
-                    title={acc.missingKeys ? `Missing: ${acc.missingKeys.join(', ')} in backend .env` : 'API Key Required'}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-[6px] bg-warning-soft text-warning border border-warning/30"
-                  >
-                    API Key Required
+                  <span className="inline-flex items-center text-[11px] font-semibold px-2.5 py-0.5 rounded-[6px] bg-soft-cream/80 text-muted-gray border border-border">
+                    Not Connected
                   </span>
                 )}
               </div>
@@ -450,7 +421,7 @@ export default function SocialMedia() {
                     {isSelected && <Check size={13} strokeWidth={2.5} />}
                     {acc.name}
                     {!acc.connected && (
-                      <span className="text-[10px] font-normal opacity-70">(Key Required)</span>
+                      <span className="text-[10px] font-normal opacity-70">(Not Connected)</span>
                     )}
                   </button>
                 );
