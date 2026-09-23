@@ -192,7 +192,9 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                   <tr>
                     <td style={{ padding: '4px 0', color: '#76736F' }}>Client</td>
                     <td style={{ padding: '4px 0', fontWeight: 700, color: '#2E2F31', fontSize: '13px' }}>
-                      {invoice.clientName}
+                      {invoice.clientName && invoice.clientName.trim().toLowerCase() !== 'client'
+                        ? invoice.clientName
+                        : (invoice.clientId ? 'Client' : 'Walk in')}
                     </td>
                   </tr>
                   <tr>

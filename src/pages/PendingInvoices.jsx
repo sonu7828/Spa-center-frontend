@@ -200,6 +200,14 @@ function renderCategorizedItems(items = [], options = {}) {
   );
 }
 
+function formatClientDisplay(clientName, clientId) {
+  const trimmed = clientName?.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'client' || trimmed.toLowerCase() === 'walk-in customer') {
+    return clientId ? 'Client' : 'Walk in';
+  }
+  return trimmed;
+}
+
 export default function PendingInvoices() {
   const navigate = useNavigate();
   const { user, allUsers } = useAuth();
@@ -417,7 +425,7 @@ export default function PendingInvoices() {
       ? clients.find((c) => String(c.id) === String(newSaleClientId))
       : null;
 
-    const clientName = selectedClient ? selectedClient.name : 'Walk-in Customer';
+    const clientName = selectedClient ? selectedClient.name : 'Walk in';
 
     // 1. Create paid invoice in shared state & backend
     const paidInvoice = await createRetailSaleInvoice({
@@ -932,7 +940,7 @@ export default function PendingInvoices() {
                               {invNum}
                             </span>
                             <span className="text-sm font-bold text-charcoal truncate">
-                              {invoice.clientName}
+                              {formatClientDisplay(invoice.clientName, invoice.clientId)}
                             </span>
                           </div>
                           <p className="text-xs text-muted-gray truncate mt-0.5">
@@ -1203,7 +1211,7 @@ export default function PendingInvoices() {
                               {invNum}
                             </span>
                             <span className="text-sm font-bold text-charcoal truncate">
-                              {invoice.clientName}
+                              {formatClientDisplay(invoice.clientName, invoice.clientId)}
                             </span>
                             <span className="text-[11px] text-muted-gray flex items-center gap-1 font-medium">
                               <Clock size={12} />
@@ -1259,7 +1267,7 @@ export default function PendingInvoices() {
                                 Client
                               </span>
                               <span className="font-semibold text-charcoal truncate block">
-                                {invoice.clientName}
+                                {formatClientDisplay(invoice.clientName, invoice.clientId)}
                               </span>
                             </div>
                             <div>
@@ -1405,7 +1413,7 @@ export default function PendingInvoices() {
                             {dateDisplay}
                           </td>
                           <td className="py-3.5 px-4 font-bold text-charcoal">
-                            {invoice.clientName}
+                            {formatClientDisplay(invoice.clientName, invoice.clientId)}
                           </td>
                           <td className="py-3.5 px-4 font-extrabold text-charcoal">
                             {totalAmount.toLocaleString('en-US')} FCFA
@@ -1484,7 +1492,7 @@ export default function PendingInvoices() {
 
                       <div className="flex items-center justify-between gap-2">
                         <div>
-                          <p className="text-sm font-bold text-charcoal">{invoice.clientName}</p>
+                          <p className="text-sm font-bold text-charcoal">{formatClientDisplay(invoice.clientName, invoice.clientId)}</p>
                           <p className="text-xs text-muted-gray uppercase font-semibold mt-0.5">
                             {paymentLabel_}
                           </p>
@@ -1558,7 +1566,7 @@ export default function PendingInvoices() {
                     Client
                   </span>
                   <span className="font-bold text-charcoal">
-                    {detailInvoice.clientName}
+                    {formatClientDisplay(detailInvoice.clientName, detailInvoice.clientId)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -1886,7 +1894,7 @@ export default function PendingInvoices() {
                   onChange={(e) => setNewSaleClientId(e.target.value)}
                   className="w-full h-[42px] px-3 bg-white border border-border rounded-[10px] text-xs text-charcoal font-medium outline-none focus:border-sage"
                 >
-                  <option value="">Walk-in Customer (No client profile)</option>
+                  <option value="">Walk in (No client profile)</option>
                   {clients.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} {c.phone ? `(${c.phone})` : ''}

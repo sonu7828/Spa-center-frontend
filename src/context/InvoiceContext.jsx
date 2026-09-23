@@ -75,7 +75,12 @@ export function formatBackendInvoice(inv) {
     invoiceNumber: inv.invoiceNumber || formatInvoiceNumber(inv.id),
     appointmentId: inv.appointmentId || null,
     clientId: inv.clientId || inv.client?.id || null,
-    clientName: inv.client?.name || 'Client',
+    clientName:
+      inv.client?.name && inv.client.name.trim() && inv.client.name.trim().toLowerCase() !== 'client'
+        ? inv.client.name.trim()
+        : inv.clientId
+        ? 'Client'
+        : 'Walk in',
     clientPhone: inv.client?.phone || '',
     status: inv.status || 'PENDING_PAYMENT',
     date: dateStr,
@@ -721,7 +726,7 @@ export function InvoiceProvider({ children }) {
         id: generatedId,
         invoiceNumber: generatedId,
         clientId: client?.id || clientId || null,
-        clientName: client?.name?.trim() || clientName || 'Walk-in Customer',
+        clientName: client?.name?.trim() || clientName || 'Walk in',
         type: 'RETAIL',
         status: 'PAID',
         date: today,
