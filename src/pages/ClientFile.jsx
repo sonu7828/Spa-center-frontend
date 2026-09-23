@@ -778,6 +778,9 @@ function BeforeAfterTab({ client, onUpdateClient, onAddMedia }) {
   const handleShareToSocial = (photo) => {
     prepareSocialDraft({
       media: photo.after || photo.before,
+      beforeMedia: photo.before || null,
+      afterMedia: photo.after || null,
+      mediaUrls: [photo.before, photo.after].filter(Boolean),
       serviceName: photo.service,
       clientName: client.name,
       caption: `✨ Beautiful ${photo.service} transformation for our client at Omega Spa Douala! 💖 Book your next session now. #OmegaSpa #Douala #Transformation`,

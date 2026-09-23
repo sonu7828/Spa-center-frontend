@@ -574,3 +574,21 @@ export const attendanceApi = {
     });
   },
 };
+
+export const socialApi = {
+  getAccounts: () => apiRequest('/social/accounts'),
+  getPosts: () => apiRequest('/social/posts'),
+  createPost: (data) =>
+    apiRequest('/social/posts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  publishNow: (id) =>
+    apiRequest('/social/posts/' + id + '/publish', {
+      method: 'POST',
+    }),
+  deletePost: (id) =>
+    apiRequest('/social/posts/' + id, {
+      method: 'DELETE',
+    }),
+};
