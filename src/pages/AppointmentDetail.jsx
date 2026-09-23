@@ -21,7 +21,7 @@ import { ArrowLeft, Clock, UserX, CheckCircle, Plus, X, XCircle } from 'lucide-r
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
-import { useAppointments } from '../context/AppointmentsContext';
+import { useAppointments, formatAppointmentId } from '../context/AppointmentsContext';
 import { useOperations } from '../context/OperationsContext';
 import { useServices } from '../context/ServicesContext';
 import { useAuth, ROLE_HOME } from '../context/AuthContext';
@@ -121,7 +121,7 @@ export default function AppointmentDetail() {
             {apt.clientName}
           </h2>
           <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-soft-cream border border-border text-muted-gray">
-            Appt #{apt.id}
+            Appt #{formatAppointmentId(apt.id)}
           </span>
         </div>
 

@@ -20,6 +20,15 @@ import { useAuth } from './AuthContext';
 
 const AppointmentsContext = createContext();
 
+export function formatAppointmentId(id) {
+  if (!id) return '';
+  const str = String(id);
+  if (str.includes('-')) {
+    return str.slice(0, 8).toUpperCase();
+  }
+  return str;
+}
+
 export function formatBackendAppointment(apt) {
   if (!apt) return null;
   const dateStr = apt.appointmentDate ? apt.appointmentDate.split('T')[0] : '';

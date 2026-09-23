@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
-import { useAppointments } from '../context/AppointmentsContext';
+import { useAppointments, formatAppointmentId } from '../context/AppointmentsContext';
 import { useAuth } from '../context/AuthContext';
 import { useServices } from '../context/ServicesContext';
 import { useInvoices } from '../context/InvoiceContext';
@@ -508,7 +508,7 @@ export default function SharedWork() {
                         {activeApt.clientName}
                       </h3>
                       <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-soft-cream text-muted-gray border border-border">
-                        Appt #{activeApt.id}
+                        Appt #{formatAppointmentId(activeApt.id)}
                       </span>
                     </div>
                     <p className="text-xs text-muted-gray mt-1 flex items-center gap-2">
