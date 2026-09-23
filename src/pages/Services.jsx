@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react';
-import { Plus, Pencil, Check, X, Sparkles, Clock, DollarSign, ToggleLeft, ToggleRight, Layers, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Check, X, Sparkles, Clock, DollarSign, ToggleLeft, ToggleRight, Layers, Trash2, FolderTree, AlertCircle } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -26,10 +26,19 @@ const categoryBadgeStyles = {
 };
 
 export default function Services() {
-  const { services, addService, editService, toggleServiceActive, deleteService, getActiveSpecialties } = useServices();
+  const { 
+    services, addService, editService, toggleServiceActive, deleteService, getActiveSpecialties,
+    specialties, addSpecialty, editSpecialty, toggleSpecialtyActive, deleteSpecialty
+  } = useServices();
   const activeCategories = getActiveSpecialties().map((s) => s.name);
 
   const [showModal, setShowModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState('');
+  const [confirmDeleteCategoryId, setConfirmDeleteCategoryId] = useState(null);
   const [editingService, setEditingService] = useState(null);
   const [saved, setSaved] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -113,16 +122,65 @@ export default function Services() {
   const activeServices = services.filter((s) => s.active !== false);
   const inactiveServices = services.filter((s) => s.active === false);
 
+  // --- Category Handlers ---
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    setCategoryError('');
+    try {
+      await addSpecialty(newCategoryName);
+      setNewCategoryName('');
+    } catch (err) {
+      setCategoryError(err.message || 'Failed to add category');
+    }
+  };
+
+  const handleSaveCategoryEdit = async (id) => {
+    setCategoryError('');
+    try {
+      await editSpecialty(id, editingCategoryName);
+      setEditingCategoryId(null);
+    } catch (err) {
+      setCategoryError(err.message || 'Failed to update category');
+    }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    setCategoryError('');
+    try {
+      await deleteSpecialty(id);
+      setConfirmDeleteCategoryId(null);
+    } catch (err) {
+      setCategoryError(err.message || 'Failed to delete category');
+      setConfirmDeleteCategoryId(null); // Close confirm after error to show error message
+    }
+  };
+
+  const closeCategoryModal = () => {
+    setShowCategoryModal(false);
+    setNewCategoryName('');
+    setEditingCategoryId(null);
+    setCategoryError('');
+    setConfirmDeleteCategoryId(null);
+  };
+
   return (
     <div className="w-full space-y-6">
       <PageHeader
         title="Services"
         subtitle="Manage spa services, pricing, duration, and categories."
         action={
-          <Button onClick={openAddModal}>
-            <Plus size={16} strokeWidth={2} />
-            Add Service
-          </Button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCategoryModal(true)}
+              className="h-[40px] px-3.5 rounded-[10px] text-sm font-semibold text-charcoal bg-white border border-border hover:bg-soft-cream transition-all flex items-center gap-1.5"
+            >
+              <FolderTree size={16} /> Manage Categories
+            </button>
+            <Button onClick={openAddModal}>
+              <Plus size={16} strokeWidth={2} />
+              Add Service
+            </Button>
+          </div>
         }
       />
 
@@ -574,6 +632,161 @@ export default function Services() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Category Management Modal */}
+      {showCategoryModal && (
+        <div
+          className="fixed inset-0 bg-charcoal/40 z-[60] flex items-center justify-center p-3 sm:p-4"
+          onClick={closeCategoryModal}
+        >
+          <div
+            className="w-full max-w-[500px] bg-white border border-border rounded-[20px] p-4 sm:p-6 shadow-xl max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4 shrink-0">
+              <h3 className="text-base font-semibold text-charcoal">Manage Service Categories</h3>
+              <button
+                onClick={closeCategoryModal}
+                className="text-muted-gray hover:text-charcoal cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-soft-cream"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {categoryError && (
+              <div className="mb-4 p-3 bg-[#FAECEC] border border-[#ECCACA] rounded-[10px] flex items-start gap-2 shrink-0">
+                <AlertCircle size={16} className="text-[#B34040] mt-0.5 shrink-0" />
+                <p className="text-sm font-medium text-[#B34040]">{categoryError}</p>
+              </div>
+            )}
+
+            {/* Add Category Form */}
+            <form onSubmit={handleAddCategory} className="flex gap-2 mb-6 shrink-0">
+              <input
+                type="text"
+                required
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="New category name..."
+                className="flex-1 h-[40px] px-4 bg-white border border-border rounded-[10px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors"
+              />
+              <Button type="submit" disabled={!newCategoryName.trim()} className="h-[40px] px-4">
+                Add
+              </Button>
+            </form>
+
+            {/* Category List */}
+            <div className="flex-1 overflow-y-auto min-h-[200px] border border-border rounded-[12px] bg-white divide-y divide-border/60">
+              {specialties.length === 0 ? (
+                <div className="p-8 text-center text-muted-gray text-sm">
+                  No categories found. Create one above.
+                </div>
+              ) : (
+                specialties.map((cat) => (
+                  <div key={cat.id} className="p-3.5 flex items-center justify-between gap-3 hover:bg-soft-cream/20 transition-colors">
+                    {/* Name column */}
+                    <div className="flex-1 min-w-0">
+                      {editingCategoryId === cat.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingCategoryName}
+                            onChange={(e) => setEditingCategoryName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveCategoryEdit(cat.id)}
+                            className="w-full h-[32px] px-2.5 bg-white border border-sage rounded-[6px] text-sm text-charcoal outline-none focus:ring-1 focus:ring-sage/30"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-semibold truncate ${cat.active ? 'text-charcoal' : 'text-muted-gray line-through'}`}>
+                            {cat.name}
+                          </span>
+                          {!cat.active && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-soft-cream text-muted-gray border border-border">
+                              Inactive
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions column */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {editingCategoryId === cat.id ? (
+                        <>
+                          <button
+                            onClick={() => handleSaveCategoryEdit(cat.id)}
+                            className="h-[30px] px-2.5 rounded-[6px] text-xs font-semibold text-white bg-sage hover:bg-[#6c8a77] transition-all"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingCategoryId(null)}
+                            className="h-[30px] px-2.5 rounded-[6px] text-xs font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : confirmDeleteCategoryId === cat.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="h-[30px] px-2.5 rounded-[6px] text-xs font-semibold text-white bg-[#B34040] hover:bg-[#962d2d] transition-all flex items-center gap-1"
+                          >
+                            Confirm Delete
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteCategoryId(null)}
+                            className="h-[30px] w-[30px] flex items-center justify-center rounded-[6px] text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingCategoryId(cat.id);
+                              setEditingCategoryName(cat.name);
+                              setCategoryError('');
+                              setConfirmDeleteCategoryId(null);
+                            }}
+                            className="h-[30px] w-[30px] flex items-center justify-center rounded-[6px] text-muted-gray bg-white border border-border hover:bg-sage-soft transition-all"
+                            title="Edit Category Name"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={() => toggleSpecialtyActive(cat.id)}
+                            className={`h-[30px] px-2.5 rounded-[6px] text-xs font-medium border transition-all ${
+                              cat.active 
+                                ? 'bg-white text-muted-gray border-border hover:bg-soft-cream'
+                                : 'bg-success-soft text-success border-success/30 hover:bg-success/20'
+                            }`}
+                          >
+                            {cat.active ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button
+                            onClick={() => {
+                               setConfirmDeleteCategoryId(cat.id);
+                               setCategoryError('');
+                            }}
+                            className="h-[30px] w-[30px] flex items-center justify-center rounded-[6px] text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all"
+                            title="Delete Category"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

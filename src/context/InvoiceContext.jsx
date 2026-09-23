@@ -112,11 +112,22 @@ export function formatBackendInvoice(inv) {
 
 export function InvoiceProvider({ children }) {
   const { isAuthenticated } = useAuth();
-  const [invoices, setInvoices] = useState(SEED_INVOICES);
+  const getCachedInvoices = () => {
+    try {
+      const raw = localStorage.getItem('omega_local_invoices');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  };
+
+  const [invoices, setInvoices] = useState(() => getCachedInvoices());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch real invoices from backend on mount
+  // Fetch real invoices from backend on mount and preserve local invoices
   const refreshInvoices = useCallback(async () => {
     if (!isAuthenticated) {
       setLoading(false);
@@ -130,7 +141,27 @@ export function InvoiceProvider({ children }) {
       const apiList = res?.data?.invoices || res?.data || [];
       if (Array.isArray(apiList)) {
         const formattedList = apiList.map(formatBackendInvoice).filter(Boolean);
-        setInvoices(formattedList);
+
+        // Read local invoices
+        let localInvoices = [];
+        try {
+          const raw = localStorage.getItem('omega_local_invoices');
+          if (raw) localInvoices = JSON.parse(raw);
+        } catch (_) {}
+
+        const backendIds = new Set(formattedList.map((inv) => String(inv.id)));
+        const backendNumbers = new Set(formattedList.map((inv) => inv.invoiceNumber));
+
+        // Retain local invoices that aren't yet in backend
+        const remainingLocal = localInvoices.filter(
+          (loc) => !backendIds.has(String(loc.id)) && !backendNumbers.has(loc.invoiceNumber)
+        );
+
+        try {
+          localStorage.setItem('omega_local_invoices', JSON.stringify(remainingLocal));
+        } catch (_) {}
+
+        setInvoices([...remainingLocal, ...formattedList]);
       }
     } catch (err) {
       console.warn('Backend invoices fetch error:', err.message);
@@ -307,6 +338,17 @@ export function InvoiceProvider({ children }) {
       // Backend payment if invoiceId is UUID
       if (typeof invoiceId === 'string' && invoiceId.includes('-')) {
         try {
+          if (paymentDetails.discount !== undefined) {
+            await invoicesApi.update(invoiceId, {
+              discount: Number(paymentDetails.discount),
+              status: 'PAID',
+            });
+          }
+        } catch (err) {
+          console.warn('Backend invoice discount update note:', err.message);
+        }
+
+        try {
           await paymentsApi.create({
             invoiceId,
             amount: amountToPay > 0 ? amountToPay : 1000,
@@ -338,6 +380,19 @@ export function InvoiceProvider({ children }) {
               pointsEarned: paymentDetails.pointsEarned || 0,
               pointsRedeemed: paymentDetails.pointsRedeemed || 0,
             };
+
+            // Update in local cache if present
+            try {
+              const raw = localStorage.getItem('omega_local_invoices');
+              if (raw) {
+                const list = JSON.parse(raw);
+                const updatedList = list.map((loc) =>
+                  String(loc.id) === String(inv.id) ? paidInvoice : loc
+                );
+                localStorage.setItem('omega_local_invoices', JSON.stringify(updatedList));
+              }
+            } catch (_) {}
+
             return paidInvoice;
           }
           return inv;
@@ -584,7 +639,7 @@ export function InvoiceProvider({ children }) {
 
   // Create a completed Retail-Only sale invoice directly (Walk-in or Client)
   const createRetailSaleInvoice = useCallback(
-    ({ client, clientId, clientName, items, paymentMethod, discount = 0 }) => {
+    async ({ client, clientId, clientName, items, paymentMethod, discount = 0 }) => {
       const today = new Date().toISOString().slice(0, 10);
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], {
@@ -616,7 +671,53 @@ export function InvoiceProvider({ children }) {
       const total = formattedItems.reduce((sum, it) => sum + it.price, 0);
       const finalTotal = Math.max(0, total - (discount || 0));
 
-      const newInvoice = {
+      const rawMethod = String(paymentMethod || 'CASH').toUpperCase();
+      const backendMethod =
+        rawMethod.includes('MTN') || rawMethod.includes('MOMO')
+          ? 'MTN_MOMO'
+          : rawMethod.includes('ORANGE')
+          ? 'ORANGE_MONEY'
+          : 'CASH';
+
+      // Build backend payload for retail products
+      const retailProductsPayload = [];
+      for (const it of formattedItems) {
+        if (it.productId && String(it.productId).includes('-')) {
+          retailProductsPayload.push({
+            retailProductId: String(it.productId),
+            quantity: it.qty,
+          });
+        }
+      }
+
+      let backendInvoice = null;
+      if (retailProductsPayload.length > 0) {
+        try {
+          const targetClientId =
+            client?.id && String(client.id).includes('-')
+              ? client.id
+              : clientId && String(clientId).includes('-')
+              ? clientId
+              : undefined;
+
+          const res = await invoicesApi.create({
+            clientId: targetClientId,
+            discount: discount || 0,
+            status: 'PAID',
+            paymentMethod: backendMethod,
+            retailProducts: retailProductsPayload,
+          });
+
+          const invData = res?.data?.invoice || res?.data || res;
+          if (invData && invData.id) {
+            backendInvoice = formatBackendInvoice(invData);
+          }
+        } catch (err) {
+          console.warn('Backend retail sale invoice creation error, using fallback:', err.message);
+        }
+      }
+
+      const newInvoice = backendInvoice || {
         id: generatedId,
         invoiceNumber: generatedId,
         clientId: client?.id || clientId || null,
@@ -639,7 +740,17 @@ export function InvoiceProvider({ children }) {
         isRetailOnly: true,
       };
 
-      setInvoices((prev) => [newInvoice, ...prev]);
+      // If local fallback, save to persistent localStorage
+      if (!backendInvoice) {
+        try {
+          const raw = localStorage.getItem('omega_local_invoices');
+          const list = raw ? JSON.parse(raw) : [];
+          list.unshift(newInvoice);
+          localStorage.setItem('omega_local_invoices', JSON.stringify(list));
+        } catch (_) {}
+      }
+
+      setInvoices((prev) => [newInvoice, ...prev.filter((inv) => String(inv.id) !== String(newInvoice.id))]);
       return newInvoice;
     },
     []

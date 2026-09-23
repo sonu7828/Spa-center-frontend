@@ -187,10 +187,64 @@ export function RetailProvider({ children }) {
   );
 
   // --- Stock Deduction on Invoice Payment ---
-  const deductRetailStock = useCallback((invoiceItems = []) => {
-    if (!Array.isArray(invoiceItems) || invoiceItems.length === 0) return;
-    refreshRetail();
-  }, [refreshRetail]);
+  const deductRetailStock = useCallback(
+    async (invoiceItems = []) => {
+      if (!Array.isArray(invoiceItems) || invoiceItems.length === 0) return;
+
+      // 1. Optimistic update in state immediately
+      setRetailProducts((prev) =>
+        prev.map((prod) => {
+          const match = invoiceItems.find(
+            (it) =>
+              String(it.productId) === String(prod.id) ||
+              String(it.id) === String(prod.id) ||
+              (it.name && it.name.toLowerCase() === prod.name?.toLowerCase()) ||
+              (it.service && it.service.toLowerCase() === prod.name?.toLowerCase())
+          );
+          if (match) {
+            const qty = Math.max(1, parseInt(match.qty !== undefined ? match.qty : match.quantity, 10) || 1);
+            return {
+              ...prod,
+              quantity: Math.max(0, (prod.quantity ?? 0) - qty),
+            };
+          }
+          return prod;
+        })
+      );
+
+      // 2. Call backend deduct API
+      try {
+        const payloadItems = [];
+        for (const it of invoiceItems) {
+          let prodId = it.productId || it.id;
+          if (!prodId || !String(prodId).includes('-')) {
+            const found = retailProducts.find(
+              (p) =>
+                (it.name && p.name.toLowerCase() === it.name.toLowerCase()) ||
+                (it.service && p.name.toLowerCase() === it.service.toLowerCase())
+            );
+            if (found && String(found.id).includes('-')) {
+              prodId = found.id;
+            }
+          }
+
+          if (prodId && String(prodId).includes('-')) {
+            const qty = Math.max(1, parseInt(it.qty !== undefined ? it.qty : it.quantity, 10) || 1);
+            payloadItems.push({ productId: prodId, quantity: qty });
+          }
+        }
+
+        if (payloadItems.length > 0) {
+          await stockApi.deductRetail({ items: payloadItems });
+        }
+      } catch (err) {
+        console.warn('Backend retail stock deduct note:', err.message);
+      } finally {
+        await refreshRetail();
+      }
+    },
+    [retailProducts, refreshRetail]
+  );
 
   return (
     <RetailContext.Provider

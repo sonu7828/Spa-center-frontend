@@ -276,7 +276,7 @@ export default function PendingInvoices() {
     if (typeof refreshInvoices === 'function') {
       refreshInvoices();
     }
-  }, [refreshInvoices, activeTab]);
+  }, [refreshInvoices]);
 
   const pendingInvoices = typeof getPendingInvoices === 'function' ? getPendingInvoices() : [];
   const paidTodayInvoices = typeof getPaidTodayInvoices === 'function' ? getPaidTodayInvoices() : [];
@@ -397,7 +397,7 @@ export default function PendingInvoices() {
 
   const newSaleTotal = newSaleCart.reduce((sum, it) => sum + it.price, 0);
 
-  const handleCollectNewSale = () => {
+  const handleCollectNewSale = async () => {
     if (newSaleCart.length === 0 || newSaleTotal <= 0) return;
 
     // Revalidate stock before completing the sale
@@ -419,15 +419,15 @@ export default function PendingInvoices() {
 
     const clientName = selectedClient ? selectedClient.name : 'Walk-in Customer';
 
-    // 1. Create paid invoice in shared state
-    const paidInvoice = createRetailSaleInvoice({
+    // 1. Create paid invoice in shared state & backend
+    const paidInvoice = await createRetailSaleInvoice({
       client: selectedClient,
       items: newSaleCart,
       paymentMethod: newSalePaymentMethod,
     });
 
     // 2. Deduct retail stock (deducted ONLY after successful payment)
-    deductRetailStock(newSaleCart);
+    await deductRetailStock(newSaleCart);
 
     // 3. Contribute to daily totals (no double counting)
     recordRetailSale({
@@ -444,7 +444,7 @@ export default function PendingInvoices() {
     // 5. Close modal, switch to Paid Today, open receipt
     closeNewRetailSaleModal();
     setActiveTab('paid-today');
-    setExpandedId(paidInvoice.id);
+    setExpandedId(paidInvoice?.id);
     setReceiptInvoice(paidInvoice);
     setPaymentSuccessNotice(
       `Retail sale completed for ${clientName} (${newSaleTotal.toLocaleString('en-US')} FCFA via ${newSalePaymentMethod}). Receipt opened.`
@@ -453,7 +453,7 @@ export default function PendingInvoices() {
   };
 
   // Collect Payment handler — triggers all operations & moves invoice to Paid Today / History
-  const handleCollectPayment = (invoice) => {
+  const handleCollectPayment = async (invoice) => {
     const payment = formatPaymentMethod(paymentMethods[invoice.id] || 'CASH');
 
     const today = new Date().toLocaleDateString('en-GB', {
@@ -582,7 +582,7 @@ export default function PendingInvoices() {
     }
 
     // 4. Deduct retail stock for sold drinks & cosmetics (never allows negative stock)
-    deductRetailStock(invoice.items);
+    await deductRetailStock(invoice.items);
 
     // 5. Earn loyalty points on SERVICE items only (retail excluded from loyalty)
     if (serviceSubtotal > 0 && clientId) {
@@ -653,7 +653,7 @@ export default function PendingInvoices() {
     }
 
     // 7. Mark invoice paid (NOT removed — moved to Paid Today & History)
-    const paidInv = markInvoicePaid(invoice.id, payment, {
+    const paidInv = await markInvoicePaid(invoice.id, payment, {
       discount: discountAmount,
       finalTotal,
       pointsEarned: earnedPts,

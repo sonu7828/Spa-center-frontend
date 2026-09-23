@@ -233,9 +233,11 @@ export const invoicesApi = {
           : rawAptId;
 
       payload = {
-        appointmentId: aptId,
+        ...(aptId ? { appointmentId: aptId } : {}),
+        ...(data.clientId ? { clientId: data.clientId } : {}),
         discount: typeof data.discount === 'number' ? data.discount : 0,
         status: data.status || 'PENDING_PAYMENT',
+        ...(data.paymentMethod ? { paymentMethod: data.paymentMethod } : {}),
         ...(data.retailProducts ? { retailProducts: data.retailProducts } : {}),
       };
     } else {
@@ -247,6 +249,11 @@ export const invoicesApi = {
       body: JSON.stringify(payload),
     });
   },
+  update: (id, data) =>
+    apiRequest('/invoices/' + id, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
   addRetailItem: (invoiceId, data) =>
     apiRequest('/invoices/' + invoiceId + '/retail-items', {
       method: 'POST',
@@ -306,6 +313,11 @@ export const stockApi = {
     apiRequest(`/stock/retail/${id}/refill`, {
       method: 'POST',
       body: JSON.stringify(refillData),
+    }),
+  deductRetail: (data) =>
+    apiRequest('/stock/retail/deduct', {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 };
 
