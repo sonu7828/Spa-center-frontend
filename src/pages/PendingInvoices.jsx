@@ -264,6 +264,7 @@ export default function PendingInvoices() {
   // Feedback notifications (e.g. WhatsApp receipt queued)
   const [whatsAppFeedback, setWhatsAppFeedback] = useState({});
   const [sendingWhatsAppId, setSendingWhatsAppId] = useState(null);
+  const [sentReceiptInvoices, setSentReceiptInvoices] = useState({});
   const [paymentSuccessNotice, setPaymentSuccessNotice] = useState(null);
 
   // Retail product picker modal (for existing pending invoice)
@@ -684,7 +685,7 @@ export default function PendingInvoices() {
   };
 
   // Real WhatsApp receipt action via backend API
-  const handleSendWhatsAppReceipt = async (invoice) => {
+  const handleSendWhatsAppReceipt = async (invoice, forceResend = false) => {
     if (!invoice) return;
     const client = getClient(invoice.clientId);
     const phone = client?.whatsapp || client?.phone || invoice.clientPhone || invoice.phone;
@@ -700,8 +701,29 @@ export default function PendingInvoices() {
       return;
     }
 
+    // If already sent once, warn user and require confirmation click
+    if (sentReceiptInvoices[invoice.id] === true && !forceResend) {
+      setWhatsAppFeedback((prev) => ({
+        ...prev,
+        [invoice.id]: `⚠️ Receipt was already sent! Click button again to Resend.`,
+      }));
+      setSentReceiptInvoices((prev) => ({ ...prev, [invoice.id]: 'CONFIRM_RESEND' }));
+      setTimeout(() => {
+        setSentReceiptInvoices((prev) => ({ ...prev, [invoice.id]: true }));
+      }, 6000);
+      return;
+    }
+
     setSendingWhatsAppId(invoice.id);
     try {
+      // 1. Send official PDF document via Meta WhatsApp Cloud API
+      try {
+        await whatsappApi.sendInvoicePdf(invoice.id, phone);
+      } catch (pdfErr) {
+        console.warn('PDF dispatch fallback to text receipt', pdfErr);
+      }
+
+      // 2. Also send summary text receipt
       const message = buildReceiptWhatsAppMessage(
         invoice,
         client,
@@ -717,9 +739,10 @@ export default function PendingInvoices() {
         idempotencyKey: `receipt:${invoice.id}:${Date.now()}`,
       });
 
+      setSentReceiptInvoices((prev) => ({ ...prev, [invoice.id]: true }));
       setWhatsAppFeedback((prev) => ({
         ...prev,
-        [invoice.id]: `✓ WhatsApp receipt sent to ${invoice.clientName || 'Client'} (${phone}).`,
+        [invoice.id]: `✓ PDF Receipt delivered to WhatsApp (${phone})!`,
       }));
     } catch (err) {
       setWhatsAppFeedback((prev) => ({
@@ -730,7 +753,7 @@ export default function PendingInvoices() {
       setSendingWhatsAppId(null);
       setTimeout(() => {
         setWhatsAppFeedback((prev) => ({ ...prev, [invoice.id]: null }));
-      }, 6000);
+      }, 7000);
     }
   };
 

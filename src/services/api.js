@@ -459,6 +459,13 @@ export const whatsappApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  sendInvoicePdf: (invoiceId, phone) =>
+    apiRequest('/whatsapp/triggers/send-invoice-pdf', {
+      method: 'POST',
+      body: JSON.stringify({ invoiceId, phone }),
+    }),
+  getInvoiceReceiptStatus: (invoiceId) =>
+    apiRequest('/whatsapp/invoices/' + invoiceId + '/receipt-status'),
   retryMessage: (logId) =>
     apiRequest('/whatsapp/logs/' + logId + '/retry', {
       method: 'POST',
