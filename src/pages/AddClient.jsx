@@ -28,7 +28,7 @@ export default function AddClient() {
 
   const [form, setForm] = useState({
     name: '',
-    phone: '',
+    phone: '+237 ',
     quartier: '',
     birthday: '',
     anniversary: '',

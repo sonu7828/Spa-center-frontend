@@ -343,10 +343,9 @@ export function InvoiceProvider({ children }) {
       // Backend payment if invoiceId is UUID
       if (typeof invoiceId === 'string' && invoiceId.includes('-')) {
         try {
-          if (paymentDetails.discount !== undefined) {
+          if (paymentDetails.discount !== undefined && Number(paymentDetails.discount) > 0) {
             await invoicesApi.update(invoiceId, {
               discount: Number(paymentDetails.discount),
-              status: 'PAID',
             });
           }
         } catch (err) {
