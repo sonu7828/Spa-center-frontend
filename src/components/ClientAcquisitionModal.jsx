@@ -30,6 +30,7 @@ import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
 import { useServices } from '../context/ServicesContext';
 import { getDoualaTodayStr, BOOKING_TIME_SLOTS } from '../utils/timezone';
+import PhoneInputField from './PhoneInputField';
 
 export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
   const { user, allUsers } = useAuth();
@@ -238,19 +239,12 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
           </div>
 
           {/* Phone / WhatsApp */}
-          <div>
-            <label className="text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1 block">
-              Phone / WhatsApp *
-            </label>
-            <input
-              type="text"
-              value={clientPhone}
-              onChange={(e) => setClientPhone(e.target.value)}
-              placeholder="+237 6XX XX XX XX"
-              className="w-full px-3 py-2 rounded-[9px] border border-border bg-white text-xs text-charcoal focus:outline-none focus:border-sage transition-colors placeholder:text-muted-gray/50 font-medium font-mono"
-              required
-            />
-          </div>
+          <PhoneInputField
+            value={clientPhone}
+            onChange={(val) => setClientPhone(val)}
+            label="Phone / WhatsApp"
+            required
+          />
 
           {/* Interested Service */}
           <div>

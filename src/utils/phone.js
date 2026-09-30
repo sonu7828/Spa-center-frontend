@@ -11,18 +11,26 @@ export function formatPhoneNumber(input) {
   if (input === undefined || input === null) return '';
 
   // Allow user to backspace freely without being hijacked
-  if (input === '' || input === '+' || input.length <= 3) {
+  const trimmed = input.trim();
+  if (
+    trimmed === '' ||
+    trimmed === '+' ||
+    trimmed === '+2' ||
+    trimmed === '+23' ||
+    trimmed === '+237' ||
+    trimmed === '+9' ||
+    trimmed === '+91' ||
+    input.length <= 4 && input.startsWith('+')
+  ) {
     return input;
   }
-
-  const trimmed = input.trim();
 
   // If input starts with Cameroon code (+237 or 237)
   if (trimmed.startsWith('+237') || trimmed.startsWith('237')) {
     const rawDigits = trimmed.replace(/\D/g, '').slice(3); // strip 237
     const limited = rawDigits.slice(0, 9); // exactly 9 digits max
 
-    if (limited.length === 0) return '+237 ';
+    if (limited.length === 0) return input.endsWith(' ') ? '+237 ' : '+237';
     if (limited.length <= 3) return `+237 ${limited}`;
     if (limited.length <= 5) return `+237 ${limited.slice(0, 3)} ${limited.slice(3)}`;
     if (limited.length <= 7) return `+237 ${limited.slice(0, 3)} ${limited.slice(3, 5)} ${limited.slice(5)}`;
@@ -33,7 +41,7 @@ export function formatPhoneNumber(input) {
   if (trimmed.startsWith('+91') || trimmed.startsWith('91')) {
     const rawDigits = trimmed.replace(/\D/g, '').slice(2);
     const limited = rawDigits.slice(0, 10); // max 10 digits
-    if (limited.length === 0) return '+91 ';
+    if (limited.length === 0) return input.endsWith(' ') ? '+91 ' : '+91';
     if (limited.length <= 5) return `+91 ${limited}`;
     return `+91 ${limited.slice(0, 5)} ${limited.slice(5)}`;
   }

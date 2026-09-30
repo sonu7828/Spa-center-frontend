@@ -43,6 +43,7 @@ import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Tabs from '../components/Tabs';
+import PhoneInputField from '../components/PhoneInputField';
 import { formatPhoneNumber, validatePhoneNumber } from '../utils/phone';
 import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
@@ -212,56 +213,10 @@ export default function ClientFile() {
                 onChange={updateField('name')}
                 placeholder="Client name"
               />
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[13px] font-medium text-muted-gray">
-                    Phone / WhatsApp
-                  </label>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setEditForm((prev) => ({ ...prev, phone: '+237 ' }))}
-                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                        (editForm.phone || '').startsWith('+237')
-                          ? 'bg-sage text-white'
-                          : 'bg-muted-gray/10 text-charcoal hover:bg-muted-gray/20'
-                      }`}
-                    >
-                      🇨🇲 +237
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditForm((prev) => ({ ...prev, phone: '+91 ' }))}
-                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                        (editForm.phone || '').startsWith('+91')
-                          ? 'bg-sage text-white'
-                          : 'bg-muted-gray/10 text-charcoal hover:bg-muted-gray/20'
-                      }`}
-                    >
-                      🇮🇳 +91
-                    </button>
-                  </div>
-                </div>
-                <input
-                  type="text"
-                  value={editForm.phone}
-                  onChange={(e) => {
-                    const formatted = formatPhoneNumber(e.target.value);
-                    setEditForm((prev) => ({ ...prev, phone: formatted }));
-                  }}
-                  placeholder="+237 6XX XX XX XX or +91 XXXXX XXXXX"
-                  className="w-full h-[48px] px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal placeholder:text-muted-gray/50 outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150"
-                />
-                {editForm.phone && (
-                  <div className="mt-1 text-xs">
-                    {validatePhoneNumber(editForm.phone).isValid ? (
-                      <span className="text-emerald-600 font-medium">✓ Valid WhatsApp Number</span>
-                    ) : (
-                      <span className="text-amber-600">{validatePhoneNumber(editForm.phone).message}</span>
-                    )}
-                  </div>
-                )}
-              </div>
+              <PhoneInputField
+                value={editForm.phone || ''}
+                onChange={(val) => setEditForm((prev) => ({ ...prev, phone: val }))}
+              />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
