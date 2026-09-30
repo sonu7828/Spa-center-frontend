@@ -43,6 +43,7 @@ import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Tabs from '../components/Tabs';
+import { formatPhoneNumber, validatePhoneNumber } from '../utils/phone';
 import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
 import { useLoyalty } from '../context/LoyaltyContext';
@@ -112,9 +113,14 @@ export default function ClientFile() {
   const handleSaveEdit = () => {
     if (!editForm) return;
 
+    if (editForm.phone && !validatePhoneNumber(editForm.phone).isValid) {
+      return;
+    }
+
     updateClient(client.id, {
       name: editForm.name.trim() || client.name,
       phone: editForm.phone.trim() || client.phone,
+      whatsapp: editForm.phone.trim() || client.phone,
       quartier: editForm.quartier.trim(),
       birthday: editForm.birthday,
       anniversary: editForm.anniversary,
@@ -206,12 +212,26 @@ export default function ClientFile() {
                 onChange={updateField('name')}
                 placeholder="Client name"
               />
-              <Input
-                label="Phone / WhatsApp"
-                value={editForm.phone}
-                onChange={updateField('phone')}
-                placeholder="+237"
-              />
+              <div>
+                <Input
+                  label="Phone / WhatsApp"
+                  value={editForm.phone}
+                  onChange={(e) => {
+                    const formatted = formatPhoneNumber(e.target.value);
+                    setEditForm((prev) => ({ ...prev, phone: formatted }));
+                  }}
+                  placeholder="+237 6XX XX XX XX"
+                />
+                {editForm.phone && (
+                  <div className="mt-1 text-xs">
+                    {validatePhoneNumber(editForm.phone).isValid ? (
+                      <span className="text-emerald-600 font-medium">✓ Valid WhatsApp Number</span>
+                    ) : (
+                      <span className="text-amber-600">{validatePhoneNumber(editForm.phone).message}</span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">

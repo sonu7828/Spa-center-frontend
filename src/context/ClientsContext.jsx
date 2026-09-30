@@ -349,7 +349,7 @@ export function ClientsProvider({ children }) {
         await clientsApi.update(id, {
           name: updates.name,
           phone: updates.phone,
-          whatsapp: updates.whatsapp,
+          whatsapp: updates.whatsapp || updates.phone,
           quartier: updates.quartier,
           birthday: updates.birthday || null,
           anniversary: updates.anniversary || null,

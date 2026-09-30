@@ -12,13 +12,14 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import { useClients } from '../context/ClientsContext';
 import { useAuth } from '../context/AuthContext';
+import { formatPhoneNumber, validatePhoneNumber } from '../utils/phone';
 
 export default function AddClient() {
   const navigate = useNavigate();
@@ -34,11 +35,32 @@ export default function AddClient() {
     anniversary: '',
   });
 
+  const [phoneError, setPhoneError] = useState('');
+
+  const handlePhoneChange = (e) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setForm((prev) => ({ ...prev, phone: formatted }));
+    const validation = validatePhoneNumber(formatted);
+    if (!validation.isValid && formatted.trim() !== '+237') {
+      setPhoneError(validation.message);
+    } else {
+      setPhoneError('');
+    }
+  };
+
   const update = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const phoneStatus = validatePhoneNumber(form.phone);
+
   const [isSaving, setIsSaving] = useState(false);
   const handleSave = async () => {
+    const validation = validatePhoneNumber(form.phone);
+    if (!validation.isValid) {
+      setPhoneError(validation.message);
+      return;
+    }
+
     setIsSaving(true);
     try {
       const newId = await addClient({
@@ -79,12 +101,27 @@ export default function AddClient() {
             onChange={update('name')}
             placeholder="Client name"
           />
-          <Input
-            label="Phone / WhatsApp"
-            value={form.phone}
-            onChange={update('phone')}
-            placeholder="+237"
-          />
+          <div>
+            <Input
+              label="Phone / WhatsApp"
+              value={form.phone}
+              onChange={handlePhoneChange}
+              placeholder="+237 6XX XX XX XX"
+            />
+            {form.phone.trim() !== '+237' && form.phone.trim() !== '' && (
+              <div className="mt-1 flex items-center gap-1.5 text-xs">
+                {phoneStatus.isValid ? (
+                  <span className="text-emerald-600 flex items-center gap-1 font-medium">
+                    <CheckCircle size={13} /> {phoneStatus.message}
+                  </span>
+                ) : (
+                  <span className="text-amber-600 flex items-center gap-1">
+                    <AlertCircle size={13} /> {phoneError || phoneStatus.message}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Row 2: Quartier + Birthday */}
