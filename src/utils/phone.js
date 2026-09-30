@@ -109,7 +109,7 @@ export function validatePhoneNumber(phone) {
         message: `Too many digits (${local.length}/10 digits).`,
       };
     }
-    return { isValid: true, message: 'Valid Indian WhatsApp number ✓' };
+    return { isValid: true, message: 'Valid WhatsApp number ✓' };
   }
 
   // International check
