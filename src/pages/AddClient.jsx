@@ -102,13 +102,43 @@ export default function AddClient() {
             placeholder="Client name"
           />
           <div>
-            <Input
-              label="Phone / WhatsApp"
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[13px] font-medium text-muted-gray">
+                Phone / WhatsApp
+              </label>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, phone: '+237 ' }))}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                    form.phone.startsWith('+237')
+                      ? 'bg-sage text-white'
+                      : 'bg-muted-gray/10 text-charcoal hover:bg-muted-gray/20'
+                  }`}
+                >
+                  🇨🇲 +237
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, phone: '+91 ' }))}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                    form.phone.startsWith('+91')
+                      ? 'bg-sage text-white'
+                      : 'bg-muted-gray/10 text-charcoal hover:bg-muted-gray/20'
+                  }`}
+                >
+                  🇮🇳 +91
+                </button>
+              </div>
+            </div>
+            <input
+              type="text"
               value={form.phone}
               onChange={handlePhoneChange}
-              placeholder="+237 6XX XX XX XX"
+              placeholder="+237 6XX XX XX XX or +91 XXXXX XXXXX"
+              className="w-full h-[48px] px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal placeholder:text-muted-gray/50 outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150"
             />
-            {form.phone.trim() !== '+237' && form.phone.trim() !== '' && (
+            {form.phone.trim() !== '' && (
               <div className="mt-1 flex items-center gap-1.5 text-xs">
                 {phoneStatus.isValid ? (
                   <span className="text-emerald-600 flex items-center gap-1 font-medium">

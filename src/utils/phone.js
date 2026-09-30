@@ -8,15 +8,16 @@
  */
 
 export function formatPhoneNumber(input) {
-  if (!input) return '+237 ';
+  if (input === undefined || input === null) return '';
 
-  // If user clears the input or leaves just +, default back to Cameroon prefix
-  const trimmed = input.trim();
-  if (trimmed === '' || trimmed === '+') {
-    return '+237 ';
+  // Allow user to backspace freely without being hijacked
+  if (input === '' || input === '+' || input.length <= 3) {
+    return input;
   }
 
-  // If input starts with Cameroon code
+  const trimmed = input.trim();
+
+  // If input starts with Cameroon code (+237 or 237)
   if (trimmed.startsWith('+237') || trimmed.startsWith('237')) {
     const rawDigits = trimmed.replace(/\D/g, '').slice(3); // strip 237
     const limited = rawDigits.slice(0, 9); // exactly 9 digits max
@@ -26,6 +27,15 @@ export function formatPhoneNumber(input) {
     if (limited.length <= 5) return `+237 ${limited.slice(0, 3)} ${limited.slice(3)}`;
     if (limited.length <= 7) return `+237 ${limited.slice(0, 3)} ${limited.slice(3, 5)} ${limited.slice(5)}`;
     return `+237 ${limited.slice(0, 3)} ${limited.slice(3, 5)} ${limited.slice(5, 7)} ${limited.slice(7)}`;
+  }
+
+  // If input starts with India (+91 or 91)
+  if (trimmed.startsWith('+91') || trimmed.startsWith('91')) {
+    const rawDigits = trimmed.replace(/\D/g, '').slice(2);
+    const limited = rawDigits.slice(0, 10); // max 10 digits
+    if (limited.length === 0) return '+91 ';
+    if (limited.length <= 5) return `+91 ${limited}`;
+    return `+91 ${limited.slice(0, 5)} ${limited.slice(5)}`;
   }
 
   // If user types a 9-digit local Cameroon number directly (e.g. 687673262)
@@ -38,20 +48,12 @@ export function formatPhoneNumber(input) {
     return `+237 ${limited.slice(0, 3)} ${limited.slice(3, 5)} ${limited.slice(5, 7)} ${limited.slice(7)}`;
   }
 
-  // If input starts with India (+91)
-  if (trimmed.startsWith('+91') || trimmed.startsWith('91')) {
-    const rawDigits = trimmed.replace(/\D/g, '').slice(2);
-    const limited = rawDigits.slice(0, 10); // max 10 digits
-    if (limited.length <= 5) return `+91 ${limited}`;
-    return `+91 ${limited.slice(0, 5)} ${limited.slice(5)}`;
-  }
-
-  // Any other country code
-  return trimmed;
+  // Any other country code (e.g. +33, +1, etc.)
+  return input;
 }
 
 export function validatePhoneNumber(phone) {
-  if (!phone || phone.trim() === '' || phone.trim() === '+237') {
+  if (!phone || phone.trim() === '' || phone.trim() === '+237' || phone.trim() === '+91') {
     return { isValid: false, message: 'Phone number is required' };
   }
 
@@ -87,10 +89,16 @@ export function validatePhoneNumber(phone) {
   // India check
   if (cleaned.startsWith('+91') || cleaned.startsWith('91')) {
     const local = cleaned.startsWith('+91') ? cleaned.slice(3) : cleaned.slice(2);
-    if (local.length !== 10) {
+    if (local.length < 10) {
       return {
         isValid: false,
-        message: `Indian number must be exactly 10 digits (Currently: ${local.length}/10)`,
+        message: `Incomplete number (${local.length}/10 digits). Indian numbers need 10 digits.`,
+      };
+    }
+    if (local.length > 10) {
+      return {
+        isValid: false,
+        message: `Too many digits (${local.length}/10 digits).`,
       };
     }
     return { isValid: true, message: 'Valid Indian WhatsApp number ✓' };
