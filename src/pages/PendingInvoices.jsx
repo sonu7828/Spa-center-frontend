@@ -53,6 +53,7 @@ import { useRetail } from '../context/RetailContext';
 import { useCommission } from '../context/CommissionContext';
 import { useAppointments } from '../context/AppointmentsContext';
 import { whatsappApi } from '../services/api';
+import { buildReceiptWhatsAppMessage } from '../utils/receiptWhatsApp';
 
 const STATUS_COLORS = {
   DRAFT: 'bg-border text-muted-gray',
@@ -686,7 +687,7 @@ export default function PendingInvoices() {
   const handleSendWhatsAppReceipt = async (invoice) => {
     if (!invoice) return;
     const client = getClient(invoice.clientId);
-    const phone = client?.whatsapp || client?.phone;
+    const phone = client?.whatsapp || client?.phone || invoice.clientPhone || invoice.phone;
 
     if (!phone) {
       setWhatsAppFeedback((prev) => ({
@@ -701,34 +702,30 @@ export default function PendingInvoices() {
 
     setSendingWhatsAppId(invoice.id);
     try {
-      if (invoice.id) {
-        await whatsappApi.triggerPaymentConfirmation(invoice.id);
-      }
+      const message = buildReceiptWhatsAppMessage(
+        invoice,
+        client,
+        getClientLoyalty(invoice.clientId)
+      );
+
+      await whatsappApi.sendMessage({
+        recipientPhone: phone,
+        message,
+        automationType: 'PAYMENT_CONFIRMATION',
+        clientId: invoice.clientId,
+        invoiceId: invoice.id,
+        idempotencyKey: `receipt:${invoice.id}:${Date.now()}`,
+      });
+
       setWhatsAppFeedback((prev) => ({
         ...prev,
-        [invoice.id]: `WhatsApp receipt sent to ${invoice.clientName || 'Client'} (${phone}).`,
+        [invoice.id]: `✓ WhatsApp receipt sent to ${invoice.clientName || 'Client'} (${phone}).`,
       }));
     } catch (err) {
-      // Fallback to custom direct message dispatch
-      try {
-        const receiptText = `Hello ${invoice.clientName || 'Valued Guest'}, here is your receipt from OMEGA SPA: Invoice ${formatInvoiceNumber(invoice.invoiceNumber || invoice.id)}. Total Paid: ${(invoice.totalAmount || invoice.total || 0).toLocaleString('en-US')} FCFA. Thank you for visiting OMEGA SPA!`;
-        await whatsappApi.sendMessage({
-          recipientPhone: phone,
-          message: receiptText,
-          automationType: 'PAYMENT_CONFIRMATION',
-          clientId: invoice.clientId,
-          invoiceId: invoice.id,
-        });
-        setWhatsAppFeedback((prev) => ({
-          ...prev,
-          [invoice.id]: `WhatsApp receipt dispatched to ${invoice.clientName || 'Client'} (${phone}).`,
-        }));
-      } catch (fallbackErr) {
-        setWhatsAppFeedback((prev) => ({
-          ...prev,
-          [invoice.id]: `Failed to send WhatsApp receipt: ${fallbackErr?.message || err?.message || 'Network error'}`,
-        }));
-      }
+      setWhatsAppFeedback((prev) => ({
+        ...prev,
+        [invoice.id]: `Failed to send WhatsApp receipt: ${err?.message || 'Network error'}`,
+      }));
     } finally {
       setSendingWhatsAppId(null);
       setTimeout(() => {
