@@ -604,12 +604,17 @@ export default function PendingInvoices() {
     }
 
     // 6. Create feedback request
-    createFeedbackRequest({
-      clientId: clientId,
-      clientName: invoice.clientName,
-      service: invoice.items.map((it) => it.service || it.name).join(', '),
-      technician: invoice.items.map((it) => it.technician || 'Staff').join(', '),
-    });
+    try {
+      await createFeedbackRequest({
+        clientId: clientId,
+        clientName: invoice.clientName,
+        appointmentId: invoice.appointmentId,
+        service: invoice.items.map((it) => it.service || it.name).join(', '),
+        technician: invoice.items.map((it) => it.technician || 'Staff').join(', '),
+      });
+    } catch (fbErr) {
+      console.warn('Feedback token generation error:', fbErr);
+    }
 
     // 6.5. Generate Employee Referral Commission (ONLY after successful payment)
     const linkedClient = clients.find(
@@ -716,28 +721,8 @@ export default function PendingInvoices() {
 
     setSendingWhatsAppId(invoice.id);
     try {
-      // 1. Send official PDF document via Meta WhatsApp Cloud API
-      try {
-        await whatsappApi.sendInvoicePdf(invoice.id, phone);
-      } catch (pdfErr) {
-        console.warn('PDF dispatch fallback to text receipt', pdfErr);
-      }
-
-      // 2. Also send summary text receipt
-      const message = buildReceiptWhatsAppMessage(
-        invoice,
-        client,
-        getClientLoyalty(invoice.clientId)
-      );
-
-      await whatsappApi.sendMessage({
-        recipientPhone: phone,
-        message,
-        automationType: 'PAYMENT_CONFIRMATION',
-        clientId: invoice.clientId,
-        invoiceId: invoice.id,
-        idempotencyKey: `receipt:${invoice.id}:${Date.now()}`,
-      });
+      // Send official PDF receipt document via Meta WhatsApp Cloud API
+      await whatsappApi.sendInvoicePdf(invoice.id, phone);
 
       setSentReceiptInvoices((prev) => ({ ...prev, [invoice.id]: true }));
       setWhatsAppFeedback((prev) => ({
@@ -745,10 +730,42 @@ export default function PendingInvoices() {
         [invoice.id]: `✓ PDF Receipt delivered to WhatsApp (${phone})!`,
       }));
     } catch (err) {
-      setWhatsAppFeedback((prev) => ({
-        ...prev,
-        [invoice.id]: `Failed to send WhatsApp receipt: ${err?.message || 'Network error'}`,
-      }));
+      // Fallback: send text receipt if PDF fails
+      try {
+        const fbRes = await createFeedbackRequest({
+          clientId: invoice.clientId,
+          clientName: invoice.clientName,
+          appointmentId: invoice.appointmentId,
+          service: invoice.items.map((it) => it.service || it.name).join(', '),
+          technician: invoice.items.map((it) => it.technician || 'Staff').join(', '),
+        });
+        const feedbackUrl = fbRes?.url || '';
+
+        const message = buildReceiptWhatsAppMessage(
+          invoice,
+          client,
+          getClientLoyalty(invoice.clientId),
+          feedbackUrl
+        );
+        await whatsappApi.sendMessage({
+          recipientPhone: phone,
+          message,
+          automationType: 'PAYMENT_CONFIRMATION',
+          clientId: invoice.clientId,
+          invoiceId: invoice.id,
+          idempotencyKey: `receipt:${invoice.id}:${Date.now()}`,
+        });
+        setSentReceiptInvoices((prev) => ({ ...prev, [invoice.id]: true }));
+        setWhatsAppFeedback((prev) => ({
+          ...prev,
+          [invoice.id]: `✓ WhatsApp receipt delivered to ${phone} (text format)`,
+        }));
+      } catch (fallbackErr) {
+        setWhatsAppFeedback((prev) => ({
+          ...prev,
+          [invoice.id]: `Failed to send WhatsApp receipt: ${fallbackErr?.message || err?.message || 'Network error'}`,
+        }));
+      }
     } finally {
       setSendingWhatsAppId(null);
       setTimeout(() => {
@@ -1966,11 +1983,13 @@ export default function PendingInvoices() {
                   className="w-full h-[42px] px-3 bg-white border border-border rounded-[10px] text-xs text-charcoal font-medium outline-none focus:border-sage"
                 >
                   <option value="">Walk in (No client profile)</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.phone ? `(${c.phone})` : ''}
-                    </option>
-                  ))}
+                  {clients
+                    .filter((c) => c.status !== 'INACTIVE' && c.isActive !== false)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.phone ? `(${c.phone})` : ''}
+                      </option>
+                    ))}
                 </select>
                 <p className="text-[11px] text-muted-gray mt-1">
                   Optional for walk-in retail customers.

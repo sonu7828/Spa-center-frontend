@@ -35,11 +35,12 @@ function minutesToTime(mins) {
 
 export default function CreateAppointment() {
   const navigate = useNavigate();
-  const { clients } = useClients();
+  const { clients, getActiveClients } = useClients();
   const { appointments, addAppointment } = useAppointments();
   const { getActiveServices } = useServices();
   const { allUsers } = useAuth();
   const activeServices = getActiveServices();
+  const activeClients = getActiveClients ? getActiveClients() : clients.filter((c) => c.status !== 'INACTIVE' && c.isActive !== false);
 
   // All active technicians
   const allTechnicians = allUsers.filter((u) => u.role === 'technician' && u.active !== false);
@@ -148,6 +149,11 @@ export default function CreateAppointment() {
     setServerError('');
     if (!form.clientId || selectedServices.length === 0 || !form.technicianId || !form.date || !form.time) return;
 
+    if (selectedClient && (selectedClient.status === 'INACTIVE' || selectedClient.isActive === false)) {
+      setServerError('This client profile is inactive. Please restore the client in Clients List before creating an appointment.');
+      return;
+    }
+
     if (newStartMins < 10 * 60 || newStartMins > 21 * 60) {
       setServerError('Appointments can only be booked between 10:00 AM and 9:00 PM (10:00 – 21:00).');
       return;
@@ -237,9 +243,9 @@ export default function CreateAppointment() {
             className="w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150 cursor-pointer appearance-none"
           >
             <option value="">Select Client</option>
-            {clients.map((c) => (
+            {activeClients.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {c.name} {c.phone ? `(${c.phone})` : ''}
               </option>
             ))}
           </select>

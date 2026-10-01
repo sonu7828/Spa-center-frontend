@@ -96,6 +96,8 @@ export default function Rebooking() {
     }
   };
 
+
+
   const handleBatchRebooking = async () => {
     setBatchSending(true);
     setFeedbackNotice(null);
@@ -292,7 +294,7 @@ export default function Rebooking() {
                       onClick={() => setActiveWhatsAppModal(client)}
                     >
                       <MessageCircle size={15} className="text-success" />
-                      WhatsApp
+                      Send Reminder
                     </Button>
                   </div>
                 </div>
@@ -378,14 +380,14 @@ export default function Rebooking() {
               </Button>
               {feedbackNotice?.type !== 'success' && (
                 <Button
-                  className="w-full sm:w-auto"
+                  className="w-full sm:w-auto text-xs"
                   disabled={sendingClientId === (activeWhatsAppModal.id || activeWhatsAppModal.clientId)}
                   onClick={() => handleSendWhatsAppRebooking(activeWhatsAppModal)}
                 >
                   <MessageCircle size={15} className="text-white" />
                   {sendingClientId === (activeWhatsAppModal.id || activeWhatsAppModal.clientId)
                     ? 'Sending...'
-                    : 'Send WhatsApp'}
+                    : 'Send Reminder'}
                 </Button>
               )}
             </div>

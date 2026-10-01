@@ -72,7 +72,7 @@ const navSections = [
       { to: '/referrals',             label: 'Referrals',    icon: UserRoundPlus, roles: ['manager', 'reception'] },
       { to: '/rebooking',             label: 'Rebooking',    icon: RefreshCw,     roles: ['manager', 'reception'] },
       { to: '/whatsapp-automations',  label: 'WhatsApp',     icon: MessageCircle, roles: ['manager', 'reception'] },
-      { to: '/client-feedback',        label: 'Feedback',     icon: Star,          roles: ['manager'] },
+      { to: '/client-feedback',        label: 'Feedback',     icon: Star,          roles: ['manager', 'reception'] },
     ],
   },
 ];

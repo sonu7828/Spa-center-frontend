@@ -21,20 +21,126 @@ import {
   UserPlus,
   CornerDownRight,
   Clock,
+  Check,
+  AlertCircle,
+  UserX,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import ClientAcquisitionModal from '../components/ClientAcquisitionModal';
 import { useAppointments } from '../context/AppointmentsContext';
+import { useOperations } from '../context/OperationsContext';
 import { useAuth } from '../context/AuthContext';
-import { getDoualaTodayStr, formatDoualaDateDisplay } from '../utils/timezone';
+import { getDoualaTodayStr, getDoualaCurrentTimeStr, formatDoualaDateDisplay } from '../utils/timezone';
 
-const categoryStyles = {
-  nails: 'bg-dusty-rose-soft border-dusty-rose/30 hover:border-dusty-rose',
-  facial: 'bg-sage-soft border-sage/30 hover:border-sage',
-  massage: 'bg-warning-soft border-warning/30 hover:border-warning',
-};
+function timeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function minutesToTime(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function getAppointmentStatusInfo(apt, isAppointmentClosed, todayDateStr, currentDoualaTimeStr) {
+  const raw = String(apt.rawStatus || apt.status || '').toUpperCase();
+  const lower = String(apt.status || '').toLowerCase();
+
+  const isCompleted =
+    lower === 'completed' ||
+    raw === 'COMPLETED' ||
+    (typeof isAppointmentClosed === 'function' && isAppointmentClosed(apt.id));
+
+  const isCancelled = lower === 'cancelled' || raw === 'CANCELLED';
+
+  if (isCompleted) {
+    return {
+      key: 'completed',
+      label: 'Completed',
+      borderLeft: 'border-l-[4px] border-l-[#4F6748]',
+      cardBg: 'bg-[#F2F7F0] border-[#CFDEC9] hover:border-[#8EBE89]',
+      contBg: 'bg-[#F2F7F0]/90 border-[#CFDEC9]',
+      badgeBg: 'bg-[#DCE7D7] border-[#B7CEB1] text-[#2F4E29]',
+      timeColor: 'text-[#3E5C38]',
+      accentColor: 'text-[#4F6748]',
+    };
+  }
+
+  if (isCancelled) {
+    return {
+      key: 'cancelled',
+      label: 'Cancelled',
+      borderLeft: 'border-l-[4px] border-l-[#9CA3AF]',
+      cardBg: 'bg-[#F3F4F6] border-[#E5E7EB]',
+      contBg: 'bg-[#F3F4F6]/90 border-[#E5E7EB]',
+      badgeBg: 'bg-[#E5E7EB] border-[#D1D5DB] text-[#4B5563]',
+      timeColor: 'text-[#4B5563]',
+      accentColor: 'text-[#6B7280]',
+    };
+  }
+
+  const isManuallyNoShow = lower === 'no-show' || lower === 'no_show' || raw === 'NO_SHOW';
+  const isManuallyLate = lower === 'late' || raw === 'LATE';
+
+  // Smart Auto-detection based on Douala date and time
+  const aptDate = apt.date ? apt.date.slice(0, 10) : '';
+  const isPastDate = aptDate && todayDateStr && aptDate < todayDateStr;
+  const isToday = aptDate && todayDateStr && aptDate === todayDateStr;
+
+  const aptMins = timeToMinutes(apt.time);
+  const nowMins = currentDoualaTimeStr ? timeToMinutes(currentDoualaTimeStr) : 0;
+
+  // Auto-Late: If today, and 15 mins have passed since appointment start time, but service is not completed
+  const isAutoLate = isToday && aptMins > 0 && nowMins > (aptMins + 15);
+
+  // Auto-No-Show: If appointment was on a past date or after spa closing time (21:30) and was never completed
+  const isAutoNoShow = isPastDate || (isToday && nowMins >= 21 * 60 + 30);
+
+  const isNoShow = isManuallyNoShow || isAutoNoShow;
+  const isLate = !isNoShow && (isManuallyLate || isAutoLate);
+
+  if (isNoShow) {
+    return {
+      key: 'no-show',
+      label: 'No-Show',
+      borderLeft: 'border-l-[4px] border-l-[#DC2626]',
+      cardBg: 'bg-[#FEF2F2] border-[#FECACA] hover:border-[#DC2626]',
+      contBg: 'bg-[#FEF2F2]/90 border-[#FECACA]',
+      badgeBg: 'bg-[#FEE2E2] border-[#FCA5A5] text-[#991B1B]',
+      timeColor: 'text-[#991B1B]',
+      accentColor: 'text-[#DC2626]',
+    };
+  }
+
+  if (isLate) {
+    return {
+      key: 'late',
+      label: 'Late',
+      borderLeft: 'border-l-[4px] border-l-[#D97706]',
+      cardBg: 'bg-[#FFFDF5] border-[#FDE68A] hover:border-[#D97706]',
+      contBg: 'bg-[#FFFDF5]/90 border-[#FDE68A]',
+      badgeBg: 'bg-[#FEF3C7] border-[#FCD34D] text-[#92400E]',
+      timeColor: 'text-[#92400E]',
+      accentColor: 'text-[#D97706]',
+    };
+  }
+
+  // Default: Scheduled (Upcoming)
+  return {
+    key: 'scheduled',
+    label: 'Scheduled',
+    borderLeft: 'border-l-[4px] border-l-[#3B82F6]',
+    cardBg: 'bg-[#F8FAFC] border-[#CBD5E1] hover:border-[#60A5FA]',
+    contBg: 'bg-[#F8FAFC]/90 border-[#CBD5E1]',
+    badgeBg: 'bg-[#EFF6FF] border-[#BFDBFE] text-[#1D4ED8]',
+    timeColor: 'text-[#1E40AF]',
+    accentColor: 'text-[#3B82F6]',
+  };
+}
 
 const timeSlots = [
   '10:00', '10:30',
@@ -73,6 +179,7 @@ function shiftDate(dateStr, days) {
 export default function AppointmentCalendar() {
   const navigate = useNavigate();
   const { getAppointmentsForDate } = useAppointments();
+  const { isAppointmentClosed } = useOperations();
   const { user, allUsers } = useAuth();
   const [currentDate, setCurrentDate] = useState(todayStr());
   const [selectedTechFilter, setSelectedTechFilter] = useState('all'); // 'all' | tech.id
@@ -99,18 +206,8 @@ export default function AppointmentCalendar() {
   // Reception/Manager can create appointments; technician cannot
   const canCreateAppointment = user?.role === 'manager' || user?.role === 'reception';
 
-  // Helpers for time/minutes conversion
-  function timeToMinutes(timeStr) {
-    if (!timeStr) return 0;
-    const [h, m] = timeStr.split(':').map(Number);
-    return (h || 0) * 60 + (m || 0);
-  }
-
-  function minutesToTime(mins) {
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  }
+  const todayDateStr = todayStr();
+  const currentDoualaTime = getDoualaCurrentTimeStr();
 
   // Snap a time string (HH:MM) to the nearest floor 30-min slot
   function snapToSlot(timeStr) {
@@ -129,7 +226,7 @@ export default function AppointmentCalendar() {
 
   dayAppointments.forEach((apt) => {
     if (!grid[apt.technicianId]) return;
-    if (apt.status === 'no-show' || apt.status === 'cancelled') return; // No-show/cancelled appointments do not block slots
+    if (apt.status === 'cancelled' || apt.rawStatus === 'CANCELLED') return; // Cancelled appointments do not block slots
 
     const startSlot = snapToSlot(apt.time);
     const startMins = timeToMinutes(apt.time);
@@ -295,6 +392,29 @@ export default function AppointmentCalendar() {
         </div>
       )}
 
+      {/* Status Legend Bar */}
+      <div className="flex items-center justify-between flex-wrap gap-2 px-1 mb-3.5">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-xs text-charcoal">
+          <span className="text-[10px] uppercase font-bold text-muted-gray tracking-wider">Status:</span>
+          <div className="flex items-center gap-1.5 bg-[#F2F7F0] border border-[#CFDEC9] px-2 py-0.5 rounded-[6px] font-semibold text-[#2F4E29] text-[11px] shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-[#4F6748]"></span>
+            <span>Completed</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-[#F8FAFC] border border-[#CBD5E1] px-2 py-0.5 rounded-[6px] font-semibold text-[#1D4ED8] text-[11px] shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-[#3B82F6]"></span>
+            <span>Scheduled</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-[#FEF2F2] border border-[#FECACA] px-2 py-0.5 rounded-[6px] font-semibold text-[#991B1B] text-[11px] shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-[#DC2626]"></span>
+            <span>No-Show</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-[#FFFDF5] border border-[#FDE68A] px-2 py-0.5 rounded-[6px] font-semibold text-[#92400E] text-[11px] shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-[#D97706]"></span>
+            <span>Late</span>
+          </div>
+        </div>
+      </div>
+
       {/* Calendar Grid Card */}
       <div className="bg-white border border-border rounded-[16px] shadow-card overflow-hidden">
         <div className="overflow-x-auto">
@@ -353,50 +473,52 @@ export default function AppointmentCalendar() {
                           key={tech.id}
                           className="px-1.5 sm:px-2 py-1 border-r border-border/30 last:border-r-0 align-top"
                         >
-                          <div className="flex flex-col gap-1">
+                          <div className="flex flex-col gap-1.5">
                             {items.map((item, idx) => {
                               const apt = item.appointment;
+                              const statusInfo = getAppointmentStatusInfo(apt, isAppointmentClosed, todayDateStr, currentDoualaTime);
+
                               if (item.isStart) {
                                 return (
                                   <button
                                     key={`${apt.id}-${slot}-${idx}`}
                                     onClick={() => navigate(`/appointments/${apt.id}`)}
-                                    className={`w-full text-left px-2.5 sm:px-3 py-2 rounded-[10px] border cursor-pointer transition-all hover:scale-[1.01] shadow-2xs ${
-                                      categoryStyles[apt.category] || 'bg-soft-cream border-border'
-                                    }`}
+                                    className={`w-full text-left px-2.5 sm:px-3 py-2 rounded-[10px] border cursor-pointer transition-all hover:scale-[1.01] shadow-2xs ${statusInfo.borderLeft} ${statusInfo.cardBg}`}
                                   >
                                     <div className="flex items-start justify-between gap-1">
-                                      <p className="text-xs sm:text-sm font-semibold text-charcoal leading-snug truncate">
+                                      <p className={`text-xs sm:text-sm font-semibold leading-snug truncate ${statusInfo.key === 'no-show' ? 'line-through text-error/80' : 'text-charcoal'}`}>
                                         {apt.time !== slot && (
                                           <span className="text-[10px] font-bold text-muted-gray mr-1">{apt.time}</span>
                                         )}
                                         {apt.clientName}
                                       </p>
-                                      <span className="text-[10px] font-semibold text-muted-gray shrink-0 bg-white/70 px-1.5 py-0.5 rounded border border-border/40">
+                                      <span className="text-[10px] font-semibold text-muted-gray shrink-0 bg-white/80 px-1.5 py-0.5 rounded border border-border/40">
                                         {item.duration}m
                                       </span>
                                     </div>
-                                    <p className="text-[11px] text-muted-gray mt-0.5 truncate">
+                                    <p className={`text-[11px] text-muted-gray mt-0.5 truncate font-medium ${statusInfo.key === 'no-show' ? 'line-through opacity-70' : ''}`}>
                                       {apt.service}
                                     </p>
-                                    <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                                      <span className="text-[10px] text-muted-gray font-medium">
+                                    <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                                      {/* Status Pill Badge */}
+                                      <span
+                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[5px] text-[9.5px] font-bold border shadow-2xs ${statusInfo.badgeBg}`}
+                                      >
+                                        {statusInfo.key === 'completed' && <Check size={10} strokeWidth={2.8} />}
+                                        {statusInfo.key === 'scheduled' && <Clock size={10} strokeWidth={2.2} />}
+                                        {statusInfo.key === 'no-show' && <UserX size={10} strokeWidth={2.2} />}
+                                        {statusInfo.key === 'late' && <AlertCircle size={10} strokeWidth={2.2} />}
+                                        <span>{statusInfo.label}</span>
+                                      </span>
+
+                                      <span className={`text-[10px] font-semibold ${statusInfo.timeColor}`}>
                                         {apt.time}–{item.endTime}
                                       </span>
+
                                       {apt.introducedBy && (
                                         <p className="text-[9px] font-bold text-[#4F6748] bg-sage-soft/90 px-1.5 py-0.5 rounded-[4px] inline-block">
                                           By {apt.introducedBy}
                                         </p>
-                                      )}
-                                      {apt.status === 'late' && (
-                                        <span className="inline-block px-1.5 py-0.5 rounded-[4px] bg-warning-soft border border-warning/20 text-[9px] font-bold text-warning uppercase tracking-wide">
-                                          Late
-                                        </span>
-                                      )}
-                                      {apt.status === 'no-show' && (
-                                        <span className="inline-block px-1.5 py-0.5 rounded-[4px] bg-error-soft border border-error/20 text-[9px] font-bold text-error uppercase tracking-wide">
-                                          No-Show
-                                        </span>
                                       )}
                                     </div>
                                   </button>
@@ -408,24 +530,51 @@ export default function AppointmentCalendar() {
                                 <button
                                   key={`${apt.id}-cont-${slot}-${idx}`}
                                   onClick={() => navigate(`/appointments/${apt.id}`)}
-                                  className={`w-full text-left px-2.5 sm:px-3 py-1.5 rounded-[10px] border border-dashed cursor-pointer transition-all hover:scale-[1.01] shadow-2xs opacity-90 ${
-                                    categoryStyles[apt.category] || 'bg-soft-cream border-border'
-                                  }`}
-                                  title={`${tech.name} occupied with ${apt.clientName} until ${item.endTime}`}
+                                  className={`w-full text-left px-2.5 sm:px-3 py-1.5 rounded-[10px] border border-dashed cursor-pointer transition-all hover:scale-[1.01] shadow-2xs opacity-95 ${statusInfo.borderLeft} ${statusInfo.contBg}`}
+                                  title={`${tech.name} occupied with ${apt.clientName} until ${item.endTime} (${statusInfo.label})`}
                                 >
                                   <div className="flex items-center justify-between gap-1">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                      <CornerDownRight className="w-3.5 h-3.5 text-[#4F6748] shrink-0 stroke-[2.5]" />
-                                      <p className="text-[11px] sm:text-xs font-semibold text-charcoal leading-tight truncate">
+                                      {statusInfo.key === 'completed' ? (
+                                        <Check className="w-3.5 h-3.5 text-[#4F6748] shrink-0 stroke-[2.5]" />
+                                      ) : statusInfo.key === 'no-show' ? (
+                                        <UserX className="w-3.5 h-3.5 text-[#DC2626] shrink-0 stroke-[2.2]" />
+                                      ) : statusInfo.key === 'late' ? (
+                                        <AlertCircle className="w-3.5 h-3.5 text-[#D97706] shrink-0 stroke-[2.2]" />
+                                      ) : (
+                                        <CornerDownRight className="w-3.5 h-3.5 text-[#3B82F6] shrink-0 stroke-[2.5]" />
+                                      )}
+                                      <p className={`text-[11px] sm:text-xs font-semibold leading-tight truncate ${statusInfo.key === 'no-show' ? 'line-through text-error/80' : 'text-charcoal'}`}>
                                         {apt.clientName}
                                       </p>
                                     </div>
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-medium text-muted-gray shrink-0 bg-white/80 px-1.5 py-0.5 rounded border border-border/40">
-                                      <Clock className="w-2.5 h-2.5 text-muted-gray" />
-                                      Until {item.endTime}
+                                    <span
+                                      className={`inline-flex items-center gap-1 text-[9px] font-semibold shrink-0 px-1.5 py-0.5 rounded border ${statusInfo.badgeBg}`}
+                                    >
+                                      {statusInfo.key === 'completed' ? (
+                                        <>
+                                          <Check size={9} strokeWidth={2.6} />
+                                          <span>Done · {item.endTime}</span>
+                                        </>
+                                      ) : statusInfo.key === 'no-show' ? (
+                                        <>
+                                          <UserX size={9} strokeWidth={2.2} />
+                                          <span>No-Show · {item.endTime}</span>
+                                        </>
+                                      ) : statusInfo.key === 'late' ? (
+                                        <>
+                                          <AlertCircle size={9} strokeWidth={2.2} />
+                                          <span>Late · {item.endTime}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Clock className="w-2.5 h-2.5" />
+                                          <span>Until {item.endTime}</span>
+                                        </>
+                                      )}
                                     </span>
                                   </div>
-                                  <p className="text-[10px] text-muted-gray mt-0.5 truncate pl-5">
+                                  <p className={`text-[10px] text-muted-gray mt-0.5 truncate pl-5 ${statusInfo.key === 'no-show' ? 'line-through opacity-70' : ''}`}>
                                     {apt.service}
                                   </p>
                                 </button>

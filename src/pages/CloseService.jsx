@@ -18,9 +18,9 @@
  * Source: WIREFRAME.md Screen 11, FLOW.md §20-24
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CheckCircle2, Award, Sparkles, Send, FileText, Users, Plus, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Award, Sparkles, Send, FileText, Users, Plus, X, Star, Copy, ExternalLink, MessageCircle, Check } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -31,7 +31,8 @@ import { useAuth, ROLE_HOME } from '../context/AuthContext';
 import { useLoyalty } from '../context/LoyaltyContext';
 import { useServices } from '../context/ServicesContext';
 import { useInvoices } from '../context/InvoiceContext';
-import { appointmentsApi } from '../services/api';
+import { useFeedback } from '../context/FeedbackContext';
+import { appointmentsApi, whatsappApi } from '../services/api';
 import { Camera, FileEdit } from 'lucide-react';
 
 export default function CloseService() {
@@ -68,7 +69,7 @@ export default function CloseService() {
   const linkedClient = clients.find(
     (c) => c.id === apt?.clientId || c.name.toLowerCase() === apt?.clientName?.toLowerCase()
   );
-  const targetClientId = linkedClient ? linkedClient.id : apt?.clientId || 1;
+  const targetClientId = linkedClient ? linkedClient.id : (apt?.clientId || null);
   const clientLoyalty = getClientLoyalty(targetClientId);
 
   // Read booked services array from appointment (source of truth)
@@ -87,6 +88,58 @@ export default function CloseService() {
   const [attachedPhotoUrl, setAttachedPhotoUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+
+  const { createFeedbackRequest } = useFeedback();
+  const [feedbackLinkUrl, setFeedbackLinkUrl] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [whatsAppNotice, setWhatsAppNotice] = useState('');
+
+  // Auto-generate feedback request for closed/invoiced appointment
+  useEffect(() => {
+    if (feedbackLinkUrl) return;
+    if ((alreadyClosed || alreadyInvoiced || submittedSuccess) && apt) {
+      createFeedbackRequest({
+        appointmentId: id,
+        clientId: targetClientId,
+        clientName: apt.clientName,
+        service: servicesList.map((s) => s.name).join(', '),
+        technician: apt.technicianName,
+        date: apt.date,
+      }).then((res) => {
+        if (res?.url) setFeedbackLinkUrl(res.url);
+      });
+    }
+  }, [alreadyClosed, alreadyInvoiced, submittedSuccess, id, apt?.clientName, targetClientId, createFeedbackRequest, feedbackLinkUrl]);
+
+  const handleCopyFeedbackLink = () => {
+    if (!feedbackLinkUrl) return;
+    navigator.clipboard.writeText(feedbackLinkUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 3000);
+  };
+
+  const handleSendFeedbackWhatsApp = async () => {
+    if (!apt) return;
+    const phone = apt.clientPhone || linkedClient?.phone || linkedClient?.whatsapp;
+    setSendingWhatsApp(true);
+    setWhatsAppNotice('');
+    try {
+      await whatsappApi.triggerAfterService(id);
+      setWhatsAppNotice('✓ After-Service Thank You & Feedback sent via WhatsApp!');
+    } catch (err) {
+      const text = encodeURIComponent(
+        `Bonjour ${apt.clientName || ''} ! Merci d'avoir visité OMEGA SPA 🌿\n\nNous espérons que vous avez apprécié votre prestation.\n\n⭐ Votre avis compte énormément pour nous ! Merci de donner votre avis ici :\n${feedbackLinkUrl}\n\n— OMEGA SPA Douala`
+      );
+      const cleanPhone = phone ? String(phone).replace(/[^0-9]/g, '') : '';
+      const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${text}` : `https://wa.me/?text=${text}`;
+      window.open(waUrl, '_blank');
+      setWhatsAppNotice('✓ WhatsApp opened with feedback message!');
+    } finally {
+      setSendingWhatsApp(false);
+      setTimeout(() => setWhatsAppNotice(''), 6000);
+    }
+  };
 
   // Total amount for this visit
   const totalVisitPrice = servicesList.reduce((sum, s) => {
@@ -218,6 +271,24 @@ export default function CloseService() {
         service: servicesList.map((s) => s.name).join(', '),
       });
 
+      // 6. Generate feedback token
+      try {
+        const fbRes = await createFeedbackRequest({
+          appointmentId: id,
+          clientId: targetClientId,
+          clientName: apt.clientName,
+          service: servicesList.map((s) => s.name).join(', '),
+          technician: apt.technicianName,
+          date: apt.date,
+        });
+        if (fbRes?.url) setFeedbackLinkUrl(fbRes.url);
+      } catch (fbErr) {}
+
+      // 7. Fire WhatsApp thank you in background
+      try {
+        whatsappApi.triggerAfterService(id).catch(() => {});
+      } catch (waErr) {}
+
       setSubmittedSuccess(true);
     } catch (err) {
       console.error('Failed to submit invoice to reception:', err);
@@ -346,6 +417,62 @@ export default function CloseService() {
             <span className="truncate">
               {clientLoyalty.balance} pts available · Est. +{estEarnedPts} pts after payment
             </span>
+          </div>
+
+          {/* Client Feedback Link Card */}
+          <div className="bg-[#FBF9F5] border border-[#E4E4E7] rounded-[12px] p-3.5 sm:p-4 mb-4 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-charcoal">
+                <Star size={15} className="text-[#F59E0B] fill-[#F59E0B]" />
+                Client Feedback & Rating Form
+              </div>
+              <span className="text-[11px] text-[#4F6748] font-medium bg-[#EBF3EC] px-2 py-0.5 rounded-full border border-[#7FA285]/30">
+                Ready for Client
+              </span>
+            </div>
+            <p className="text-xs text-muted-gray leading-relaxed">
+              Client can submit star ratings and review comments using this personal feedback link:
+            </p>
+            {feedbackLinkUrl && (
+              <div className="flex items-center gap-2 bg-white border border-[#E4E4E7] rounded-[8px] p-2 text-xs">
+                <span className="truncate text-muted-gray flex-1 font-mono text-[11px]">
+                  {feedbackLinkUrl}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyFeedbackLink}
+                  className="px-2.5 py-1 rounded-[6px] bg-[#F4F4F5] hover:bg-[#E4E4E7] text-charcoal font-medium text-[11px] flex items-center gap-1 shrink-0 cursor-pointer"
+                >
+                  {copiedLink ? <Check size={12} className="text-success" /> : <Copy size={12} />}
+                  {copiedLink ? 'Copied' : 'Copy'}
+                </button>
+                <a
+                  href={feedbackLinkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 rounded-[6px] bg-[#F4F4F5] hover:bg-[#E4E4E7] text-charcoal font-medium text-[11px] flex items-center gap-1 shrink-0 cursor-pointer"
+                >
+                  <ExternalLink size={12} />
+                  Open
+                </a>
+              </div>
+            )}
+            <div className="pt-1">
+              <Button
+                onClick={handleSendFeedbackWhatsApp}
+                disabled={sendingWhatsApp}
+                className="bg-[#25D366] hover:bg-[#128C7E] text-white border-transparent text-xs h-8.5 font-semibold flex items-center gap-1.5"
+              >
+                <MessageCircle size={14} />
+                {sendingWhatsApp ? 'Sending...' : 'Send Feedback Link via WhatsApp'}
+              </Button>
+            </div>
+            {whatsAppNotice && (
+              <div className="text-xs font-medium text-[#4F6748] bg-[#EBF3EC] border border-[#7FA285]/40 rounded-[8px] p-2 flex items-center gap-2">
+                <Check size={13} />
+                {whatsAppNotice}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end sm:gap-3 pt-2 border-t border-border/50">

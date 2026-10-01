@@ -435,10 +435,15 @@ export function ClientsProvider({ children }) {
     );
   }, []);
 
+  const getActiveClients = useCallback(() => {
+    return clients.filter((c) => c.status !== 'INACTIVE' && c.isActive !== false);
+  }, [clients]);
+
   return (
     <ClientsContext.Provider
       value={{
         clients,
+        getActiveClients,
         loading,
         error,
         refreshClients,

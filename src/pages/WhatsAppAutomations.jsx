@@ -35,17 +35,9 @@ import {
   RefreshCw,
   FileText,
   TrendingUp,
-  Pencil,
   X,
   Check,
-  Send,
   MessageCircle,
-  Users,
-  UserCheck,
-  Megaphone,
-  Calendar,
-  Plus,
-  Trash2,
   Search,
   ShieldAlert,
   AlertCircle,
@@ -55,12 +47,11 @@ import {
   Filter,
   CreditCard,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
-import Input from '../components/Input';
 import { useWhatsApp } from '../context/WhatsAppContext';
-import { useClients } from '../context/ClientsContext';
 import { useAuth } from '../context/AuthContext';
 
 const AUTOMATION_ICONS = {
@@ -85,27 +76,9 @@ const AUTOMATION_COLORS = {
   DAILY_CLOSE_BOSS: { bg: 'bg-sage-soft', border: 'border-sage/30', text: 'text-[#4F6748]', dot: 'bg-sage' },
 };
 
-function formatSpecialDate(dateStr, repeatYearly) {
-  if (!dateStr) return '';
-  if (dateStr.includes('-')) {
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-      const year = parts[0];
-      const monthIdx = parseInt(parts[1], 10) - 1;
-      const dayNum = parseInt(parts[2], 10);
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const monthStr = months[monthIdx] || parts[1];
-      const dayStr = dayNum < 10 ? `0${dayNum}` : `${dayNum}`;
-      return repeatYearly ? `${dayStr} ${monthStr}` : `${dayStr} ${monthStr} ${year}`;
-    }
-  }
-  return dateStr;
-}
-
 export default function WhatsAppAutomations() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { clients } = useClients();
 
   const {
     automations = [],
@@ -116,17 +89,10 @@ export default function WhatsAppAutomations() {
     fetchAutomations,
     updateAutomation,
     toggleAutomation,
-    updateTemplate,
     fetchLogs,
     retryMessage,
-    sendMessage,
     processReminders,
     triggerDailyClose,
-    specialDays = [],
-    addSpecialDay,
-    updateSpecialDay,
-    deleteSpecialDay,
-    toggleSpecialDayAutoSend,
   } = useWhatsApp();
 
   const role = (user?.role || '').toLowerCase();
@@ -135,12 +101,7 @@ export default function WhatsAppAutomations() {
   const isBlocked = !isManager && !isReception;
 
   // Active top navigation tab
-  const [activeTab, setActiveTab] = useState('automations'); // 'automations' | 'logs' | 'special-days'
-
-  // Inline Template Edit State
-  const [editingType, setEditingType] = useState(null);
-  const [editDraft, setEditDraft] = useState('');
-  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [activeTab, setActiveTab] = useState('automations'); // 'automations' | 'logs'
 
   // Status message alerts
   const [alertNotice, setAlertNotice] = useState(null);
@@ -154,26 +115,6 @@ export default function WhatsAppAutomations() {
   const [processingReminders, setProcessingReminders] = useState(false);
   const [triggeringDailyClose, setTriggeringDailyClose] = useState(false);
   const [retryingLogId, setRetryingLogId] = useState(null);
-
-  // Custom Send Message Modal state
-  const [showSendModal, setShowSendModal] = useState(false);
-  const [customRecipientPhone, setCustomRecipientPhone] = useState('');
-  const [customMessageText, setCustomMessageText] = useState('');
-  const [sendingCustom, setSendingCustom] = useState(false);
-
-  // Special Public Days State
-  const [showDayModal, setShowDayModal] = useState(false);
-  const [editingDay, setEditingDay] = useState(null);
-  const [clientSearch, setClientSearch] = useState('');
-  const [dayForm, setDayForm] = useState({
-    name: '',
-    date: '',
-    repeatYearly: true,
-    message: '',
-    audience: 'all',
-    selectedClients: [],
-    autoSend: true,
-  });
 
   // =========================================================================
   // RBAC GUARD: TECHNICIAN & CLEANER ACCESS DENIED
@@ -202,34 +143,7 @@ export default function WhatsAppAutomations() {
     setTimeout(() => setAlertNotice(null), 5000);
   };
 
-  // Start editing template
-  const handleStartEdit = (auto) => {
-    if (!isManager) return;
-    setEditingType(auto.type);
-    setEditDraft(auto.template || '');
-  };
-
-  const handleCancelEdit = () => {
-    setEditingType(null);
-    setEditDraft('');
-  };
-
-  const handleSaveEdit = async (type) => {
-    if (!editDraft.trim()) return;
-    setSavingTemplate(true);
-    try {
-      await updateTemplate(type, editDraft.trim());
-      setEditingType(null);
-      setEditDraft('');
-      showNotification(`Template for ${type} updated successfully.`);
-    } catch (err) {
-      showNotification(err.message || 'Failed to update template', true);
-    } finally {
-      setSavingTemplate(false);
-    }
-  };
-
-  // Toggle automation active/inactive
+  // Toggle automation active/inactive (Works dynamically in DB and dispatch engine)
   const handleToggle = async (auto) => {
     if (!isManager) {
       showNotification('Receptionists can only view automation status. Manager permission required to toggle.', true);
@@ -237,7 +151,7 @@ export default function WhatsAppAutomations() {
     }
     try {
       await toggleAutomation(auto.type);
-      showNotification(`${auto.title} ${!auto.isActive ? 'enabled' : 'disabled'}.`);
+      showNotification(`${auto.title} ${!auto.isActive ? 'enabled (will auto-send)' : 'disabled (skipped from sending)'}.`);
     } catch (err) {
       showNotification(err.message || 'Error toggling automation', true);
     }
@@ -264,7 +178,8 @@ export default function WhatsAppAutomations() {
     if (!isManager) return;
     setTriggeringDailyClose(true);
     try {
-      const res = await triggerDailyClose();
+      const savedBossPhone = localStorage.getItem('omega_boss_phone');
+      await triggerDailyClose(savedBossPhone ? { recipientPhone: savedBossPhone } : {});
       showNotification('Daily close summary successfully queued and dispatched to Boss WhatsApp.');
     } catch (err) {
       showNotification(err.message || 'Failed to trigger daily close', true);
@@ -286,27 +201,7 @@ export default function WhatsAppAutomations() {
     }
   };
 
-  // Send custom message handler
-  const handleSendCustomMessage = async (e) => {
-    e.preventDefault();
-    if (!customRecipientPhone.trim() || !customMessageText.trim()) return;
-    setSendingCustom(true);
-    try {
-      await sendMessage({
-        recipientPhone: customRecipientPhone.trim(),
-        message: customMessageText.trim(),
-      });
-      setShowSendModal(false);
-      setCustomRecipientPhone('');
-      setCustomMessageText('');
-      showNotification('Custom message sent and logged.');
-      setActiveTab('logs');
-    } catch (err) {
-      showNotification(err.message || 'Failed to send custom message', true);
-    } finally {
-      setSendingCustom(false);
-    }
-  };
+
 
   // Filtered Logs
   const filteredLogs = useMemo(() => {
@@ -323,66 +218,6 @@ export default function WhatsAppAutomations() {
       return true;
     });
   }, [logs, logStatusFilter, logTypeFilter, logSearch]);
-
-  // Special Days helpers
-  const openAddDay = () => {
-    setEditingDay(null);
-    setDayForm({
-      name: '',
-      date: new Date().toISOString().split('T')[0],
-      repeatYearly: true,
-      message: '',
-      audience: 'all',
-      selectedClients: [],
-      autoSend: true,
-    });
-    setClientSearch('');
-    setShowDayModal(true);
-  };
-
-  const openEditDay = (day) => {
-    setEditingDay(day);
-    setDayForm({
-      name: day.name,
-      date: day.date,
-      repeatYearly: day.repeatYearly !== undefined ? day.repeatYearly : true,
-      message: day.message,
-      audience: day.audience || 'all',
-      selectedClients: day.selectedClients ? [...day.selectedClients] : [],
-      autoSend: day.autoSend !== undefined ? day.autoSend : true,
-    });
-    setClientSearch('');
-    setShowDayModal(true);
-  };
-
-  const handleSaveDay = () => {
-    if (!dayForm.name.trim() || !dayForm.date.trim() || !dayForm.message.trim()) return;
-    if (editingDay) {
-      updateSpecialDay(editingDay.id, dayForm);
-    } else {
-      addSpecialDay(dayForm);
-    }
-    setShowDayModal(false);
-    setEditingDay(null);
-  };
-
-  const toggleModalClient = (clientId) => {
-    setDayForm((prev) => ({
-      ...prev,
-      selectedClients: prev.selectedClients.includes(clientId)
-        ? prev.selectedClients.filter((id) => id !== clientId)
-        : [...prev.selectedClients, clientId],
-    }));
-  };
-
-  const filteredClientsForModal = useMemo(() => {
-    if (!clientSearch.trim()) return clients;
-    return clients.filter(
-      (c) =>
-        c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
-        (c.phone && c.phone.includes(clientSearch))
-    );
-  }, [clients, clientSearch]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -466,13 +301,6 @@ export default function WhatsAppAutomations() {
             </Button>
           )}
 
-          <Button
-            onClick={() => setShowSendModal(true)}
-            className="h-10 text-xs px-4 font-bold cursor-pointer shrink-0"
-          >
-            <Send size={14} />
-            Send Custom Message
-          </Button>
         </div>
       </div>
 
@@ -501,18 +329,6 @@ export default function WhatsAppAutomations() {
           <FileText size={14} className="text-sage" />
           Message Audit Logs ({pagination.total})
         </button>
-
-        <button
-          onClick={() => setActiveTab('special-days')}
-          className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
-            activeTab === 'special-days'
-              ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
-              : 'text-muted-gray hover:text-charcoal'
-          }`}
-        >
-          <Calendar size={14} className="text-sage" />
-          Special Days & Broadcast ({specialDays.length})
-        </button>
       </div>
 
       {/* =====================================================================
@@ -525,7 +341,7 @@ export default function WhatsAppAutomations() {
               Standard Automation Rules
             </h2>
             <span className="text-xs text-muted-gray">
-              {isManager ? 'Manager: Click toggle or Edit Message to update.' : 'Reception: Operational view only.'}
+              {isManager ? 'Manager: Toggle ON/OFF to activate or deactivate automations.' : 'Reception: Operational view only.'}
             </span>
           </div>
 
@@ -533,7 +349,6 @@ export default function WhatsAppAutomations() {
             {automations.map((auto) => {
               const IconComponent = AUTOMATION_ICONS[auto.type] || MessageCircle;
               const color = AUTOMATION_COLORS[auto.type] || AUTOMATION_COLORS.BIRTHDAY;
-              const isEditing = editingType === auto.type;
 
               return (
                 <div
@@ -566,7 +381,7 @@ export default function WhatsAppAutomations() {
                           type="button"
                           onClick={() => handleToggle(auto)}
                           disabled={!isManager}
-                          title={isManager ? 'Toggle ON/OFF' : 'Manager permission required'}
+                          title={isManager ? (auto.isActive ? 'Click to turn OFF' : 'Click to turn ON') : 'Manager permission required'}
                           className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                             auto.isActive ? 'bg-[#4F6748]' : 'bg-border'
                           } ${!isManager ? 'opacity-80 cursor-not-allowed' : ''}`}
@@ -600,84 +415,33 @@ export default function WhatsAppAutomations() {
                       </div>
                     </div>
 
-                    {/* Template Content */}
+                    {/* Template Content (Read-Only Meta Verified Preview) */}
                     <div className="p-5">
-                      {isEditing ? (
-                        <div className="space-y-3">
-                          <label className="block text-[11px] font-bold text-muted-gray uppercase tracking-wider">
-                            Edit Message Template ({auto.type})
-                          </label>
-                          <textarea
-                            value={editDraft}
-                            onChange={(e) => setEditDraft(e.target.value)}
-                            rows={6}
-                            className="w-full px-3.5 py-2.5 bg-white border border-sage rounded-[10px] text-xs text-charcoal outline-none focus:ring-1 focus:ring-sage/30 font-mono leading-relaxed resize-y"
-                          />
-
-                          {/* Variable Tag Helper Pills */}
-                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                            <span className="text-[10px] text-muted-gray font-semibold">Available tags:</span>
-                            {['{clientName}', '{service}', '{technician}', '{amount}', '{paymentMethod}', '{loyaltyPoints}', '{rewardPoints}', '{feedbackLink}'].map((tag) => (
-                              <button
-                                key={tag}
-                                type="button"
-                                onClick={() => setEditDraft((prev) => prev + (prev.endsWith(' ') ? '' : ' ') + tag)}
-                                className="px-2 py-0.5 rounded-[6px] text-[10px] font-mono bg-sage-soft border border-sage/30 text-[#4F6748] hover:bg-sage/20 transition-colors cursor-pointer"
-                              >
-                                + {tag}
-                              </button>
-                            ))}
-                          </div>
-
-                          <div className="flex justify-end gap-2 pt-2">
-                            <Button
-                              variant="secondary"
-                              onClick={handleCancelEdit}
-                              className="h-8 text-xs px-3"
-                              disabled={savingTemplate}
-                            >
-                              <X size={13} />
-                              Cancel
-                            </Button>
-                            <Button
-                              onClick={() => handleSaveEdit(auto.type)}
-                              className="h-8 text-xs px-4"
-                              disabled={savingTemplate}
-                            >
-                              <Check size={13} />
-                              {savingTemplate ? 'Saving...' : 'Save Template'}
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <span className="text-[10px] font-bold text-muted-gray uppercase tracking-wider block mb-1.5">
-                            Current Template Preview
-                          </span>
-                          <div className="bg-soft-cream/50 border border-border/60 rounded-[10px] p-3 max-h-[140px] overflow-y-auto mb-3">
-                            <p className="text-xs text-charcoal font-mono whitespace-pre-wrap leading-relaxed">
-                              {auto.template || 'No template configured.'}
-                            </p>
-                          </div>
-
-                          {isManager && (
-                            <button
-                              onClick={() => handleStartEdit(auto)}
-                              className="inline-flex items-center gap-1.5 text-xs font-bold text-sage hover:text-[#4F6748] transition-colors cursor-pointer"
-                            >
-                              <Pencil size={13} />
-                              Edit Template
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-muted-gray uppercase tracking-wider block">
+                          Verified Meta Template Preview
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+                          <ShieldCheck size={11} className="text-emerald-600" />
+                          Meta Cloud Verified
+                        </span>
+                      </div>
+                      <div className="bg-soft-cream/50 border border-border/60 rounded-[10px] p-3 max-h-[140px] overflow-y-auto">
+                        <p className="text-xs text-charcoal font-mono whitespace-pre-wrap leading-relaxed">
+                          {auto.template || 'No template configured.'}
+                        </p>
+                      </div>
+                      <p className="text-[11px] text-muted-gray mt-2.5 flex items-center gap-1.5">
+                        <Sparkles size={12} className="text-sage shrink-0" />
+                        <span>Auto-sends directly without requiring client to reply "Hi". Toggle switch above to turn ON or OFF.</span>
+                      </p>
                     </div>
                   </div>
 
                   {/* Card Footer */}
                   <div className="px-5 py-2.5 bg-warm-ivory/30 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-gray">
-                    <span>Last updated: {auto.lastExecution ? new Date(auto.lastExecution).toLocaleDateString() : 'Active'}</span>
-                    <span className="font-semibold text-charcoal font-mono">Backend Auto-Managed</span>
+                    <span>Engine: {auto.isActive ? 'Active & Running' : 'Paused'}</span>
+                    <span className="font-semibold text-charcoal font-mono">Meta Cloud API Managed</span>
                   </div>
                 </div>
               );
@@ -860,235 +624,6 @@ export default function WhatsAppAutomations() {
         </div>
       )}
 
-      {/* =====================================================================
-          TAB 3: SPECIAL DAYS & BROADCAST (PRESERVED WORKFLOW)
-         ===================================================================== */}
-      {activeTab === 'special-days' && (
-        <div className="bg-white border border-border rounded-[16px] shadow-card overflow-hidden">
-          <div className="px-5 py-4 bg-[#F8F3FA] border-b border-[#E1BEE7]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-[10px] bg-white border border-[#E1BEE7]/60 flex items-center justify-center text-[#8E24AA] shadow-2xs shrink-0">
-                <Calendar size={18} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-charcoal">Special Public Days</h3>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E1BEE7]/40 text-[#6A1B9A]">
-                    {specialDays.length} Saved
-                  </span>
-                </div>
-                <p className="text-[11px] text-muted-gray mt-0.5">
-                  Automated holiday & special public day greetings for clients
-                </p>
-              </div>
-            </div>
-
-            {isManager && (
-              <Button
-                onClick={openAddDay}
-                className="h-[38px] text-xs px-3.5 shrink-0 self-start sm:self-auto"
-              >
-                <Plus size={14} />
-                Add Special Day
-              </Button>
-            )}
-          </div>
-
-          <div className="p-5">
-            {specialDays.length === 0 ? (
-              <div className="py-8 text-center bg-soft-cream/30 border border-dashed border-border rounded-[12px]">
-                <Calendar size={28} className="mx-auto text-muted-gray/50 mb-2" />
-                <p className="text-sm font-medium text-charcoal">No special days configured yet</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {specialDays.map((day) => (
-                  <div
-                    key={day.id}
-                    className="bg-white border border-border rounded-[14px] p-4 shadow-2xs flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <h4 className="text-sm font-bold text-charcoal">{day.name}</h4>
-                        <span className="px-2 py-0.5 rounded-[6px] text-[10px] font-bold bg-[#E1BEE7]/30 text-[#6A1B9A]">
-                          {formatSpecialDate(day.date, day.repeatYearly)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-gray font-mono bg-soft-cream/40 p-2.5 rounded-[8px] border border-border/50 mb-3 whitespace-pre-wrap">
-                        {day.message}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs pt-2 border-t border-border/50">
-                      <span className="text-[11px] text-muted-gray">
-                        Audience: {day.audience === 'all' ? 'All Clients' : `${day.selectedClients?.length || 0} Selected`}
-                      </span>
-                      {isManager && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => openEditDay(day)}
-                            className="text-sage font-bold hover:underline cursor-pointer"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => deleteSpecialDay(day.id)}
-                            className="text-rose-500 font-bold hover:underline cursor-pointer"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Custom Message Modal ── */}
-      {showSendModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/40 backdrop-blur-xs p-4">
-          <div className="bg-white border border-border rounded-[20px] max-w-md w-full p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <Send size={18} className="text-sage" />
-                <h3 className="font-bold text-charcoal text-base">Send Custom WhatsApp</h3>
-              </div>
-              <button
-                onClick={() => setShowSendModal(false)}
-                className="text-muted-gray hover:text-charcoal cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSendCustomMessage} className="space-y-3.5">
-              <div>
-                <label className="text-xs font-bold text-muted-gray uppercase tracking-wider block mb-1">
-                  Recipient Phone Number
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="+2376XXXXXXXX"
-                  value={customRecipientPhone}
-                  onChange={(e) => setCustomRecipientPhone(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-soft-cream/40 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-muted-gray uppercase tracking-wider block mb-1">
-                  Message Text
-                </label>
-                <textarea
-                  required
-                  rows={4}
-                  placeholder="Enter message to client..."
-                  value={customMessageText}
-                  onChange={(e) => setCustomMessageText(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-soft-cream/40 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage leading-relaxed resize-y"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setShowSendModal(false)}
-                  className="h-10 text-xs px-4"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={sendingCustom}
-                  className="h-10 text-xs px-5 font-bold"
-                >
-                  {sendingCustom ? 'Dispatching...' : 'Dispatch Message'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Special Day Modal ── */}
-      {showDayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/40 backdrop-blur-xs p-4">
-          <div className="bg-white border border-border rounded-[20px] max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <h3 className="font-bold text-charcoal text-base">
-                {editingDay ? 'Edit Special Day' : 'Add Special Day Greeting'}
-              </h3>
-              <button
-                onClick={() => setShowDayModal(false)}
-                className="text-muted-gray hover:text-charcoal cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-muted-gray uppercase tracking-wider block mb-1">
-                  Event Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Independence Day"
-                  value={dayForm.name}
-                  onChange={(e) => setDayForm({ ...dayForm, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-soft-cream/40 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-muted-gray uppercase tracking-wider block mb-1">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  value={dayForm.date}
-                  onChange={(e) => setDayForm({ ...dayForm, date: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-soft-cream/40 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-muted-gray uppercase tracking-wider block mb-1">
-                  Message
-                </label>
-                <textarea
-                  rows={4}
-                  value={dayForm.message}
-                  onChange={(e) => setDayForm({ ...dayForm, message: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-soft-cream/40 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage leading-relaxed"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => setShowDayModal(false)}
-                  className="h-10 text-xs px-4"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSaveDay}
-                  className="h-10 text-xs px-5 font-bold"
-                >
-                  Save Special Day
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -37,7 +37,7 @@ const RECEPTION_ROUTES = [
   '/appointments', '/appointments/new', '/appointments/:id',
   '/appointments/:id/late', '/appointments/:id/no-show',
   '/referrals', '/rebooking', '/invoices', '/expenses', '/expenses/new', '/attendance',
-  '/whatsapp-automations',
+  '/whatsapp-automations', '/client-feedback',
 ];
 
 const TECHNICIAN_ROUTES = [

@@ -30,6 +30,7 @@ import {
   Receipt,
   ShieldAlert,
   Sparkles,
+  Phone,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -50,6 +51,14 @@ export default function DailyClose() {
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState(null);
+  const [bossPhone, setBossPhone] = useState(() => localStorage.getItem('omega_boss_phone') || '+237676761349');
+
+  const handleBossPhoneChange = (val) => {
+    setBossPhone(val);
+    try {
+      localStorage.setItem('omega_boss_phone', val);
+    } catch (e) {}
+  };
 
   // Live Backend Reports State
   const [dashboardSummary, setDashboardSummary] = useState(null);
@@ -235,10 +244,18 @@ export default function DailyClose() {
     }).length;
 
   const handleSend = async () => {
+    if (!bossPhone.trim()) {
+      setSendError('Please enter Boss WhatsApp phone number.');
+      setTimeout(() => setSendError(null), 5000);
+      return;
+    }
     setSending(true);
     setSendError(null);
     try {
-      await whatsappApi.triggerDailyClose({ businessDate: new Date().toISOString().split('T')[0] });
+      await whatsappApi.triggerDailyClose({
+        businessDate: new Date().toISOString().split('T')[0],
+        recipientPhone: bossPhone.trim(),
+      });
       setSent(true);
       setTimeout(() => setSent(false), 5000);
     } catch (err) {
@@ -268,25 +285,47 @@ export default function DailyClose() {
           </p>
         </div>
 
-        <Button
-          variant={sent ? 'secondary' : 'primary'}
-          onClick={handleSend}
-          disabled={sending || sent}
-          className="h-11 px-6 text-sm font-semibold shrink-0 cursor-pointer"
-        >
-          {sent ? (
-            <>
-              <Check size={16} className="text-success" />
-              Sent to Boss WhatsApp
-            </>
-          ) : (
-            <>
-              <MessageCircle size={16} />
-              Send to Boss WhatsApp
-            </>
-          )}
-        </Button>
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex flex-col">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-gray mb-1 flex items-center gap-1">
+              <Phone size={11} className="text-sage" />
+              Boss WhatsApp Number
+            </label>
+            <input
+              type="text"
+              placeholder="+2376XXXXXXXX or +91..."
+              value={bossPhone}
+              onChange={(e) => handleBossPhoneChange(e.target.value)}
+              className="h-11 px-3.5 bg-soft-cream/40 border border-border rounded-[10px] text-xs font-mono font-semibold text-charcoal focus:border-sage outline-none min-w-[210px]"
+            />
+          </div>
+
+          <Button
+            variant={sent ? 'secondary' : 'primary'}
+            onClick={handleSend}
+            disabled={sending || sent || !bossPhone.trim()}
+            className="h-11 px-6 text-sm font-semibold shrink-0 cursor-pointer"
+          >
+            {sent ? (
+              <>
+                <Check size={16} className="text-success" />
+                Sent to Boss WhatsApp
+              </>
+            ) : (
+              <>
+                <MessageCircle size={16} />
+                {sending ? 'Sending...' : 'Send to Boss WhatsApp'}
+              </>
+            )}
+          </Button>
+        </div>
       </div>
+
+      {sendError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-[10px]">
+          {sendError}
+        </div>
+      )}
 
       {/* Main Grid: Left Financials, Right Operations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

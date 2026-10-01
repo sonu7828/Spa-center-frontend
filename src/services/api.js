@@ -473,6 +473,24 @@ export const whatsappApi = {
     }),
 };
 
+export const feedbackApi = {
+  getByToken: (token) => apiRequest('/public/feedback/' + token),
+  submit: (token, data) =>
+    apiRequest('/public/feedback/' + token, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  generateToken: (data) =>
+    apiRequest('/feedback/generate-token', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getAll: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest('/client-feedback' + (query ? '?' + query : ''));
+  },
+};
+
 export const expensesApi = {
   getAll: (params = {}) => {
     const query = new URLSearchParams(params).toString();

@@ -74,29 +74,6 @@ export const AUTOMATION_METADATA = {
   },
 };
 
-const DEFAULT_SPECIAL_DAYS = [
-  {
-    id: 'spd-christmas',
-    name: 'Christmas',
-    date: '2026-12-25',
-    repeatYearly: true,
-    message: 'Merry Christmas from OMEGA SPA 🎄\nWishing you and your loved ones peace, joy, and glowing beauty this festive season.',
-    audience: 'all',
-    selectedClients: [],
-    autoSend: true,
-  },
-  {
-    id: 'spd-womens-day',
-    name: "Women's Day",
-    date: '2026-03-08',
-    repeatYearly: true,
-    message: "Happy International Women's Day from OMEGA SPA! 🌸 Celebrate your beauty, strength, and grace with us. Enjoy a complimentary relaxing tea with your session today.",
-    audience: 'all',
-    selectedClients: [],
-    autoSend: true,
-  },
-];
-
 export function WhatsAppProvider({ children }) {
   const { user, isAuthenticated } = useAuth();
 
@@ -113,9 +90,8 @@ export function WhatsAppProvider({ children }) {
   const [logsLoading, setLogsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Special events & broadcast state
+  // Special broadcast state
   const [specialUpdates, setSpecialUpdates] = useState([]);
-  const [specialDays, setSpecialDays] = useState(DEFAULT_SPECIAL_DAYS);
 
   const role = (user?.role || '').toLowerCase();
   const isManager = role === 'manager';
@@ -369,58 +345,6 @@ export function WhatsAppProvider({ children }) {
     [fetchLogs]
   );
 
-  // Special Public Days CRUD
-  const addSpecialDay = useCallback((data) => {
-    const newDay = {
-      id: `spd-${Date.now()}`,
-      name: data.name?.trim() || 'Special Event',
-      date: data.date?.trim() || '',
-      repeatYearly: data.repeatYearly !== undefined ? Boolean(data.repeatYearly) : true,
-      message: data.message?.trim() || '',
-      audience: data.audience || 'all',
-      selectedClients: data.audience === 'selected' ? (data.selectedClients || []) : [],
-      autoSend: data.autoSend !== undefined ? Boolean(data.autoSend) : true,
-      createdAt: new Date().toISOString(),
-    };
-    setSpecialDays((prev) => [newDay, ...prev]);
-    return newDay;
-  }, []);
-
-  const updateSpecialDay = useCallback((id, data) => {
-    setSpecialDays((prev) =>
-      prev.map((day) =>
-        day.id === id
-          ? {
-              ...day,
-              name: data.name !== undefined ? data.name.trim() : day.name,
-              date: data.date !== undefined ? data.date.trim() : day.date,
-              repeatYearly: data.repeatYearly !== undefined ? Boolean(data.repeatYearly) : day.repeatYearly,
-              message: data.message !== undefined ? data.message.trim() : day.message,
-              audience: data.audience || day.audience,
-              selectedClients:
-                data.audience === 'selected'
-                  ? (data.selectedClients || [])
-                  : data.audience === 'all'
-                  ? []
-                  : day.selectedClients,
-              autoSend: data.autoSend !== undefined ? Boolean(data.autoSend) : day.autoSend,
-              updatedAt: new Date().toISOString(),
-            }
-          : day
-      )
-    );
-  }, []);
-
-  const deleteSpecialDay = useCallback((id) => {
-    setSpecialDays((prev) => prev.filter((day) => day.id !== id));
-  }, []);
-
-  const toggleSpecialDayAutoSend = useCallback((id) => {
-    setSpecialDays((prev) =>
-      prev.map((day) => (day.id === id ? { ...day, autoSend: !day.autoSend } : day))
-    );
-  }, []);
-
   const value = {
     automations,
     logs,
@@ -440,11 +364,6 @@ export function WhatsAppProvider({ children }) {
     generateInvoiceMessage,
     sendSpecialUpdate,
     specialUpdates,
-    specialDays,
-    addSpecialDay,
-    updateSpecialDay,
-    deleteSpecialDay,
-    toggleSpecialDayAutoSend,
   };
 
   return <WhatsAppContext.Provider value={value}>{children}</WhatsAppContext.Provider>;

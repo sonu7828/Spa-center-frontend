@@ -3,7 +3,7 @@ import { formatInvoiceNumber } from '../context/InvoiceContext';
 /**
  * Builds a beautifully formatted official digital receipt for WhatsApp
  */
-export function buildReceiptWhatsAppMessage(invoice, client, clientLoyalty) {
+export function buildReceiptWhatsAppMessage(invoice, client, clientLoyalty, feedbackUrl) {
   if (!invoice) return '';
 
   const invNumber = formatInvoiceNumber(invoice);
@@ -60,6 +60,10 @@ export function buildReceiptWhatsAppMessage(invoice, client, clientLoyalty) {
       ? client.loyaltyPoints
       : pointsEarned;
 
+  const feedbackSection = feedbackUrl
+    ? `\n⭐ *Votre avis compte pour nous / Rate your visit:*\n${feedbackUrl}\n----------------------------------------`
+    : '';
+
   return `🧾 *OMEGA SPA — Reçu / Official Receipt*
 ----------------------------------------
 *Facture / Invoice:* ${invNumber}
@@ -73,7 +77,7 @@ ${itemsText}
 *Total Payé / Paid:* *${Number(grandTotal).toLocaleString('en-US')} FCFA*
 *Mode de Paiement:* ${pmDisplay}
 *Points Fidélité / Loyalty:* +${pointsEarned} pts (Solde: ${currentBalance} pts)
-----------------------------------------
+----------------------------------------${feedbackSection}
 _Merci pour votre visite chez OMEGA SPA !_ 🌿
 _Douala, Cameroun · Tél: +237 6 87 67 32 62_`;
 }

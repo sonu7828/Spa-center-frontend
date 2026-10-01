@@ -15,110 +15,12 @@
  * in a clean format suitable for A4 paper or 80mm thermal printers.
  */
 
-import { useState, useEffect } from 'react';
-import { Printer, X, Send, CheckCircle, AlertCircle, FileText } from 'lucide-react';
+import { Printer, X } from 'lucide-react';
 import Button from './Button';
 import { formatInvoiceNumber } from '../context/InvoiceContext';
-import { whatsappApi } from '../services/api';
-import { useClients } from '../context/ClientsContext';
-import { buildReceiptWhatsAppMessage } from '../utils/receiptWhatsApp';
 
 export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }) {
   if (!isOpen || !invoice) return null;
-
-  const { getClient } = useClients();
-  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
-  const [whatsAppFeedback, setWhatsAppFeedback] = useState(null);
-  const [alreadySentInfo, setAlreadySentInfo] = useState(null);
-  const [confirmResend, setConfirmResend] = useState(false);
-
-  const client = invoice.clientId ? getClient(invoice.clientId) : invoice.client;
-  const recipientPhone = client?.whatsapp || client?.phone || invoice.clientPhone || invoice.phone;
-
-  // Check if receipt already sent
-  useEffect(() => {
-    if (invoice?.id) {
-      whatsappApi
-        .getInvoiceReceiptStatus(invoice.id)
-        .then((res) => {
-          if (res?.data?.alreadySent) {
-            setAlreadySentInfo(res.data);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [invoice?.id]);
-
-  const handleSendWhatsAppPdf = async () => {
-    if (!recipientPhone) {
-      setWhatsAppFeedback({ error: true, text: 'No phone number on file for this client.' });
-      setTimeout(() => setWhatsAppFeedback(null), 5000);
-      return;
-    }
-
-    // If already sent, warn on first subsequent click and require second click to confirm resend
-    if (alreadySentInfo && !confirmResend) {
-      const timeStr = alreadySentInfo.lastSentAt
-        ? new Date(alreadySentInfo.lastSentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        : '';
-      setWhatsAppFeedback({
-        warning: true,
-        text: `Receipt was already sent${timeStr ? ` at ${timeStr}` : ''}! Click again to Resend.`,
-      });
-      setConfirmResend(true);
-      setTimeout(() => setConfirmResend(false), 6000);
-      return;
-    }
-
-    setIsSendingWhatsApp(true);
-    setWhatsAppFeedback(null);
-    setConfirmResend(false);
-
-    try {
-      // 1. Send official PDF document via Meta WhatsApp Cloud API
-      await whatsappApi.sendInvoicePdf(invoice.id, recipientPhone);
-
-      setWhatsAppFeedback({
-        error: false,
-        text: `✓ PDF Receipt sent to WhatsApp (${recipientPhone})!`,
-      });
-      setAlreadySentInfo({
-        alreadySent: true,
-        lastSentAt: new Date().toISOString(),
-        recipientPhone,
-      });
-    } catch (err) {
-      // Fallback: send text receipt if PDF document encounter issues
-      try {
-        const message = buildReceiptWhatsAppMessage(invoice, client, clientLoyalty);
-        await whatsappApi.sendMessage({
-          recipientPhone,
-          message,
-          automationType: 'PAYMENT_CONFIRMATION',
-          clientId: invoice.clientId,
-          invoiceId: invoice.id,
-          idempotencyKey: `receipt:${invoice.id}:${Date.now()}`,
-        });
-        setWhatsAppFeedback({
-          error: false,
-          text: `✓ WhatsApp receipt delivered to ${recipientPhone}!`,
-        });
-        setAlreadySentInfo({
-          alreadySent: true,
-          lastSentAt: new Date().toISOString(),
-          recipientPhone,
-        });
-      } catch (fallbackErr) {
-        setWhatsAppFeedback({
-          error: true,
-          text: `Failed: ${fallbackErr?.message || err?.message || 'Could not send'}`,
-        });
-      }
-    } finally {
-      setIsSendingWhatsApp(false);
-      setTimeout(() => setWhatsAppFeedback(null), 8000);
-    }
-  };
 
   const invNumber = formatInvoiceNumber(invoice);
 
@@ -549,72 +451,14 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
         </div>
 
         {/* ── Modal Actions (hidden on print) ── */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 sm:px-6 py-3.5 sm:py-4 border-t border-border bg-white no-print shrink-0">
-          <div className="w-full sm:w-auto text-left text-xs min-h-[20px]">
-            {whatsAppFeedback ? (
-              <span
-                className={`inline-flex items-center gap-1.5 font-medium ${
-                  whatsAppFeedback.error
-                    ? 'text-amber-600'
-                    : whatsAppFeedback.warning
-                    ? 'text-amber-700 font-semibold'
-                    : 'text-emerald-600'
-                }`}
-              >
-                {whatsAppFeedback.error || whatsAppFeedback.warning ? (
-                  <AlertCircle size={14} />
-                ) : (
-                  <CheckCircle size={14} />
-                )}
-                {whatsAppFeedback.text}
-              </span>
-            ) : alreadySentInfo ? (
-              <span className="text-muted-gray text-xs inline-flex items-center gap-1">
-                <CheckCircle size={13} className="text-emerald-600" />
-                Receipt already sent
-                {alreadySentInfo.lastSentAt
-                  ? ` (${new Date(alreadySentInfo.lastSentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
-                  : ''}
-              </span>
-            ) : null}
-          </div>
-          <div className="grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:justify-end">
-            <Button variant="secondary" onClick={onClose} className="h-11 text-xs">
-              Close
-            </Button>
-            <Button onClick={handlePrint} className="h-11 text-xs">
-              <Printer size={15} strokeWidth={1.8} />
-              Print
-            </Button>
-            <button
-              type="button"
-              onClick={handleSendWhatsAppPdf}
-              disabled={isSendingWhatsApp}
-              className={`inline-flex items-center justify-center gap-1.5 px-3.5 h-11 text-white text-xs font-semibold rounded-[11px] shadow-sm transition-all cursor-pointer whitespace-nowrap ${
-                confirmResend
-                  ? 'bg-amber-600 hover:bg-amber-700 animate-pulse'
-                  : 'bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50'
-              }`}
-            >
-              {isSendingWhatsApp ? (
-                <>
-                  <Send size={14} className="animate-spin" /> Sending PDF...
-                </>
-              ) : confirmResend ? (
-                <>
-                  <AlertCircle size={14} /> Confirm Resend?
-                </>
-              ) : alreadySentInfo ? (
-                <>
-                  <FileText size={14} /> Resend PDF Receipt
-                </>
-              ) : (
-                <>
-                  <FileText size={14} /> Send PDF on WhatsApp
-                </>
-              )}
-            </button>
-          </div>
+        <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-3.5 sm:py-4 border-t border-border bg-white no-print shrink-0">
+          <Button variant="secondary" onClick={onClose} className="h-11 text-xs">
+            Close
+          </Button>
+          <Button onClick={handlePrint} className="h-11 text-xs">
+            <Printer size={15} strokeWidth={1.8} />
+            Print Receipt
+          </Button>
         </div>
       </div>
     </div>

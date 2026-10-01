@@ -15,9 +15,9 @@
  * Source: WIREFRAME.md Screen 08, FLOW.md §15
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, Clock, UserX, CheckCircle, Plus, X, XCircle, FileText } from 'lucide-react';
+import { ArrowLeft, Clock, UserX, CheckCircle, Plus, X, XCircle, FileText, Star, Copy, ExternalLink, MessageCircle, Check, Sparkles } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -25,6 +25,9 @@ import { useAppointments, formatAppointmentId } from '../context/AppointmentsCon
 import { useOperations } from '../context/OperationsContext';
 import { useServices } from '../context/ServicesContext';
 import { useAuth, ROLE_HOME } from '../context/AuthContext';
+import { useFeedback } from '../context/FeedbackContext';
+import { whatsappApi } from '../services/api';
+import { getDoualaTodayStr, getDoualaCurrentTimeStr } from '../utils/timezone';
 
 export default function AppointmentDetail() {
   const { id } = useParams();
@@ -38,11 +41,84 @@ export default function AppointmentDetail() {
   const apt = getAppointment(id);
   const isClosed = isAppointmentClosed(id) || apt?.status === 'completed';
 
+  const todayDateStr = getDoualaTodayStr();
+  const currentDoualaTime = getDoualaCurrentTimeStr();
+  const aptDate = apt?.date ? apt.date.slice(0, 10) : '';
+  const isPastDate = aptDate && todayDateStr && aptDate < todayDateStr;
+  const isToday = aptDate && todayDateStr && aptDate === todayDateStr;
+
+  function timeToMins(t) {
+    if (!t) return 0;
+    const [h, m] = t.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  }
+  const aptMins = timeToMins(apt?.time);
+  const nowMins = timeToMins(currentDoualaTime);
+
+  const isAutoLate = isToday && aptMins > 0 && nowMins > (aptMins + 15);
+  const isAutoNoShow = isPastDate || (isToday && nowMins >= 21 * 60 + 30);
+
+  const isNoShow = !isClosed && (apt?.status === 'no-show' || apt?.rawStatus === 'NO_SHOW' || isAutoNoShow);
+  const isLate = !isClosed && !isNoShow && (apt?.status === 'late' || apt?.rawStatus === 'LATE' || isAutoLate);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedServiceToAdd, setSelectedServiceToAdd] = useState(activeServices[0]?.name || '');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState(null);
+
+  const { getFeedbackByAppointment, createFeedbackRequest } = useFeedback();
+  const existingFeedback = getFeedbackByAppointment(id);
+  const [feedbackUrlState, setFeedbackUrlState] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [whatsAppNotice, setWhatsAppNotice] = useState('');
+
+  // Auto-generate feedback request & URL when appointment is closed
+  useEffect(() => {
+    if (feedbackUrlState) return;
+    if (isClosed && apt) {
+      createFeedbackRequest({
+        appointmentId: id,
+        clientId: apt.clientId,
+        clientName: apt.clientName,
+        service: apt.service,
+        technician: apt.technicianName,
+        date: apt.date,
+      }).then((res) => {
+        if (res?.url) setFeedbackUrlState(res.url);
+      });
+    }
+  }, [isClosed, id, apt?.clientName, createFeedbackRequest, feedbackUrlState]);
+
+  const handleCopyFeedbackLink = () => {
+    if (!feedbackUrlState) return;
+    navigator.clipboard.writeText(feedbackUrlState);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 3000);
+  };
+
+  const handleSendFeedbackWhatsApp = async () => {
+    if (!apt) return;
+    const phone = apt.clientPhone;
+    setSendingWhatsApp(true);
+    setWhatsAppNotice('');
+    try {
+      await whatsappApi.triggerAfterService(id);
+      setWhatsAppNotice('✓ Thank You message with Feedback link sent via WhatsApp!');
+    } catch (err) {
+      const text = encodeURIComponent(
+        `Bonjour ${apt.clientName || ''} ! Merci d'avoir visité OMEGA SPA 🌿\n\nNous espérons que vous avez apprécié votre prestation (${apt.service || 'soin'}).\n\n⭐ Votre avis compte énormément pour nous ! Donnez votre avis en quelques secondes ici :\n${feedbackUrlState}\n\n— OMEGA SPA Douala`
+      );
+      const cleanPhone = phone ? String(phone).replace(/[^0-9]/g, '') : '';
+      const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${text}` : `https://wa.me/?text=${text}`;
+      window.open(waUrl, '_blank');
+      setWhatsAppNotice('✓ WhatsApp opened with feedback message!');
+    } finally {
+      setSendingWhatsApp(false);
+      setTimeout(() => setWhatsAppNotice(''), 6000);
+    }
+  };
 
   // Technician: block if not own appointment
   if (apt && user?.role === 'technician' && apt.technicianName !== user?.name) {
@@ -120,9 +196,24 @@ export default function AppointmentDetail() {
           <h2 className="text-xl font-semibold text-charcoal">
             {apt.clientName}
           </h2>
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-soft-cream border border-border text-muted-gray">
-            Appt #{formatAppointmentId(apt.id)}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-[6px] border ${
+                isClosed
+                  ? 'bg-[#DCE7D7] border-[#B7CEB1] text-[#2F4E29]'
+                  : isNoShow
+                  ? 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]'
+                  : isLate
+                  ? 'bg-[#FFFDF5] border-[#FDE68A] text-[#92400E]'
+                  : 'bg-[#EFF6FF] border-[#BFDBFE] text-[#1D4ED8]'
+              }`}
+            >
+              {isClosed ? '✓ Completed' : isNoShow ? '✕ No-Show' : isLate ? '⚠ Late' : '🕒 Scheduled'}
+            </span>
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-soft-cream border border-border text-muted-gray">
+              Appt #{formatAppointmentId(apt.id)}
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 text-xs sm:text-sm text-muted-gray pt-2.5 border-t border-border/60">
@@ -324,6 +415,103 @@ export default function AppointmentDetail() {
       {apt.status === 'cancelled' && (
         <div className="bg-white border border-error/30 rounded-[16px] p-4 shadow-card">
           <p className="text-sm font-semibold text-error">✕ This appointment has been cancelled</p>
+        </div>
+      )}
+
+      {/* Client Feedback Card (When Completed / Closed) */}
+      {isClosed && (
+        <div className="bg-white border border-[#E4E4E7] rounded-[16px] p-5 shadow-card space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Star size={18} className="text-[#F59E0B] fill-[#F59E0B]" />
+              <h3 className="text-sm font-bold text-charcoal">Client Feedback & Review</h3>
+            </div>
+            {existingFeedback ? (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#EBF3EC] text-[#4F6748] border border-[#7FA285]/30">
+                ✓ Received
+              </span>
+            ) : (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A]">
+                Pending Response
+              </span>
+            )}
+          </div>
+
+          {existingFeedback ? (
+            <div className="bg-[#FBF9F5] border border-[#E4E4E7] rounded-[12px] p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star
+                      key={s}
+                      size={16}
+                      className={s <= existingFeedback.rating ? 'text-[#F59E0B] fill-[#F59E0B]' : 'text-[#E4E4E7]'}
+                    />
+                  ))}
+                  <span className="text-xs font-bold text-charcoal ml-1.5">
+                    {existingFeedback.rating} / 5 Stars
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted-gray">{existingFeedback.date}</span>
+              </div>
+              {existingFeedback.comment && (
+                <p className="text-xs text-charcoal/80 italic mt-1 bg-white p-2.5 rounded-[8px] border border-[#E4E4E7]/60">
+                  "{existingFeedback.comment}"
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-gray leading-relaxed">
+                Send the Thank You message with the feedback form link directly to the client's WhatsApp, or open and fill it now:
+              </p>
+
+              {/* Feedback Link Box */}
+              {feedbackUrlState && (
+                <div className="flex items-center gap-2 bg-[#FBF9F5] border border-[#E4E4E7] rounded-[10px] p-2 text-xs">
+                  <span className="truncate text-muted-gray flex-1 font-mono text-[11px]">
+                    {feedbackUrlState}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyFeedbackLink}
+                    className="px-2.5 py-1 rounded-[6px] bg-white border border-[#E4E4E7] hover:bg-[#F4F4F5] text-charcoal font-medium text-[11px] flex items-center gap-1 shrink-0 cursor-pointer"
+                  >
+                    {copiedLink ? <Check size={12} className="text-success" /> : <Copy size={12} />}
+                    {copiedLink ? 'Copied' : 'Copy'}
+                  </button>
+                  <a
+                    href={feedbackUrlState}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 rounded-[6px] bg-white border border-[#E4E4E7] hover:bg-[#F4F4F5] text-charcoal font-medium text-[11px] flex items-center gap-1 shrink-0 cursor-pointer"
+                  >
+                    <ExternalLink size={12} />
+                    Open Form
+                  </a>
+                </div>
+              )}
+
+              {/* Action Button: Send on WhatsApp */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  onClick={handleSendFeedbackWhatsApp}
+                  disabled={sendingWhatsApp}
+                  className="bg-[#25D366] hover:bg-[#128C7E] text-white border-transparent text-xs h-9 font-semibold flex items-center gap-1.5"
+                >
+                  <MessageCircle size={15} />
+                  {sendingWhatsApp ? 'Sending...' : 'Send Feedback Form on WhatsApp'}
+                </Button>
+              </div>
+
+              {whatsAppNotice && (
+                <div className="text-xs font-medium text-[#4F6748] bg-[#EBF3EC] border border-[#7FA285]/40 rounded-[8px] p-2.5 flex items-center gap-2 animate-fade-in">
+                  <Check size={14} />
+                  {whatsAppNotice}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
