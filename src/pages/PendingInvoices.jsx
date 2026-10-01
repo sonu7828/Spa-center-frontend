@@ -1029,6 +1029,23 @@ export default function PendingInvoices() {
                           </div>
                         </div>
 
+                        {/* Technician Notes & Observations */}
+                        {(() => {
+                          const invNotes = invoice.notes || (invoice.appointmentId ? appointments.find((a) => String(a.id) === String(invoice.appointmentId))?.notes : null);
+                          if (!invNotes) return null;
+                          return (
+                            <div className="mb-4 bg-warm-ivory/60 border border-border/80 rounded-[12px] p-3 text-xs">
+                              <div className="flex items-center gap-1.5 font-bold text-charcoal uppercase tracking-wider mb-1 text-[10px]">
+                                <FileText size={13} className="text-sage" />
+                                <span>Technician Notes & Observations</span>
+                              </div>
+                              <p className="text-charcoal bg-white p-2.5 rounded-[8px] border border-border/60 leading-relaxed whitespace-pre-wrap">
+                                {invNotes}
+                              </p>
+                            </div>
+                          );
+                        })()}
+
                         {/* Loyalty Redemption */}
                         <div className="mb-4 bg-soft-cream/40 border border-border/80 rounded-[14px] p-4">
                           <div className="flex items-center justify-between mb-2">
@@ -1329,6 +1346,23 @@ export default function PendingInvoices() {
                               </div>
                             </div>
                           </div>
+
+                          {/* Technician Notes & Observations */}
+                          {(() => {
+                            const invNotes = invoice.notes || (invoice.appointmentId ? appointments.find((a) => String(a.id) === String(invoice.appointmentId))?.notes : null);
+                            if (!invNotes) return null;
+                            return (
+                              <div className="bg-warm-ivory/60 border border-border/80 rounded-[12px] p-3 text-xs">
+                                <div className="flex items-center gap-1.5 font-bold text-charcoal uppercase tracking-wider mb-1 text-[10px]">
+                                  <FileText size={13} className="text-sage" />
+                                  <span>Technician Notes & Observations</span>
+                                </div>
+                                <p className="text-charcoal bg-white p-2.5 rounded-[8px] border border-border/60 leading-relaxed whitespace-pre-wrap">
+                                  {invNotes}
+                                </p>
+                              </div>
+                            );
+                          })()}
 
                           {/* WhatsApp Feedback Notice */}
                           {whatsAppFeedback[invoice.id] && (
@@ -1640,6 +1674,23 @@ export default function PendingInvoices() {
                   </div>
                 </div>
               </div>
+
+              {/* Technician Notes & Observations */}
+              {(() => {
+                const invNotes = detailInvoice.notes || (detailInvoice.appointmentId ? appointments.find((a) => String(a.id) === String(detailInvoice.appointmentId))?.notes : null);
+                if (!invNotes) return null;
+                return (
+                  <div className="bg-warm-ivory/60 border border-border/80 rounded-[12px] p-3.5 text-xs">
+                    <div className="flex items-center gap-1.5 font-bold text-charcoal uppercase tracking-wider mb-1.5 text-[10px]">
+                      <FileText size={13} className="text-sage" />
+                      <span>Technician Notes & Observations</span>
+                    </div>
+                    <p className="text-charcoal bg-white p-2.5 rounded-[8px] border border-border/60 leading-relaxed whitespace-pre-wrap">
+                      {invNotes}
+                    </p>
+                  </div>
+                );
+              })()}
 
               {/* Payment Method */}
               <div className="flex justify-between items-center bg-white p-3.5 rounded-[12px] border border-border">

@@ -83,7 +83,7 @@ export default function CloseService() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedServiceToAdd, setSelectedServiceToAdd] = useState(activeServices[0]?.name || '');
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
-  const [serviceNotes, setServiceNotes] = useState('');
+  const [serviceNotes, setServiceNotes] = useState(apt?.notes || '');
   const [attachedPhotoUrl, setAttachedPhotoUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -197,6 +197,7 @@ export default function CloseService() {
         clientName: apt.clientName,
         items: invoiceItems,
         total: totalVisitPrice,
+        notes: serviceNotes.trim() || apt.notes || undefined,
         introducedBy: apt.introducedBy || linkedClient?.introducedBy || null,
         introducedById: apt.introducedById || linkedClient?.introducedById || null,
       });
@@ -204,6 +205,7 @@ export default function CloseService() {
       // 5. Mark appointment as service-completed (not payment-completed)
       await updateAppointment(id, {
         status: 'completed',
+        notes: serviceNotes.trim() || apt.notes || undefined,
         services: servicesList.map((svc) => ({
           ...svc,
           price:
@@ -284,6 +286,33 @@ export default function CloseService() {
               <span>{totalVisitPrice.toLocaleString('en-US')} FCFA</span>
             </div>
           </div>
+
+          {/* Technician Service Notes & Observations Preview */}
+          {(serviceNotes || apt.notes) && (
+            <div className="bg-warm-ivory/60 border border-border/80 rounded-[12px] p-3.5 mb-4">
+              <p className="text-[11px] font-bold text-charcoal uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <FileEdit size={14} className="text-sage" />
+                Service Notes & Observations Recorded
+              </p>
+              <p className="text-xs text-charcoal bg-white p-2.5 rounded-[8px] border border-border/60 leading-relaxed whitespace-pre-wrap">
+                {serviceNotes || apt.notes}
+              </p>
+            </div>
+          )}
+
+          {attachedPhotoUrl && (
+            <div className="bg-warm-ivory/60 border border-border/80 rounded-[12px] p-3.5 mb-4">
+              <p className="text-[11px] font-bold text-charcoal uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Camera size={14} className="text-sage" />
+                Completion Photo (Saved to Client File)
+              </p>
+              <img
+                src={attachedPhotoUrl}
+                alt="Service Result"
+                className="w-24 h-24 object-cover rounded-[10px] border border-border shadow-2xs"
+              />
+            </div>
+          )}
 
           {existingInvoice && existingInvoice.items.length > 1 && (
             <div className="bg-soft-cream/60 border border-border rounded-[12px] p-3.5 sm:p-4 mb-4">

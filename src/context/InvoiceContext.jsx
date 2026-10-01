@@ -108,6 +108,7 @@ export function formatBackendInvoice(inv) {
     payments: inv.payments || [],
     pointsEarned: inv.pointsEarned || 0,
     pointsRedeemed: inv.pointsRedeemed || 0,
+    notes: inv.notes || inv.appointment?.notes || null,
     createdAt: inv.createdAt,
     submittedAt: inv.createdAt,
     introducedBy: inv.client?.introducedByEmployee?.name || null,
@@ -962,7 +963,7 @@ export function InvoiceProvider({ children }) {
 
   // Submit completed single-technician appointment invoice to Reception
   const submitAppointmentInvoice = useCallback(
-    async ({ appointmentId, clientId, clientName, items, total, introducedBy, introducedById }) => {
+    async ({ appointmentId, clientId, clientName, items, total, notes, introducedBy, introducedById }) => {
       const targetAptId =
         appointmentId !== undefined && appointmentId !== null
           ? String(appointmentId)
@@ -982,7 +983,7 @@ export function InvoiceProvider({ children }) {
           if (invoiceObj && invoiceObj.id) {
             const formatted = formatBackendInvoice(invoiceObj);
             setInvoices((prev) => [
-              formatted,
+              { ...formatted, notes: notes || formatted.notes || null },
               ...prev.filter((i) => String(i.id) !== String(formatted.id)),
             ]);
             await refreshInvoices();
@@ -1043,6 +1044,7 @@ export function InvoiceProvider({ children }) {
             remainingAmount: finalTotalNum,
             status: 'PENDING_PAYMENT',
             submittedAt: new Date().toISOString(),
+            notes: notes || existing.notes || null,
             introducedBy: existing.introducedBy || introducedBy || null,
             introducedById: existing.introducedById || introducedById || null,
           };
@@ -1059,6 +1061,7 @@ export function InvoiceProvider({ children }) {
           status: 'PENDING_PAYMENT',
           date: today,
           items: cleanItems,
+          notes: notes || null,
           total: finalTotalNum,
           finalTotal: finalTotalNum,
           paidAmount: 0,

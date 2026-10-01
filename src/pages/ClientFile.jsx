@@ -37,6 +37,7 @@ import {
   Star,
   UserX,
   RotateCcw,
+  FileText,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -159,6 +160,7 @@ export default function ClientFile() {
       price: totalPrice > 0 ? totalPrice.toLocaleString('en-US') : '—',
       status: statusLower,
       rawStatus: a.rawStatus || 'SCHEDULED',
+      notes: a.notes || '',
     };
   });
 
@@ -598,8 +600,14 @@ function ServiceHistoryTab({ history, client }) {
                 <td className="px-5 py-3.5 text-sm text-charcoal whitespace-nowrap">
                   {row.date} {row.time ? <span className="text-xs text-muted-gray font-mono">({row.time})</span> : ''}
                 </td>
-                <td className="px-5 py-3.5 text-sm font-medium text-charcoal whitespace-nowrap">
-                  {row.service}
+                <td className="px-5 py-3.5 text-sm font-medium text-charcoal">
+                  <div>{row.service}</div>
+                  {row.notes && (
+                    <div className="mt-1 inline-flex items-start gap-1 text-[11px] font-normal text-charcoal/80 bg-warm-ivory/80 border border-border/80 rounded-[6px] px-2 py-0.5 max-w-sm">
+                      <FileText size={12} className="text-sage shrink-0 mt-0.5" />
+                      <span className="leading-snug"><strong>Note:</strong> {row.notes}</span>
+                    </div>
+                  )}
                 </td>
                 <td className="px-5 py-3.5 text-sm text-muted-gray whitespace-nowrap">
                   {row.technician}
@@ -676,6 +684,12 @@ function ServiceHistoryTab({ history, client }) {
               <p className="text-[11px] text-muted-gray">
                 Product: <span className="text-charcoal font-medium">{row.product}</span>
               </p>
+            )}
+            {row.notes && (
+              <div className="mt-1 flex items-start gap-1 text-[11px] text-charcoal/80 bg-warm-ivory/80 border border-border/80 rounded-[6px] px-2 py-1">
+                <FileText size={12} className="text-sage shrink-0 mt-0.5" />
+                <span className="leading-snug"><strong>Note:</strong> {row.notes}</span>
+              </div>
             )}
           </div>
         ))}

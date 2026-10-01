@@ -17,7 +17,7 @@
 
 import { useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, Clock, UserX, CheckCircle, Plus, X, XCircle } from 'lucide-react';
+import { ArrowLeft, Clock, UserX, CheckCircle, Plus, X, XCircle, FileText } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -196,6 +196,19 @@ export default function AppointmentDetail() {
             ))}
           </div>
         </div>
+
+        {/* Service Notes & Observations */}
+        {apt.notes && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-charcoal mb-2 flex items-center gap-1.5">
+              <FileText size={14} className="text-sage" />
+              Service Notes & Observations
+            </h3>
+            <div className="p-3 bg-warm-ivory/60 border border-border/80 rounded-[10px] text-xs text-charcoal leading-relaxed whitespace-pre-wrap">
+              {apt.notes}
+            </div>
+          </div>
+        )}
 
         {isClosed && (
           <p className="text-xs font-semibold text-success mt-3 pt-2 border-t border-border/50">
