@@ -163,6 +163,55 @@ export default function Login() {
                 </>
               )}
             </button>
+
+            {/* Quick Demo Credentials — Click to Fill */}
+            <div className="pt-3.5 mt-3 border-t border-border/80">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-charcoal uppercase tracking-wider">
+                  Demo Accounts
+                </span>
+                <span className="text-[10px] text-sage font-medium">Click to fill</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { role: 'Manager', email: 'akabandolo@gmail.com', password: 'password', badgeBg: 'bg-[#F2F7F0]', badgeBorder: 'border-[#CFDEC9]', badgeText: 'text-[#2F4E29]' },
+                  { role: 'Receptionist', email: 'receptionist@gmail.com', password: '123456', badgeBg: 'bg-[#EFF6FF]', badgeBorder: 'border-[#BFDBFE]', badgeText: 'text-[#1E40AF]' },
+                  { role: 'Technician', email: 'tech01@gmail.com', password: '123456', badgeBg: 'bg-[#FAF5FF]', badgeBorder: 'border-[#E9D5FF]', badgeText: 'text-[#6B21A8]' },
+                  { role: 'Cleaner', email: 'cleaner@gmail.com', password: '123456', badgeBg: 'bg-[#FFFBEB]', badgeBorder: 'border-[#FDE68A]', badgeText: 'text-[#92400E]' },
+                ].map((demo) => {
+                  const isCurrentlyFilled = email === demo.email;
+                  return (
+                    <button
+                      key={demo.role}
+                      type="button"
+                      onClick={() => {
+                        setEmail(demo.email);
+                        setPassword(demo.password);
+                        setError('');
+                      }}
+                      className={`p-2 rounded-[10px] border text-left transition-all cursor-pointer group ${
+                        isCurrentlyFilled
+                          ? 'border-sage bg-[#F2F7F0] ring-1 ring-sage/30 shadow-2xs'
+                          : 'border-border/80 bg-white/70 hover:bg-white hover:border-sage/40 hover:shadow-xs'
+                      }`}
+                      title={`Click to fill ${demo.role} credentials`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-charcoal group-hover:text-sage">
+                          {demo.role}
+                        </span>
+                        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${demo.badgeBg} ${demo.badgeBorder} ${demo.badgeText}`}>
+                          {isCurrentlyFilled ? 'Filled' : 'Fill'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-gray truncate mt-1">
+                        {demo.email}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </form>
         </div>
       </div>
