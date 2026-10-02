@@ -37,10 +37,12 @@ export default function AddClient() {
   });
 
   const [phoneError, setPhoneError] = useState('');
+  const [serverError, setServerError] = useState('');
 
   const handlePhoneChange = (e) => {
     const formatted = formatPhoneNumber(e.target.value);
     setForm((prev) => ({ ...prev, phone: formatted }));
+    setServerError('');
     const validation = validatePhoneNumber(formatted);
     if (!validation.isValid && formatted.trim() !== '+237') {
       setPhoneError(validation.message);
@@ -49,16 +51,35 @@ export default function AddClient() {
     }
   };
 
-  const update = (field) => (e) =>
+  const update = (field) => (e) => {
+    setServerError('');
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
 
   const phoneStatus = validatePhoneNumber(form.phone);
 
   const [isSaving, setIsSaving] = useState(false);
   const handleSave = async () => {
+    setServerError('');
+    setPhoneError('');
+
     const validation = validatePhoneNumber(form.phone);
     if (!validation.isValid) {
       setPhoneError(validation.message);
+      return;
+    }
+
+    // Check if client with this phone number already exists
+    const cleanInputPhone = form.phone.replace(/[\s\-\+\(\)]/g, '');
+    const existing = clients.find((c) => {
+      const cleanExisting = (c.phone || '').replace(/[\s\-\+\(\)]/g, '');
+      return cleanExisting && cleanExisting === cleanInputPhone;
+    });
+
+    if (existing) {
+      const msg = `Client with phone number ${form.phone} already exists (${existing.name}).`;
+      setServerError(msg);
+      setPhoneError('Client with this phone number already exists.');
       return;
     }
 
@@ -75,7 +96,12 @@ export default function AddClient() {
 
       navigate(`/clients/${newId}`);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to add client:', err);
+      const msg = err.message || 'Failed to create client. Client with this phone number already exists.';
+      setServerError(msg);
+      if (msg.toLowerCase().includes('phone') || msg.toLowerCase().includes('already exists')) {
+        setPhoneError('Client with this phone number already exists.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -94,6 +120,14 @@ export default function AddClient() {
       />
 
       <div className="bg-white border border-border rounded-[16px] p-4 sm:p-6 shadow-card">
+        {/* Error / Warning Alert Banner */}
+        {serverError && (
+          <div className="mb-5 flex items-center gap-2.5 p-3.5 bg-rose-50 border border-rose-200 rounded-[12px] text-xs sm:text-sm font-semibold text-rose-700 animate-fade-in">
+            <AlertCircle size={18} className="shrink-0 text-rose-600" />
+            <span>{serverError}</span>
+          </div>
+        )}
+
         {/* Row 1: Name + Phone */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4">
           <Input
@@ -106,6 +140,7 @@ export default function AddClient() {
             value={form.phone}
             onChange={(val) => {
               setForm((prev) => ({ ...prev, phone: val }));
+              setServerError('');
               setPhoneError('');
             }}
             error={phoneError}

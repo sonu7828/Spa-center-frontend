@@ -242,35 +242,49 @@ export function ClientsProvider({ children }) {
         year: 'numeric',
       });
 
-      // Manager client creation: strictly normal DIRECT client with no referral attribution
+      // 1. Pre-validation: Check if client with this phone number already exists locally
+      const cleanInputPhone = (clientData.phone || '').replace(/[\s\-\+\(\)]/g, '');
+      if (cleanInputPhone) {
+        const existing = clients.find((c) => {
+          const cleanExisting = (c.phone || '').replace(/[\s\-\+\(\)]/g, '');
+          return cleanExisting && cleanExisting === cleanInputPhone;
+        });
+        if (existing) {
+          const dupErr = new Error(`Client with this phone number already exists (${existing.name}).`);
+          dupErr.status = 409;
+          throw dupErr;
+        }
+      }
+
+      // 2. Manager client creation: strictly normal DIRECT client with no referral attribution
       const isClientFromManager =
         isManager ||
         clientData.source === 'DIRECT' ||
         (clientData.clientSource === 'Direct' && !clientData.introducedBy);
 
-      // Try backend creation first
-      try {
-        const payload = {
-          name: (clientData.name || '').trim(),
-          phone: (clientData.phone || '').trim(),
-          whatsapp: (clientData.whatsapp || clientData.phone || '').trim(),
-          quartier: (clientData.quartier || '').trim() || null,
-          birthday: clientData.birthday || null,
-          anniversary: clientData.anniversary || null,
-          source: isClientFromManager
-            ? 'DIRECT'
-            : clientData.source || (clientData.introducedBy ? 'STAFF_REFERRAL' : 'DIRECT'),
-          introducedByEmployeeId:
-            !isClientFromManager &&
-            clientData.introducedById &&
-            typeof clientData.introducedById === 'string' &&
-            clientData.introducedById.includes('-')
-              ? clientData.introducedById
-              : null,
-          recommendedByName: isClientFromManager ? null : clientData.recommendedBy?.name || null,
-          recommendedByPhone: isClientFromManager ? null : clientData.recommendedBy?.phone || null,
-        };
+      // 3. Backend creation
+      const payload = {
+        name: (clientData.name || '').trim(),
+        phone: (clientData.phone || '').trim(),
+        whatsapp: (clientData.whatsapp || clientData.phone || '').trim(),
+        quartier: (clientData.quartier || '').trim() || null,
+        birthday: clientData.birthday || null,
+        anniversary: clientData.anniversary || null,
+        source: isClientFromManager
+          ? 'DIRECT'
+          : clientData.source || (clientData.introducedBy ? 'STAFF_REFERRAL' : 'DIRECT'),
+        introducedByEmployeeId:
+          !isClientFromManager &&
+          clientData.introducedById &&
+          typeof clientData.introducedById === 'string' &&
+          clientData.introducedById.includes('-')
+            ? clientData.introducedById
+            : null,
+        recommendedByName: isClientFromManager ? null : clientData.recommendedBy?.name || null,
+        recommendedByPhone: isClientFromManager ? null : clientData.recommendedBy?.phone || null,
+      };
 
+      try {
         const res = await clientsApi.create(payload);
         const created = res?.data;
         if (created && created.id) {
@@ -288,49 +302,12 @@ export function ClientsProvider({ children }) {
           setClients((prev) => [formatted, ...prev]);
           return formatted.id;
         }
+        throw new Error('Failed to create client on server.');
       } catch (err) {
-        console.warn('Backend client creation error, saving in local state:', err.message);
+        console.error('Client creation failed:', err);
+        // Strictly propagate error to caller — DO NOT create local duplicate ghost client
+        throw err;
       }
-
-      // Local fallback
-      const numericIds = clients.map((c) => Number(c.id)).filter((n) => !isNaN(n));
-      const newId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : Date.now();
-
-      const newClient = {
-        id: newId,
-        name: clientData.name || '',
-        phone: clientData.phone || '',
-        whatsapp: clientData.whatsapp || clientData.phone || '',
-        quartier: clientData.quartier || '',
-        birthday: clientData.birthday || '',
-        anniversary: clientData.anniversary || '',
-        recommendedBy: isClientFromManager
-          ? null
-          : clientData.recommendedBy
-          ? {
-              name: clientData.recommendedBy.name || '',
-              phone: clientData.recommendedBy.phone || '',
-              date: clientData.recommendedBy.date || today,
-            }
-          : null,
-        introducedBy: isClientFromManager ? null : clientData.introducedBy || null,
-        introducedById: isClientFromManager ? null : clientData.introducedById || null,
-        firstAppointmentService: clientData.firstAppointmentService || null,
-        clientSource: isClientFromManager
-          ? 'Direct'
-          : clientData.clientSource || (clientData.introducedBy ? 'Staff Referral' : 'Direct'),
-        source: isClientFromManager ? 'DIRECT' : clientData.source || (clientData.introducedBy ? 'STAFF_REFERRAL' : 'DIRECT'),
-        lastService: clientData.firstAppointmentService || '—',
-        lastVisit: '—',
-        status: 'ACTIVE',
-        isActive: true,
-        noShows: 0,
-        serviceHistory: [],
-        photos: [],
-      };
-
-      setClients((prev) => [newClient, ...prev]);
-      return newId;
     },
     [clients, isManager]
   );

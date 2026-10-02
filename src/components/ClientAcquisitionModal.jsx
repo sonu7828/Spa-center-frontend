@@ -35,7 +35,7 @@ import PhoneInputField from './PhoneInputField';
 export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
   const { user, allUsers } = useAuth();
   const isManager = user?.role === 'manager' || user?.role === 'MANAGER';
-  const { addClient } = useClients();
+  const { clients, addClient } = useClients();
   const { addAppointment } = useAppointments();
   const { getActiveServices } = useServices();
 
@@ -116,16 +116,33 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       (s) => s.name === interestedService
     );
 
-    // 1. Add client to ClientsContext with acquisition tracking (disabled for Manager)
-    const newClientId = await addClient({
-      name: trimmedName,
-      phone: trimmedPhone,
-      introducedBy: isManager ? null : (user?.name || 'Staff'),
-      introducedById: isManager ? null : (user?.id || null),
-      firstAppointmentService: interestedService,
-      clientSource: isManager ? 'Direct' : 'Staff Referral',
-      source: isManager ? 'DIRECT' : undefined,
+    // Check if client with this phone number already exists
+    const cleanInputPhone = trimmedPhone.replace(/[\s\-\+\(\)]/g, '');
+    const existing = clients?.find((c) => {
+      const cleanExisting = (c.phone || '').replace(/[\s\-\+\(\)]/g, '');
+      return cleanExisting && cleanExisting === cleanInputPhone;
     });
+    if (existing) {
+      setError(`Client with phone number ${trimmedPhone} already exists (${existing.name}). Please select them from existing clients.`);
+      return;
+    }
+
+    let newClientId;
+    try {
+      // 1. Add client to ClientsContext with acquisition tracking (disabled for Manager)
+      newClientId = await addClient({
+        name: trimmedName,
+        phone: trimmedPhone,
+        introducedBy: isManager ? null : (user?.name || 'Staff'),
+        introducedById: isManager ? null : (user?.id || null),
+        firstAppointmentService: interestedService,
+        clientSource: isManager ? 'Direct' : 'Staff Referral',
+        source: isManager ? 'DIRECT' : undefined,
+      });
+    } catch (err) {
+      setError(err.message || 'Failed to add client. Phone number already exists.');
+      return;
+    }
 
     // 2. Create appointment in AppointmentsContext with acquisition tracking
     const priceNum = selectedServiceObj?.price
