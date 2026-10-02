@@ -15,14 +15,16 @@ import { useAuth } from './AuthContext';
 const RetailContext = createContext();
 
 export function RetailProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const hasAccess = user?.role === 'manager' || user?.role === 'reception' || user?.role === 'MANAGER' || user?.role === 'RECEPTION';
+
   const [retailProducts, setRetailProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch real retail products from backend
+  // Fetch real retail products from backend (Manager & Reception only)
   const refreshRetail = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !hasAccess) {
       setLoading(false);
       setError(null);
       return;
@@ -41,16 +43,16 @@ export function RetailProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, hasAccess]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && hasAccess) {
       refreshRetail();
     } else {
       setRetailProducts([]);
       setLoading(false);
     }
-  }, [isAuthenticated, refreshRetail]);
+  }, [isAuthenticated, hasAccess, refreshRetail]);
 
   // Derive drinks & cosmetics
   const drinks = useMemo(() => {

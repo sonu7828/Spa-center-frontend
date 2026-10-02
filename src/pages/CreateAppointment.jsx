@@ -9,7 +9,7 @@
  * Source: WIREFRAME.md Screen 07, FLOW.md §11-12
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, TriangleAlert, Check, Plus, X } from 'lucide-react';
 
@@ -38,19 +38,48 @@ export default function CreateAppointment() {
   const { clients, getActiveClients } = useClients();
   const { appointments, addAppointment } = useAppointments();
   const { getActiveServices } = useServices();
-  const { allUsers } = useAuth();
+  const { allUsers, user } = useAuth();
+  const isTechnician = user?.role === 'technician';
   const activeServices = getActiveServices();
-  const activeClients = getActiveClients ? getActiveClients() : clients.filter((c) => c.status !== 'INACTIVE' && c.isActive !== false);
+  const allActiveClients = getActiveClients ? getActiveClients() : clients.filter((c) => c.status !== 'INACTIVE' && c.isActive !== false);
+
+  // If technician, filter to ONLY clients belonging to this technician:
+  // - Introduced by this technician (c.introducedById === user.id or c.introducedBy === user.name)
+  // - OR Client already has an appointment assigned to this technician
+  const activeClients = isTechnician
+    ? allActiveClients.filter((c) => {
+        const isIntroduced =
+          String(c.introducedById) === String(user?.id) ||
+          (c.introducedBy && c.introducedBy.toLowerCase() === (user?.name || '').toLowerCase());
+        const hasApptWithTech =
+          c.appointments?.some(
+            (a) =>
+              String(a.mainTechnicianId || a.technicianId) === String(user?.id)
+          ) ||
+          appointments?.some(
+            (a) =>
+              String(a.clientId) === String(c.id) &&
+              String(a.technicianId || a.mainTechnicianId) === String(user?.id)
+          );
+        return isIntroduced || hasApptWithTech;
+      })
+    : allActiveClients;
 
   // All active technicians
   const allTechnicians = allUsers.filter((u) => u.role === 'technician' && u.active !== false);
 
   const [form, setForm] = useState({
     clientId: '',
-    technicianId: '',
+    technicianId: isTechnician ? String(user?.id || '') : '',
     date: getDoualaTodayStr(),
     time: '',
   });
+
+  useEffect(() => {
+    if (isTechnician && user?.id && form.technicianId !== String(user.id)) {
+      setForm((prev) => ({ ...prev, technicianId: String(user.id) }));
+    }
+  }, [isTechnician, user?.id, form.technicianId]);
 
   // Multi-service selection: source of truth (starts empty, no pre-selected service)
   const [selectedServices, setSelectedServices] = useState([]);
@@ -234,21 +263,39 @@ export default function CreateAppointment() {
       <div className="bg-white border border-border rounded-[16px] p-4 sm:p-6 shadow-card">
         {/* Client */}
         <div className="mb-4">
-          <label className="block text-[13px] font-medium text-muted-gray mb-1.5">
-            Client
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-[13px] font-medium text-muted-gray">
+              Client
+            </label>
+            {isTechnician && (
+              <span className="text-[11px] font-semibold text-sage">
+                Your Clients ({activeClients.length})
+              </span>
+            )}
+          </div>
           <select
             value={form.clientId}
             onChange={update('clientId')}
             className="w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150 cursor-pointer appearance-none"
           >
-            <option value="">Select Client</option>
+            <option value="">
+              {isTechnician
+                ? activeClients.length > 0
+                  ? 'Select One of Your Clients'
+                  : 'No clients registered by you yet'
+                : 'Select Client'}
+            </option>
             {activeClients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name} {c.phone ? `(${c.phone})` : ''}
               </option>
             ))}
           </select>
+          {isTechnician && activeClients.length === 0 && (
+            <p className="text-xs text-muted-gray mt-1.5 leading-relaxed">
+              You haven't introduced any clients yet. You can register a new client using the <strong>Add New Client</strong> button on the Appointments page first.
+            </p>
+          )}
         </div>
 
         {/* Deposit Warning */}
@@ -358,24 +405,35 @@ export default function CreateAppointment() {
           <label className="block text-[13px] font-medium text-muted-gray mb-1.5">
             Main Technician
             <span className="text-[11px] font-normal text-sage ml-1.5">
-              — Primary assigned technician for visit
+              {isTechnician ? '— Assigned to you' : '— Primary assigned technician for visit'}
             </span>
           </label>
           <select
             value={form.technicianId}
             onChange={update('technicianId')}
-            className="w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150 cursor-pointer appearance-none"
+            disabled={isTechnician}
+            className={`w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150 ${
+              isTechnician ? 'bg-soft-cream/60 cursor-not-allowed text-charcoal/80' : 'cursor-pointer'
+            } appearance-none`}
           >
-            <option value="">Select Main Technician</option>
-            {allTechnicians.map((t) => {
-              const conflictInfo = getTechConflictInfo(t.id);
-              return (
-                <option key={t.id} value={t.id}>
-                  {t.name} — {(t.specialties || []).join(', ') || 'Technician'}
-                  {conflictInfo ? ` ⚠️ (Busy ${conflictInfo.cStart}–${conflictInfo.cEnd})` : ''}
-                </option>
-              );
-            })}
+            {isTechnician ? (
+              <option value={user?.id}>
+                {user?.name || 'You'} (Your Profile)
+              </option>
+            ) : (
+              <>
+                <option value="">Select Main Technician</option>
+                {allTechnicians.map((t) => {
+                  const conflictInfo = getTechConflictInfo(t.id);
+                  return (
+                    <option key={t.id} value={t.id}>
+                      {t.name} — {(t.specialties || []).join(', ') || 'Technician'}
+                      {conflictInfo ? ` ⚠️ (Busy ${conflictInfo.cStart}–${conflictInfo.cEnd})` : ''}
+                    </option>
+                  );
+                })}
+              </>
+            )}
           </select>
         </div>
 

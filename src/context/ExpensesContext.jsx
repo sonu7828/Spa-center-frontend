@@ -34,13 +34,15 @@ export const EXPENSE_PAYMENT_METHODS = [
 ];
 
 export function ExpensesProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const hasAccess = user?.role === 'manager' || user?.role === 'reception' || user?.role === 'MANAGER' || user?.role === 'RECEPTION';
+
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const refreshExpenses = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !hasAccess) {
       setLoading(false);
       setError(null);
       return;
@@ -59,16 +61,16 @@ export function ExpensesProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, hasAccess]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && hasAccess) {
       refreshExpenses();
     } else {
       setExpenses([]);
       setLoading(false);
     }
-  }, [isAuthenticated, refreshExpenses]);
+  }, [isAuthenticated, hasAccess, refreshExpenses]);
 
   // Add new expense with strict validation
   const addExpense = useCallback(

@@ -11,6 +11,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { socialApi } from '../services/api';
+import { useAuth } from './AuthContext';
 
 const SocialContext = createContext();
 
@@ -21,14 +22,18 @@ const DEFAULT_ACCOUNTS = [
 ];
 
 export function SocialProvider({ children }) {
+  const { user, isAuthenticated } = useAuth();
+  const isManager = user?.role === 'manager' || user?.role === 'MANAGER';
+
   const [accounts, setAccounts] = useState(DEFAULT_ACCOUNTS);
   const [posts, setPosts] = useState([]);
   const [draftPost, setDraftPost] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch real account connection statuses from backend
+  // Fetch real account connection statuses from backend (Manager only)
   const refreshAccounts = useCallback(async () => {
+    if (!isAuthenticated || !isManager) return;
     try {
       const res = await socialApi.getAccounts();
       if (res?.data && Array.isArray(res.data)) {
@@ -43,10 +48,11 @@ export function SocialProvider({ children }) {
         { id: 'tiktok', name: 'TikTok', handle: '@omegaspadouala', connected: false, statusText: 'API Key Required', missingKeys: ['TIKTOK_ACCESS_TOKEN'], iconColor: '#000000' },
       ]);
     }
-  }, []);
+  }, [isAuthenticated, isManager]);
 
-  // Fetch all posts from backend
+  // Fetch all posts from backend (Manager only)
   const refreshPosts = useCallback(async () => {
+    if (!isAuthenticated || !isManager) return;
     try {
       const res = await socialApi.getPosts();
       if (res?.data && Array.isArray(res.data)) {
@@ -55,12 +61,14 @@ export function SocialProvider({ children }) {
     } catch (err) {
       console.warn('Could not fetch social posts from backend:', err?.message || err);
     }
-  }, []);
+  }, [isAuthenticated, isManager]);
 
   useEffect(() => {
-    refreshAccounts();
-    refreshPosts();
-  }, [refreshAccounts, refreshPosts]);
+    if (isAuthenticated && isManager) {
+      refreshAccounts();
+      refreshPosts();
+    }
+  }, [isAuthenticated, isManager, refreshAccounts, refreshPosts]);
 
   // Toggle account connection
   const toggleAccountConnection = useCallback((platformId) => {

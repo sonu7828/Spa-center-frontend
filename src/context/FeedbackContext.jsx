@@ -52,7 +52,9 @@ function setLocalData(key, data) {
 }
 
 export function FeedbackProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const hasAccess = user?.role === 'manager' || user?.role === 'reception' || user?.role === 'MANAGER' || user?.role === 'RECEPTION';
+
   const [feedback, setFeedback] = useState(() => getLocalData(STORAGE_KEY_FEEDBACK, []));
   const [pendingRequests, setPendingRequests] = useState(() => getLocalData(STORAGE_KEY_PENDING, []));
   const [isLoading, setIsLoading] = useState(false);
@@ -94,9 +96,9 @@ export function FeedbackProvider({ children }) {
     };
   }, []);
 
-  // Fetch feedback from backend API when authenticated
+  // Fetch feedback from backend API when authenticated (Manager & Reception only)
   const refreshFeedback = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !hasAccess) return;
     try {
       setIsLoading(true);
       const res = await feedbackApi.getAll({ limit: 100 });
@@ -121,13 +123,13 @@ export function FeedbackProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, hasAccess]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && hasAccess) {
       refreshFeedback();
     }
-  }, [isAuthenticated, refreshFeedback]);
+  }, [isAuthenticated, hasAccess, refreshFeedback]);
 
   const pendingRequestsRef = useRef(pendingRequests);
   useEffect(() => {

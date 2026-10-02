@@ -138,8 +138,8 @@ export function formatBackendClient(c) {
     anniversary: c.anniversary ? c.anniversary.split('T')[0] : '',
     source: c.source || 'DIRECT',
     clientSource: c.source === 'STAFF_REFERRAL' || c.introducedByEmployee ? 'Staff Referral' : 'Direct',
-    introducedBy: c.introducedByEmployee?.name || c.introducedBy || null,
-    introducedById: c.introducedByEmployeeId || c.introducedById || null,
+    introducedBy: c.introducedByEmployee?.staffProfile?.name || c.introducedByEmployee?.name || c.introducedBy || null,
+    introducedById: c.introducedByEmployeeId || c.introducedByEmployee?.id || c.introducedById || null,
     recommendedBy: c.recommendedByName
       ? {
           name: c.recommendedByName,

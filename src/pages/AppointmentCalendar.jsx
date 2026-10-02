@@ -203,8 +203,8 @@ export default function AppointmentCalendar() {
       ? availableTechnicians
       : availableTechnicians.filter((t) => String(t.id) === String(selectedTechFilter));
 
-  // Reception/Manager can create appointments; technician cannot
-  const canCreateAppointment = user?.role === 'manager' || user?.role === 'reception';
+  // Manager, Reception, and Technician can create appointments
+  const canCreateAppointment = true;
 
   const todayDateStr = todayStr();
   const currentDoualaTime = getDoualaCurrentTimeStr();
@@ -276,21 +276,19 @@ export default function AppointmentCalendar() {
             {isTechnician && (
               <button
                 onClick={() => setShowAcquisitionModal(true)}
-                className="h-[38px] sm:h-[44px] px-3.5 sm:px-4 rounded-[11px] bg-sage hover:bg-sage-hover text-white text-xs sm:text-sm font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-[0.98]"
+                className="h-[38px] sm:h-[44px] px-3.5 sm:px-4 rounded-[11px] bg-white border border-border text-charcoal hover:bg-soft-cream text-xs sm:text-sm font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-[0.98]"
               >
                 <UserPlus size={15} strokeWidth={2.2} />
                 <span>Add New Client</span>
               </button>
             )}
-            {canCreateAppointment && !isTechnician && (
-              <Button
-                onClick={() => navigate('/appointments/new')}
-                className="h-[38px] sm:h-[44px] px-3.5 sm:px-5 text-xs sm:text-sm whitespace-nowrap font-bold"
-              >
-                <CalendarPlus size={16} strokeWidth={2} />
-                <span>Appointment</span>
-              </Button>
-            )}
+            <Button
+              onClick={() => navigate('/appointments/new')}
+              className="h-[38px] sm:h-[44px] px-3.5 sm:px-5 text-xs sm:text-sm whitespace-nowrap font-bold"
+            >
+              <CalendarPlus size={16} strokeWidth={2} />
+              <span>{isTechnician ? 'Book Appointment' : 'Appointment'}</span>
+            </Button>
           </div>
         }
       />

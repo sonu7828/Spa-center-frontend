@@ -117,7 +117,9 @@ export function formatBackendInvoice(inv) {
 }
 
 export function InvoiceProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const hasAccess = user?.role === 'manager' || user?.role === 'reception' || user?.role === 'MANAGER' || user?.role === 'RECEPTION';
+
   const getCachedInvoices = () => {
     try {
       const raw = localStorage.getItem('omega_local_invoices');
@@ -133,9 +135,9 @@ export function InvoiceProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch real invoices from backend on mount and preserve local invoices
+  // Fetch real invoices from backend on mount and preserve local invoices (Manager & Reception only)
   const refreshInvoices = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !hasAccess) {
       setLoading(false);
       setError(null);
       return;
@@ -175,16 +177,15 @@ export function InvoiceProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, hasAccess]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && hasAccess) {
       refreshInvoices();
     } else {
-      setInvoices(SEED_INVOICES);
       setLoading(false);
     }
-  }, [isAuthenticated, refreshInvoices]);
+  }, [isAuthenticated, hasAccess, refreshInvoices]);
 
   const findOpenInvoice = useCallback(
     (clientId, clientName) => {
