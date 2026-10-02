@@ -62,7 +62,14 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
   const drinkItems = (invoice.items || []).filter((it) => it.type === 'drink');
   const cosmeticItems = (invoice.items || []).filter((it) => it.type === 'cosmetic');
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    const origTitle = document.title;
+    document.title = ' ';
+    window.print();
+    setTimeout(() => {
+      document.title = origTitle;
+    }, 1000);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-charcoal/50 backdrop-blur-xs overflow-hidden">
@@ -70,7 +77,11 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
       <style>{`
         @media print {
           /* Hide everything */
-          html, body { margin: 0 !important; padding: 0 !important; }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+          }
           body * { visibility: hidden !important; }
 
           /* Show only receipt */
@@ -79,13 +90,15 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
           }
 
           #omega-receipt-print {
-            position: fixed !important;
-            inset: 0 !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
             height: auto !important;
             margin: 0 !important;
-            padding: 28px 36px !important;
+            padding: 24px 32px !important;
             background: #fff !important;
             color: #1a1a1a !important;
             box-shadow: none !important;
@@ -121,8 +134,8 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
           .no-print { display: none !important; }
 
           @page {
-            size: A4;
-            margin: 12mm 16mm;
+            size: auto;
+            margin: 0mm !important;
           }
         }
       `}</style>
@@ -436,16 +449,9 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
               <p style={{ fontSize: '12px', fontWeight: 700, color: '#2E2F31', margin: '0 0 4px' }}>
                 Thank you for visiting OMEGA SPA!
               </p>
-              <p style={{ fontSize: '11px', color: '#76736F', margin: '0 0 10px' }}>
+              <p style={{ fontSize: '11px', color: '#76736F', margin: 0 }}>
                 We look forward to pampering you again soon.
               </p>
-              <div style={{ fontSize: '10px', color: '#9e9a96', lineHeight: '1.6' }}>
-                <p style={{ margin: 0 }}>OMEGA SPA · Douala, Cameroon</p>
-                <p style={{ margin: 0 }}>Tel: +237 6 87 67 32 62 · info@omegaspa.cm</p>
-                <p style={{ margin: '4px 0 0', fontStyle: 'italic', fontSize: '9px' }}>
-                  This receipt was generated electronically and is valid without signature.
-                </p>
-              </div>
             </div>
           </div>
         </div>
