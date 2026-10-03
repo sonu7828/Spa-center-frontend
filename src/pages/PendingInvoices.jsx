@@ -15,7 +15,7 @@
  *   - [ Send / Resend WhatsApp Receipt ] → Structure ready for WhatsApp API
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -37,6 +37,9 @@ import {
   Coffee,
   X,
   RotateCcw,
+  Loader2,
+  Trash2,
+  Search,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -52,8 +55,11 @@ import { useAuth } from '../context/AuthContext';
 import { useRetail } from '../context/RetailContext';
 import { useCommission } from '../context/CommissionContext';
 import { useAppointments } from '../context/AppointmentsContext';
+import { useServices } from '../context/ServicesContext';
+import { DEFAULT_SERVICES } from '../data/defaultCatalog';
 import { whatsappApi } from '../services/api';
 import { buildReceiptWhatsAppMessage } from '../utils/receiptWhatsApp';
+import { isUUID } from '../utils/uuid';
 
 const STATUS_COLORS = {
   DRAFT: 'bg-border text-muted-gray',
@@ -209,6 +215,161 @@ function formatClientDisplay(clientName, clientId) {
   return trimmed;
 }
 
+// Searchable & Scroll-contained Dropdown Component
+function SearchableSelect({
+  value,
+  onChange,
+  options = [],
+  placeholder = '-- Select --',
+  emptyText = 'No options found',
+  searchPlaceholder = 'Search...',
+  className = '',
+  heightClass = 'h-[38px]',
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [openUpward, setOpenUpward] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const handleToggle = () => {
+    if (!isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      // If space below is less than 230px and there is plenty of room above, open upward
+      if (spaceBelow < 230 && rect.top > 230) {
+        setOpenUpward(true);
+      } else {
+        setOpenUpward(false);
+      }
+    }
+    setIsOpen(!isOpen);
+    setSearchTerm('');
+  };
+
+  const selectedOption = options.find((opt) => String(opt.value) === String(value));
+
+  const filteredOptions = options.filter((opt) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    const matchLabel = opt.label ? String(opt.label).toLowerCase().includes(term) : false;
+    const matchSublabel = opt.sublabel ? String(opt.sublabel).toLowerCase().includes(term) : false;
+    const matchBadge = opt.badge ? String(opt.badge).toLowerCase().includes(term) : false;
+    return matchLabel || matchSublabel || matchBadge;
+  });
+
+  return (
+    <div
+      className={`relative ${isOpen ? 'z-40' : 'z-0'} ${className}`}
+      ref={containerRef}
+    >
+      <button
+        type="button"
+        onClick={handleToggle}
+        className={`w-full ${heightClass} px-3 bg-white border border-border rounded-[10px] text-xs text-charcoal flex items-center justify-between text-left transition-all cursor-pointer hover:border-sage/60 focus:outline-none focus:border-sage ${
+          isOpen ? 'border-sage ring-1 ring-sage/30' : ''
+        }`}
+      >
+        <div className="truncate pr-2">
+          {selectedOption ? (
+            <span className="font-semibold text-charcoal">{selectedOption.label}</span>
+          ) : (
+            <span className="text-muted-gray">{placeholder}</span>
+          )}
+        </div>
+        <ChevronDown
+          size={14}
+          className={`text-muted-gray shrink-0 transition-transform duration-200 ${
+            isOpen ? 'rotate-180 text-sage' : ''
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div
+          className={`absolute left-0 right-0 z-50 bg-white border border-border rounded-[12px] shadow-xl overflow-hidden animate-scale-up ${
+            openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+          }`}
+          style={{ minWidth: '100%' }}
+        >
+          {options.length > 5 && (
+            <div className="p-2 border-b border-border/60 bg-soft-cream/40">
+              <div className="relative">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-gray" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="w-full h-7 pl-7 pr-2 text-xs bg-white border border-border rounded-[7px] outline-none focus:border-sage text-charcoal"
+                  onClick={(e) => e.stopPropagation()}
+                  autoFocus
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="max-h-52 overflow-y-auto divide-y divide-border/20 py-1 scrollbar-thin">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-3 text-center text-xs text-muted-gray">{emptyText}</div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const isSelected = String(opt.value) === String(value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(opt.value);
+                      setIsOpen(false);
+                      setSearchTerm('');
+                    }}
+                    className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-soft-cream/70 transition-colors cursor-pointer ${
+                      isSelected ? 'bg-sage-soft/70 font-semibold text-[#3E5238]' : 'text-charcoal'
+                    }`}
+                  >
+                    <div className="truncate pr-2">
+                      <span className="block truncate">{opt.label}</span>
+                      {opt.sublabel && (
+                        <span className="block text-[10px] text-muted-gray truncate">
+                          {opt.sublabel}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {opt.badge && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-warm-ivory text-muted-gray font-medium">
+                          {opt.badge}
+                        </span>
+                      )}
+                      {isSelected && (
+                        <Check size={13} className="text-[#4F6748]" />
+                      )}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PendingInvoices() {
   const navigate = useNavigate();
   const { user, allUsers } = useAuth();
@@ -224,11 +385,35 @@ export default function PendingInvoices() {
     addRetailItemToInvoice,
     removeRetailItemFromInvoice,
     createRetailSaleInvoice,
+    createWalkInServiceInvoice,
   } = useInvoices();
+
+  const { services, getActiveServices } = useServices();
+  const rawActiveServices = (getActiveServices ? getActiveServices() : services || []).filter(
+    (s) => s.active !== false
+  );
+  const activeServices = rawActiveServices.length > 0
+    ? rawActiveServices
+    : (DEFAULT_SERVICES || []).filter((s) => s.active !== false);
+  const activeTechnicians = (allUsers || []).filter(
+    (u) => u.active !== false && u.role?.toLowerCase() !== 'cleaner'
+  );
+  const referralStaff = (allUsers || []).filter(
+    (u) =>
+      u.active !== false &&
+      u.role?.toLowerCase() !== 'cleaner' &&
+      u.role?.toLowerCase() !== 'manager'
+  );
 
   const { drinks, cosmetics, deductRetailStock } = useRetail();
 
-  const { closeServiceRecord, isAppointmentClosed, isServiceClosed, recordRetailSale } = useOperations();
+  const {
+    closeServiceRecord,
+    isAppointmentClosed,
+    isServiceClosed,
+    recordRetailSale,
+    consumptionRules,
+  } = useOperations();
   const { clients, addClientServiceHistory, getClient } = useClients();
   const {
     earnPoints,
@@ -281,6 +466,38 @@ export default function PendingInvoices() {
   const [newSaleQuantities, setNewSaleQuantities] = useState({});
   const [newSalePaymentMethod, setNewSalePaymentMethod] = useState('CASH');
   const [newSaleNotice, setNewSaleNotice] = useState('');
+
+  // Payment collecting loading states (prevents multiple clicks)
+  const [collectingId, setCollectingId] = useState(null);
+  const [isCollectingNewSale, setIsCollectingNewSale] = useState(false);
+
+  // Walk-In / Direct Service Invoice Flow State
+  const [showNewServiceModal, setShowNewServiceModal] = useState(false);
+  const [newServiceClientType, setNewServiceClientType] = useState('walkin'); // 'walkin' | 'registered'
+  const [newServiceClientId, setNewServiceClientId] = useState('');
+  const [newServiceWalkInName, setNewServiceWalkInName] = useState('');
+  const [newServiceWalkInPhone, setNewServiceWalkInPhone] = useState('+237 ');
+  const [newServiceIntroducedById, setNewServiceIntroducedById] = useState('');
+  const [newServiceLines, setNewServiceLines] = useState([
+    {
+      id: 1,
+      serviceId: '',
+      serviceName: '',
+      technicianId: '',
+      technicianName: '',
+      price: '',
+      product: '',
+    },
+  ]);
+  const [newServiceRetailCart, setNewServiceRetailCart] = useState([]);
+  const [showRetailInServiceModal, setShowRetailInServiceModal] = useState(false);
+  const [newServiceRetailQuantities, setNewServiceRetailQuantities] = useState({});
+  const [newServiceRetailTab, setNewServiceRetailTab] = useState('drinks');
+  const [newServiceNotes, setNewServiceNotes] = useState('');
+  const [newServicePaymentMethod, setNewServicePaymentMethod] = useState('CASH');
+  const [newServiceActionChoice, setNewServiceActionChoice] = useState('pending'); // 'pending' | 'pay_now'
+  const [isSubmittingServiceInvoice, setIsSubmittingServiceInvoice] = useState(false);
+  const [newServiceError, setNewServiceError] = useState('');
 
   useEffect(() => {
     if (typeof refreshInvoices === 'function') {
@@ -409,6 +626,7 @@ export default function PendingInvoices() {
 
   const handleCollectNewSale = async () => {
     if (newSaleCart.length === 0 || newSaleTotal <= 0) return;
+    if (isCollectingNewSale) return;
 
     // Revalidate stock before completing the sale
     for (const cartItem of newSaleCart) {
@@ -423,54 +641,476 @@ export default function PendingInvoices() {
       }
     }
 
-    const selectedClient = newSaleClientId
-      ? clients.find((c) => String(c.id) === String(newSaleClientId))
-      : null;
+    setIsCollectingNewSale(true);
+    try {
+      const selectedClient = newSaleClientId
+        ? clients.find((c) => String(c.id) === String(newSaleClientId))
+        : null;
 
-    const clientName = selectedClient ? selectedClient.name : 'Walk in';
+      const clientName = selectedClient ? selectedClient.name : 'Walk in';
 
-    // 1. Create paid invoice in shared state & backend
-    const paidInvoice = await createRetailSaleInvoice({
-      client: selectedClient,
-      items: newSaleCart,
-      paymentMethod: newSalePaymentMethod,
-    });
+      // 1. Create paid invoice in shared state & backend
+      const paidInvoice = await createRetailSaleInvoice({
+        client: selectedClient,
+        items: newSaleCart,
+        paymentMethod: newSalePaymentMethod,
+      });
 
-    // 2. Deduct retail stock (deducted ONLY after successful payment)
-    await deductRetailStock(newSaleCart);
+      // 2. Deduct retail stock (deducted ONLY after successful payment)
+      await deductRetailStock(newSaleCart);
 
-    // 3. Contribute to daily totals (no double counting)
-    recordRetailSale({
-      amount: newSaleTotal,
-      payment: newSalePaymentMethod,
-      items: newSaleCart,
-      clientName,
-      isWalkIn: !selectedClient,
-    });
+      // 3. Contribute to daily totals (no double counting)
+      recordRetailSale({
+        amount: newSaleTotal,
+        payment: newSalePaymentMethod,
+        items: newSaleCart,
+        clientName,
+        isWalkIn: !selectedClient,
+      });
 
-    // 4. Retail products do NOT earn loyalty points (approved rule)
-    // No earnPoints call for retail-only sales
+      // 4. Retail products do NOT earn loyalty points (approved rule)
+      // No earnPoints call for retail-only sales
 
-    // 5. Close modal, switch to Paid Today, open receipt
-    closeNewRetailSaleModal();
-    setActiveTab('paid-today');
-    setExpandedId(paidInvoice?.id);
-    setReceiptInvoice(paidInvoice);
-    setPaymentSuccessNotice(
-      `Retail sale completed for ${clientName} (${newSaleTotal.toLocaleString('en-US')} FCFA via ${newSalePaymentMethod}). Receipt opened.`
+      // 5. Close modal, switch to Paid Today, open receipt
+      closeNewRetailSaleModal();
+      setActiveTab('paid-today');
+      setExpandedId(paidInvoice?.id);
+      setReceiptInvoice(paidInvoice);
+      setPaymentSuccessNotice(
+        `Retail sale completed for ${clientName} (${newSaleTotal.toLocaleString('en-US')} FCFA via ${newSalePaymentMethod}). Receipt opened.`
+      );
+      setTimeout(() => setPaymentSuccessNotice(null), 5000);
+    } catch (err) {
+      console.error('Retail sale collection error:', err);
+      setPaymentSuccessNotice(`Payment error: ${err?.message || 'Could not complete sale'}`);
+      setTimeout(() => setPaymentSuccessNotice(null), 5000);
+    } finally {
+      setIsCollectingNewSale(false);
+    }
+  };
+
+  // --- Walk-in / New Service Flow Calculations & Handlers ---
+  const newServiceRetailTotal = (newServiceRetailCart || []).reduce(
+    (sum, it) => sum + (it.price || 0),
+    0
+  );
+
+  const newServiceLinesTotal = (newServiceLines || []).reduce((sum, line) => {
+    const p = typeof line.price === 'number' ? line.price : parseInt(String(line.price).replace(/[^0-9]/g, ''), 10) || 0;
+    return sum + p;
+  }, 0);
+
+  const newServiceGrandTotal = newServiceLinesTotal + newServiceRetailTotal;
+
+  const openNewServiceModal = () => {
+    setNewServiceClientType('walkin');
+    setNewServiceClientId('');
+    setNewServiceWalkInName('');
+    setNewServiceWalkInPhone('+237 ');
+    setNewServiceIntroducedById('');
+    setNewServiceLines([
+      {
+        id: Date.now(),
+        serviceId: '',
+        serviceName: '',
+        technicianId: '',
+        technicianName: '',
+        price: '',
+        product: '',
+      },
+    ]);
+    setNewServiceRetailCart([]);
+    setShowRetailInServiceModal(false);
+    setNewServiceRetailTab('drinks');
+    setNewServiceNotes('');
+    setNewServicePaymentMethod('CASH');
+    setNewServiceActionChoice('pending');
+    setNewServiceError('');
+    setShowNewServiceModal(true);
+  };
+
+  const closeNewServiceModal = () => {
+    setShowNewServiceModal(false);
+    setNewServiceError('');
+  };
+
+  const handleServiceLineSelect = (idx, sId) => {
+    const selectedSvc = activeServices.find((s) => String(s.id) === String(sId));
+    setNewServiceLines((prev) =>
+      prev.map((line, i) => {
+        if (i !== idx) return line;
+        const defaultPrice = selectedSvc
+          ? (typeof selectedSvc.numericPrice === 'number'
+              ? selectedSvc.numericPrice
+              : parseInt(String(selectedSvc.price).replace(/[^0-9]/g, ''), 10) || 0)
+          : '';
+        return {
+          ...line,
+          serviceId: sId,
+          serviceName: selectedSvc ? selectedSvc.name : '',
+          price: defaultPrice !== '' ? defaultPrice : line.price,
+        };
+      })
     );
-    setTimeout(() => setPaymentSuccessNotice(null), 5000);
+    setNewServiceError('');
+  };
+
+  const handleTechnicianLineSelect = (idx, tId) => {
+    const selectedTech = activeTechnicians.find((t) => String(t.id) === String(tId));
+    setNewServiceLines((prev) =>
+      prev.map((line, i) => {
+        if (i !== idx) return line;
+        return {
+          ...line,
+          technicianId: tId,
+          technicianName: selectedTech ? selectedTech.name : '',
+        };
+      })
+    );
+    setNewServiceError('');
+  };
+
+  const handlePriceLineChange = (idx, val) => {
+    setNewServiceLines((prev) =>
+      prev.map((line, i) => (i === idx ? { ...line, price: val } : line))
+    );
+  };
+
+  const handleProductLineChange = (idx, val) => {
+    setNewServiceLines((prev) =>
+      prev.map((line, i) => (i === idx ? { ...line, product: val } : line))
+    );
+  };
+
+  const addServiceLine = () => {
+    setNewServiceLines((prev) => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        serviceId: '',
+        serviceName: '',
+        technicianId: '',
+        technicianName: '',
+        price: '',
+        product: '',
+      },
+    ]);
+  };
+
+  const removeServiceLine = (idx) => {
+    setNewServiceLines((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const addRetailToServiceCart = (product, qtyToAdd = 1) => {
+    const qty = Math.max(1, parseInt(qtyToAdd, 10) || 1);
+    const existing = newServiceRetailCart.find((it) => it.productId === product.id);
+    const currentInCart = existing ? existing.qty : 0;
+    const remainingStock = product.stock - currentInCart;
+
+    if (qty > remainingStock) {
+      setNewServiceError(
+        `Only ${product.stock} available in stock for "${product.name}"`
+      );
+      setTimeout(() => setNewServiceError(''), 3500);
+      return;
+    }
+
+    if (existing) {
+      setNewServiceRetailCart((prev) =>
+        prev.map((it) =>
+          it.productId === product.id
+            ? {
+                ...it,
+                qty: it.qty + qty,
+                price: (it.unitPrice || product.price) * (it.qty + qty),
+              }
+            : it
+        )
+      );
+    } else {
+      setNewServiceRetailCart((prev) => [
+        ...prev,
+        {
+          productId: product.id,
+          name: product.name,
+          service: product.name,
+          unitPrice: product.price,
+          price: product.price * qty,
+          qty,
+          type: product.type,
+          stock: product.stock,
+        },
+      ]);
+    }
+  };
+
+  const removeRetailFromServiceCart = (productId) => {
+    setNewServiceRetailCart((prev) => prev.filter((it) => it.productId !== productId));
+  };
+
+  const handleSubmitWalkInServiceInvoice = async (collectNow = false) => {
+    if (isSubmittingServiceInvoice) return;
+    setNewServiceError('');
+
+    // 1. Client Validation
+    let resolvedClient = null;
+    let clientName = '';
+    let clientPhone = '';
+
+    if (newServiceClientType === 'registered') {
+      if (!newServiceClientId) {
+        setNewServiceError('Please select a registered client.');
+        return;
+      }
+      resolvedClient = clients.find((c) => String(c.id) === String(newServiceClientId));
+      if (!resolvedClient) {
+        setNewServiceError('Selected client not found.');
+        return;
+      }
+      clientName = resolvedClient.name;
+      clientPhone = resolvedClient.phone || '';
+    } else {
+      clientName = newServiceWalkInName.trim() || 'Walk in';
+      const rawPhone = newServiceWalkInPhone.trim();
+      clientPhone = (rawPhone && rawPhone !== '+237' && rawPhone !== '+237 ') ? rawPhone : '';
+    }
+
+    // 2. Services Validation
+    if (!newServiceLines || newServiceLines.length === 0) {
+      setNewServiceError('Please add at least one service.');
+      return;
+    }
+
+    for (let i = 0; i < newServiceLines.length; i++) {
+      const line = newServiceLines[i];
+      if (!line.serviceName && !line.serviceId) {
+        setNewServiceError(`Service #${i + 1}: Please select a service.`);
+        return;
+      }
+      if (!line.technicianName && !line.technicianId) {
+        setNewServiceError(`Service #${i + 1}: Please assign a performing technician.`);
+        return;
+      }
+      const priceNum =
+        typeof line.price === 'number'
+          ? line.price
+          : parseInt(String(line.price).replace(/[^0-9]/g, ''), 10);
+      if (isNaN(priceNum) || priceNum < 0) {
+        setNewServiceError(`Service #${i + 1}: Please enter a valid price.`);
+        return;
+      }
+    }
+
+    if (newServiceGrandTotal <= 0) {
+      setNewServiceError('Invoice grand total must be greater than 0 FCFA.');
+      return;
+    }
+
+    // 3. Retail stock validation
+    for (const item of newServiceRetailCart) {
+      const source = item.type === 'drink' ? drinks : cosmetics;
+      const currentProduct = source.find((p) => p.id === item.productId);
+      if (!currentProduct || item.qty > currentProduct.stock) {
+        setNewServiceError(
+          `Cannot complete: "${item.name}" only has ${currentProduct?.stock ?? 0} in stock (requested ${item.qty}).`
+        );
+        return;
+      }
+    }
+
+    // 4. Referral Staff
+    const refStaff = referralStaff.find((s) => String(s.id) === String(newServiceIntroducedById));
+
+    setIsSubmittingServiceInvoice(true);
+    try {
+      const today = new Date().toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      const formattedServices = newServiceLines.map((line) => ({
+        serviceId: line.serviceId,
+        service: line.serviceName,
+        name: line.serviceName,
+        technician: line.technicianName,
+        technicianId: line.technicianId,
+        price:
+          typeof line.price === 'number'
+            ? line.price
+            : parseInt(String(line.price).replace(/[^0-9]/g, ''), 10) || 0,
+        product: line.product || null,
+        category: 'SERVICES',
+        type: 'service',
+      }));
+
+      // Create invoice via InvoiceContext
+      const invoice = await createWalkInServiceInvoice({
+        client: resolvedClient,
+        clientId: resolvedClient?.id || null,
+        clientName,
+        clientPhone,
+        services: formattedServices,
+        retailItems: newServiceRetailCart,
+        status: collectNow ? 'PAID' : 'PENDING_PAYMENT',
+        paymentMethod: collectNow ? newServicePaymentMethod : null,
+        notes: newServiceNotes,
+        introducedBy: refStaff ? refStaff.name : null,
+        introducedById: refStaff ? refStaff.id : null,
+        discount: 0,
+      });
+
+      if (collectNow) {
+        // A. Deduct retail stock if retail items present
+        if (newServiceRetailCart.length > 0 && typeof deductRetailStock === 'function') {
+          await deductRetailStock(newServiceRetailCart);
+        }
+
+        // B. Record retail sale in operations (if retail items included)
+        if (newServiceRetailCart.length > 0 && typeof recordRetailSale === 'function') {
+          recordRetailSale({
+            amount: newServiceRetailTotal,
+            payment: newServicePaymentMethod,
+            items: newServiceRetailCart,
+            clientName,
+            isWalkIn: !resolvedClient,
+          });
+        }
+
+        // C. Close service operations records
+        const serviceItems = (invoice?.items || []).filter(
+          (it) => it.type !== 'drink' && it.type !== 'cosmetic'
+        );
+
+        serviceItems.forEach((item) => {
+          const itemPriceNum =
+            typeof item.price === 'number'
+              ? item.price
+              : parseInt(String(item.price).replace(/[^0-9]/g, ''), 10) || 0;
+          const itemFinalPriceStr = itemPriceNum.toLocaleString('en-US');
+          const itemSvcId = item.id;
+
+          if (typeof closeServiceRecord === 'function') {
+            closeServiceRecord({
+              appointmentId: invoice.id,
+              appointmentServiceId: itemSvcId,
+              clientId: invoice.clientId,
+              clientName: invoice.clientName,
+              service: item.service,
+              technician: item.technician,
+              product: item.product,
+              price: itemFinalPriceStr,
+              paymentMethod: newServicePaymentMethod,
+              date: today,
+              time: timeStr,
+              introducedBy: invoice.introducedBy,
+              introducedById: invoice.introducedById,
+            });
+          }
+
+          // Client Service History
+          if (invoice.clientId && typeof addClientServiceHistory === 'function') {
+            addClientServiceHistory(invoice.clientId, {
+              serviceName: item.service,
+              date: today,
+              price: itemFinalPriceStr,
+              technician: item.technician,
+            });
+          }
+
+          // Technician Commission
+          if (typeof calculateAndAddCommission === 'function') {
+            calculateAndAddCommission({
+              technicianName: item.technician,
+              technicianId: item.technicianId,
+              serviceName: item.service,
+              servicePrice: itemPriceNum,
+              clientName: invoice.clientName,
+              date: today,
+              paymentMethod: newServicePaymentMethod,
+              invoiceId: invoice.id,
+              introducedBy: invoice.introducedBy,
+              introducedById: invoice.introducedById,
+            });
+          }
+        });
+
+        // D. Loyalty Points (only on service portion, retail excluded)
+        if (
+          invoice.clientId &&
+          typeof earnPoints === 'function' &&
+          typeof calculateEarnedPoints === 'function'
+        ) {
+          const serviceSubtotal = serviceItems.reduce(
+            (sum, it) =>
+              sum +
+              (typeof it.price === 'number'
+                ? it.price
+                : parseInt(String(it.price).replace(/[^0-9]/g, ''), 10) || 0),
+            0
+          );
+          if (serviceSubtotal > 0) {
+            const firstServiceName = serviceItems[0]?.service;
+            const earnedPts = calculateEarnedPoints(serviceSubtotal, firstServiceName);
+            if (earnedPts > 0) {
+              earnPoints(invoice.clientId, {
+                points: earnedPts,
+                serviceName: serviceItems.map((it) => it.service).join(', '),
+                serviceAmount: serviceSubtotal,
+                date: today,
+              });
+            }
+          }
+        }
+
+        // Close modal, open receipt, switch tab
+        closeNewServiceModal();
+        setActiveTab('paid-today');
+        setExpandedId(invoice?.id);
+        setReceiptInvoice(invoice);
+        setPaymentSuccessNotice(
+          `Walk-in service completed for ${clientName} (${newServiceGrandTotal.toLocaleString('en-US')} FCFA via ${newServicePaymentMethod}). Receipt opened.`
+        );
+        setTimeout(() => setPaymentSuccessNotice(null), 5000);
+      } else {
+        // Pending Mode
+        closeNewServiceModal();
+        setActiveTab('pending');
+        setExpandedId(invoice?.id);
+        setPaymentSuccessNotice(
+          `Walk-in service invoice #${invoice?.invoiceNumber || ''} created for ${clientName}. Ready for payment collection.`
+        );
+        setTimeout(() => setPaymentSuccessNotice(null), 5000);
+      }
+    } catch (err) {
+      console.error('Walk-in service invoice creation error:', err);
+      setNewServiceError(err.message || 'Failed to create invoice.');
+    } finally {
+      setIsSubmittingServiceInvoice(false);
+    }
   };
 
   // Collect Payment handler — triggers all operations & moves invoice to Paid Today / History
   const handleCollectPayment = async (invoice) => {
-    const payment = formatPaymentMethod(paymentMethods[invoice.id] || 'CASH');
+    if (!invoice || collectingId) return; // Prevent duplicate clicks
+    setCollectingId(invoice.id);
 
-    const today = new Date().toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
+    try {
+      const payment = formatPaymentMethod(paymentMethods[invoice.id] || 'CASH');
+
+      const today = new Date().toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
 
     // Revalidate retail stock before completing payment
     const retailItemsToValidate = invoice.items.filter(
@@ -687,7 +1327,14 @@ export default function PendingInvoices() {
       `Payment collected for ${invoice.clientName} (${finalTotal.toLocaleString('en-US')} FCFA via ${payment.toUpperCase()}).${commNotice} Moved to Paid Today.`
     );
     setTimeout(() => setPaymentSuccessNotice(null), 6000);
-  };
+  } catch (err) {
+    console.error('Payment collection error:', err);
+    setPaymentSuccessNotice(`Payment error: ${err?.message || 'Could not complete payment'}`);
+    setTimeout(() => setPaymentSuccessNotice(null), 6000);
+  } finally {
+    setCollectingId(null);
+  }
+};
 
   // Real WhatsApp receipt action via backend API
   const handleSendWhatsAppReceipt = async (invoice, forceResend = false) => {
@@ -720,26 +1367,39 @@ export default function PendingInvoices() {
     }
 
     setSendingWhatsAppId(invoice.id);
-    try {
-      // Send official PDF receipt document via Meta WhatsApp Cloud API
-      await whatsappApi.sendInvoicePdf(invoice.id, phone);
+    let pdfDelivered = false;
 
-      setSentReceiptInvoices((prev) => ({ ...prev, [invoice.id]: true }));
-      setWhatsAppFeedback((prev) => ({
-        ...prev,
-        [invoice.id]: `✓ PDF Receipt delivered to WhatsApp (${phone})!`,
-      }));
-    } catch (err) {
-      // Fallback: send text receipt if PDF fails
+    // 1. If invoice exists in backend DB (has valid UUID), attempt official PDF receipt
+    if (isUUID(invoice.id)) {
       try {
-        const fbRes = await createFeedbackRequest({
-          clientId: invoice.clientId,
-          clientName: invoice.clientName,
-          appointmentId: invoice.appointmentId,
-          service: invoice.items.map((it) => it.service || it.name).join(', '),
-          technician: invoice.items.map((it) => it.technician || 'Staff').join(', '),
-        });
-        const feedbackUrl = fbRes?.url || '';
+        await whatsappApi.sendInvoicePdf(invoice.id, phone);
+        pdfDelivered = true;
+        setSentReceiptInvoices((prev) => ({ ...prev, [invoice.id]: true }));
+        setWhatsAppFeedback((prev) => ({
+          ...prev,
+          [invoice.id]: `✓ PDF Receipt delivered to WhatsApp (${phone})!`,
+        }));
+      } catch (err) {
+        console.warn('PDF receipt failed, falling back to text receipt:', err.message);
+      }
+    }
+
+    // 2. If PDF was not delivered (e.g. local walk-in invoice or PDF generation failed), send formatted text receipt
+    if (!pdfDelivered) {
+      try {
+        let feedbackUrl = '';
+        try {
+          if (invoice.clientId && isUUID(invoice.clientId)) {
+            const fbRes = await createFeedbackRequest({
+              clientId: invoice.clientId,
+              clientName: invoice.clientName,
+              appointmentId: isUUID(invoice.appointmentId) ? invoice.appointmentId : undefined,
+              service: invoice.items.map((it) => it.service || it.name).join(', '),
+              technician: invoice.items.map((it) => it.technician || 'Staff').join(', '),
+            });
+            feedbackUrl = fbRes?.url || '';
+          }
+        } catch (_) {}
 
         const message = buildReceiptWhatsAppMessage(
           invoice,
@@ -747,14 +1407,25 @@ export default function PendingInvoices() {
           getClientLoyalty(invoice.clientId),
           feedbackUrl
         );
-        await whatsappApi.sendMessage({
+
+        const sendPayload = {
           recipientPhone: phone,
           message,
           automationType: 'PAYMENT_CONFIRMATION',
-          clientId: invoice.clientId,
-          invoiceId: invoice.id,
           idempotencyKey: `receipt:${invoice.id}:${Date.now()}`,
-        });
+        };
+
+        if (invoice.clientId && isUUID(invoice.clientId)) {
+          sendPayload.clientId = String(invoice.clientId);
+        }
+        if (invoice.appointmentId && isUUID(invoice.appointmentId)) {
+          sendPayload.appointmentId = String(invoice.appointmentId);
+        }
+        if (invoice.id && isUUID(invoice.id)) {
+          sendPayload.invoiceId = String(invoice.id);
+        }
+
+        await whatsappApi.sendMessage(sendPayload);
         setSentReceiptInvoices((prev) => ({ ...prev, [invoice.id]: true }));
         setWhatsAppFeedback((prev) => ({
           ...prev,
@@ -763,15 +1434,15 @@ export default function PendingInvoices() {
       } catch (fallbackErr) {
         setWhatsAppFeedback((prev) => ({
           ...prev,
-          [invoice.id]: `Failed to send WhatsApp receipt: ${fallbackErr?.message || err?.message || 'Network error'}`,
+          [invoice.id]: `Failed to send WhatsApp receipt: ${fallbackErr?.message || 'Network error'}`,
         }));
       }
-    } finally {
-      setSendingWhatsAppId(null);
-      setTimeout(() => {
-        setWhatsAppFeedback((prev) => ({ ...prev, [invoice.id]: null }));
-      }, 7000);
     }
+
+    setSendingWhatsAppId(null);
+    setTimeout(() => {
+      setWhatsAppFeedback((prev) => ({ ...prev, [invoice.id]: null }));
+    }, 7000);
   };
 
   return (
@@ -789,11 +1460,23 @@ export default function PendingInvoices() {
               <span>Refresh</span>
             </Button>
             {canSellRetail && (
-              <Button onClick={openNewRetailSaleModal}>
-                <Plus size={16} strokeWidth={2.5} />
-                New Retail Sale
+              <Button
+                variant="secondary"
+                onClick={openNewRetailSaleModal}
+                title="Direct Retail Sale"
+              >
+                <ShoppingBag size={15} strokeWidth={2} />
+                <span>+ Retail Sale</span>
               </Button>
             )}
+            <Button
+              variant="primary"
+              onClick={openNewServiceModal}
+              title="Create Walk-In / Service Invoice"
+            >
+              <Sparkles size={15} strokeWidth={2.2} />
+              <span>+ New Service</span>
+            </Button>
           </div>
         }
       />
@@ -938,8 +1621,20 @@ export default function PendingInvoices() {
               <FileText size={40} className="text-border mx-auto mb-3" />
               <p className="text-sm font-semibold text-charcoal">No pending invoices.</p>
               <p className="text-xs text-muted-gray mt-1">
-                Invoices appear here after a technician completes a service.
+                Invoices appear here after a technician completes a service, or create a walk-in invoice directly.
               </p>
+              <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
+                <Button variant="primary" onClick={openNewServiceModal}>
+                  <Sparkles size={15} strokeWidth={2.2} />
+                  <span>+ New Service Invoice</span>
+                </Button>
+                {canSellRetail && (
+                  <Button variant="secondary" onClick={openNewRetailSaleModal}>
+                    <ShoppingBag size={15} strokeWidth={2} />
+                    <span>+ Retail Sale</span>
+                  </Button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1178,23 +1873,38 @@ export default function PendingInvoices() {
                           </div>
                         </div>
 
-                        {/* Collect Payment CTA */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
-                          <div className="text-xs text-muted-gray">
-                            Collecting will mark status as{' '}
-                            <span className="font-bold text-success">PAID</span> and move
-                            to Paid Today.
+                          {/* Collect Payment CTA */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
+                            <div className="text-xs text-muted-gray">
+                              Collecting will mark status as{' '}
+                              <span className="font-bold text-success">PAID</span> and move
+                              to Paid Today.
+                            </div>
+                            <Button
+                              className="w-full sm:w-auto min-w-[220px]"
+                              disabled={Boolean(collectingId)}
+                              onClick={() => handleCollectPayment(invoice)}
+                            >
+                              {collectingId === invoice.id ? (
+                                <>
+                                  <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
+                                  <span>Collecting Payment...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
+                                  <span>
+                                    Collect Payment (
+                                    {(discountAmount > 0
+                                      ? finalTotal
+                                      : invoice.total
+                                    ).toLocaleString('en-US')}{' '}
+                                    FCFA)
+                                  </span>
+                                </>
+                              )}
+                            </Button>
                           </div>
-                          <Button className="w-full sm:w-auto" onClick={() => handleCollectPayment(invoice)}>
-                            <DollarSign size={16} strokeWidth={1.8} />
-                            Collect Payment (
-                            {(discountAmount > 0
-                              ? finalTotal
-                              : invoice.total
-                            ).toLocaleString('en-US')}{' '}
-                            FCFA)
-                          </Button>
-                        </div>
                       </div>
                     )}
                   </div>
@@ -2274,18 +2984,582 @@ export default function PendingInvoices() {
                 <Button
                   variant="secondary"
                   className="flex-1 sm:flex-none"
+                  disabled={isCollectingNewSale}
                   onClick={closeNewRetailSaleModal}
                 >
                   Cancel
                 </Button>
                 <Button
-                  className="flex-1 sm:flex-none"
-                  disabled={newSaleCart.length === 0 || newSaleTotal <= 0}
+                  className="flex-1 sm:flex-none min-w-[200px]"
+                  disabled={newSaleCart.length === 0 || newSaleTotal <= 0 || isCollectingNewSale}
                   onClick={handleCollectNewSale}
                 >
-                  <DollarSign size={16} strokeWidth={1.8} />
-                  Collect Payment ({newSaleTotal.toLocaleString('en-US')} FCFA)
+                  {isCollectingNewSale ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
+                      <span>Collecting Payment...</span>
+                    </>
+                  ) : (
+                    <>
+                      <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
+                      <span>Collect Payment ({newSaleTotal.toLocaleString('en-US')} FCFA)</span>
+                    </>
+                  )}
                 </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          NEW WALK-IN / SERVICE INVOICE MODAL
+          ============================================================ */}
+      {showNewServiceModal && (
+        <div className="fixed inset-0 bg-charcoal/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-[20px] border border-border shadow-modal max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden my-auto animate-scale-up">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-border bg-warm-ivory/40 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-[12px] bg-sage/20 border border-sage/30 flex items-center justify-center text-sage-hover">
+                  <Sparkles size={20} strokeWidth={2.2} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-charcoal">
+                    New Walk-In / Service Invoice
+                  </h3>
+                  <p className="text-xs text-muted-gray">
+                    Create service invoice & assign performing technicians
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeNewServiceModal}
+                disabled={isSubmittingServiceInvoice}
+                className="w-8 h-8 rounded-full bg-white hover:bg-border/60 text-muted-gray hover:text-charcoal flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 pb-24">
+              {newServiceError && (
+                <div className="p-3 rounded-[10px] bg-error-soft border border-error/30 text-xs font-semibold text-error flex items-center gap-2">
+                  <span>⚠</span>
+                  <span>{newServiceError}</span>
+                </div>
+              )}
+
+              {/* 1. Client Type & Selection */}
+              <div className="space-y-3 bg-soft-cream/40 p-4 rounded-[14px] border border-border/70">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-charcoal uppercase tracking-wider">
+                    Customer Info:
+                  </label>
+                  <div className="flex items-center gap-1 bg-warm-ivory p-1 rounded-[10px] border border-border text-xs">
+                    <button
+                      type="button"
+                      onClick={() => { setNewServiceClientType('walkin'); setNewServiceError(''); }}
+                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${
+                        newServiceClientType === 'walkin'
+                          ? 'bg-white text-charcoal shadow-xs'
+                          : 'text-muted-gray hover:text-charcoal'
+                      }`}
+                    >
+                      Walk-in
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setNewServiceClientType('registered'); setNewServiceError(''); }}
+                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${
+                        newServiceClientType === 'registered'
+                          ? 'bg-white text-charcoal shadow-xs'
+                          : 'text-muted-gray hover:text-charcoal'
+                      }`}
+                    >
+                      Registered Client
+                    </button>
+                  </div>
+                </div>
+
+                {newServiceClientType === 'walkin' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-muted-gray mb-1">
+                        Client Name (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={newServiceWalkInName}
+                        onChange={(e) => setNewServiceWalkInName(e.target.value)}
+                        placeholder="e.g. Marie or leave blank for 'Walk in'"
+                        className="w-full h-[40px] px-3.5 bg-white border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-muted-gray mb-1">
+                        Phone Number (Optional)
+                      </label>
+                      <input
+                        type="tel"
+                        value={newServiceWalkInPhone}
+                        onChange={(e) => setNewServiceWalkInPhone(e.target.value)}
+                        placeholder="+237 6XX XX XX XX"
+                        className="w-full h-[40px] px-3.5 bg-white border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pt-1">
+                    <label className="block text-[11px] font-semibold text-muted-gray mb-1">
+                      Select Registered Client *
+                    </label>
+                    <SearchableSelect
+                      value={newServiceClientId}
+                      onChange={(val) => {
+                        setNewServiceClientId(val);
+                        setNewServiceError('');
+                      }}
+                      placeholder="-- Choose registered client --"
+                      searchPlaceholder="Search client by name or phone..."
+                      heightClass="h-[40px]"
+                      options={clients.map((c) => {
+                        const loyalty = getClientLoyalty(c.id);
+                        return {
+                          value: String(c.id),
+                          label: c.name,
+                          sublabel: c.phone || 'No phone number',
+                          badge: `${loyalty?.balance || 0} pts`,
+                        };
+                      })}
+                    />
+                  </div>
+                )}
+
+                {/* Referral Employee (Optional) */}
+                <div className="pt-2 border-t border-border/50">
+                  <label className="block text-[11px] font-semibold text-muted-gray mb-1">
+                    Introduced By / Referral Staff (Optional for Commission)
+                  </label>
+                  <SearchableSelect
+                    value={newServiceIntroducedById}
+                    onChange={(val) => setNewServiceIntroducedById(val)}
+                    placeholder="None / Direct Visit"
+                    searchPlaceholder="Search staff name..."
+                    heightClass="h-[38px]"
+                    options={[
+                      { value: '', label: 'None / Direct Visit' },
+                      ...referralStaff.map((staff) => ({
+                        value: String(staff.id),
+                        label: staff.name,
+                        sublabel: staff.role
+                          ? `${staff.role.charAt(0).toUpperCase() + staff.role.slice(1)}`
+                          : '',
+                      })),
+                    ]}
+                  />
+                </div>
+              </div>
+
+              {/* 2. Services List */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-charcoal uppercase tracking-wider">
+                      Services Rendered
+                    </span>
+                    <span className="text-[10px] font-bold bg-sage-soft text-[#4F6748] px-2 py-0.5 rounded-full">
+                      {newServiceLines.length}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addServiceLine}
+                    className="text-xs font-semibold text-[#4F6748] hover:text-[#3E5238] flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Plus size={14} strokeWidth={2.5} />
+                    <span>Add Another Service</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {newServiceLines.map((line, idx) => (
+                    <div
+                      key={line.id || idx}
+                      className="bg-warm-ivory/50 rounded-[14px] p-3.5 border border-border/80 space-y-2.5 relative group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-muted-gray uppercase tracking-wider">
+                          Service #{idx + 1}
+                        </span>
+                        {newServiceLines.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeServiceLine(idx)}
+                            className="w-6 h-6 rounded-full hover:bg-error-soft text-muted-gray hover:text-error flex items-center justify-center transition-colors cursor-pointer"
+                            title="Remove service"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {/* Service Picker */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-muted-gray mb-1">
+                            Service *
+                          </label>
+                          <SearchableSelect
+                            value={line.serviceId}
+                            onChange={(val) => handleServiceLineSelect(idx, val)}
+                            placeholder="-- Select Service --"
+                            searchPlaceholder="Search service name..."
+                            heightClass="h-[38px]"
+                            options={activeServices.map((s) => ({
+                              value: String(s.id),
+                              label: s.name,
+                              badge: `${(s.numericPrice || parseInt(String(s.price).replace(/[^0-9]/g, ''), 10) || 0).toLocaleString()} FCFA`,
+                              sublabel: s.duration ? `${s.duration} mins` : '',
+                            }))}
+                          />
+                        </div>
+
+                        {/* Technician Picker */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-muted-gray mb-1">
+                            Performing Technician *
+                          </label>
+                          <SearchableSelect
+                            value={line.technicianId}
+                            onChange={(val) => handleTechnicianLineSelect(idx, val)}
+                            placeholder="-- Assign Technician --"
+                            searchPlaceholder="Search technician..."
+                            heightClass="h-[38px]"
+                            options={activeTechnicians.map((t) => ({
+                              value: String(t.id),
+                              label: t.name,
+                              sublabel: t.specialties?.length > 0
+                                ? t.specialties.join(', ')
+                                : (t.role ? t.role.charAt(0).toUpperCase() + t.role.slice(1) : 'Technician'),
+                            }))}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                        {/* Price */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-muted-gray mb-1">
+                            Price (FCFA) *
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="500"
+                            value={line.price}
+                            onChange={(e) => handlePriceLineChange(idx, e.target.value)}
+                            placeholder="Price in FCFA"
+                            className="w-full h-[38px] px-3 bg-white border border-border rounded-[9px] text-xs text-charcoal font-bold outline-none focus:border-sage"
+                          />
+                        </div>
+
+                        {/* Product Note */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[10px] font-semibold text-muted-gray">
+                              Product Used (Optional)
+                            </label>
+                            {(() => {
+                              const rule = (consumptionRules || []).find(
+                                (r) => r.serviceName?.toLowerCase() === line.serviceName?.toLowerCase()
+                              );
+                              if (rule && rule.rules?.length > 0) {
+                                return (
+                                  <span className="text-[9px] text-[#4F6748] font-bold bg-[#DCE7D7] px-1.5 py-0.5 rounded">
+                                    Auto-deducts from stock
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+                          <input
+                            type="text"
+                            value={line.product}
+                            onChange={(e) => handleProductLineChange(idx, e.target.value)}
+                            placeholder="Optional custom/extra product note..."
+                            className="w-full h-[38px] px-3 bg-white border border-border rounded-[9px] text-xs text-charcoal outline-none focus:border-sage"
+                          />
+                          {(() => {
+                            const rule = (consumptionRules || []).find(
+                              (r) => r.serviceName?.toLowerCase() === line.serviceName?.toLowerCase()
+                            );
+                            if (rule && rule.rules?.length > 0) {
+                              return (
+                                <p className="text-[10px] text-muted-gray mt-1 truncate">
+                                  <span className="font-semibold text-charcoal">Auto: </span>
+                                  {rule.rules.map((r) => `${r.quantity}${r.unit} ${r.productName}`).join(', ')}
+                                </p>
+                              );
+                            }
+                            return (
+                              <p className="text-[10px] text-muted-gray mt-1">
+                                Stock auto-deducts according to Service Stock rules.
+                              </p>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Optional Retail Items */}
+              <div className="bg-soft-cream/30 rounded-[14px] p-3.5 border border-border/70 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShoppingBag size={14} className="text-sage" />
+                    <span className="text-xs font-bold text-charcoal">
+                      Add Retail Products (Optional)
+                    </span>
+                    {newServiceRetailCart.length > 0 && (
+                      <span className="text-[10px] font-bold bg-[#DCE7D7] text-[#4F6748] px-2 py-0.5 rounded-full">
+                        {newServiceRetailCart.length} item{newServiceRetailCart.length !== 1 ? 's' : ''} ({newServiceRetailTotal.toLocaleString()} FCFA)
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowRetailInServiceModal(!showRetailInServiceModal)}
+                    className="text-xs font-semibold text-[#4F6748] hover:underline cursor-pointer"
+                  >
+                    {showRetailInServiceModal ? 'Hide Products' : '+ Browse Retail'}
+                  </button>
+                </div>
+
+                {/* Selected retail items list */}
+                {newServiceRetailCart.length > 0 && (
+                  <div className="divide-y divide-border/40 bg-white rounded-[10px] border border-border/60 overflow-hidden text-xs">
+                    {newServiceRetailCart.map((it) => (
+                      <div key={it.productId} className="flex items-center justify-between px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-gray">{it.qty}x</span>
+                          <span className="font-semibold text-charcoal">{it.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                          <span className="font-bold text-charcoal">{it.price.toLocaleString()} FCFA</span>
+                          <button
+                            type="button"
+                            onClick={() => removeRetailFromServiceCart(it.productId)}
+                            className="text-muted-gray hover:text-error transition-colors"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Retail Browser if expanded */}
+                {showRetailInServiceModal && (
+                  <div className="pt-2 border-t border-border/50 space-y-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewServiceRetailTab('drinks')}
+                        className={`text-xs px-2.5 py-1 rounded-[7px] font-semibold cursor-pointer ${
+                          newServiceRetailTab === 'drinks' ? 'bg-charcoal text-white' : 'bg-white text-muted-gray border border-border'
+                        }`}
+                      >
+                        🥤 Drinks ({drinks.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewServiceRetailTab('cosmetics')}
+                        className={`text-xs px-2.5 py-1 rounded-[7px] font-semibold cursor-pointer ${
+                          newServiceRetailTab === 'cosmetics' ? 'bg-charcoal text-white' : 'bg-white text-muted-gray border border-border'
+                        }`}
+                      >
+                        💄 Cosmetics ({cosmetics.length})
+                      </button>
+                    </div>
+
+                    <div className="max-h-40 overflow-y-auto divide-y divide-border/30 bg-white rounded-[10px] border border-border">
+                      {(newServiceRetailTab === 'drinks' ? drinks : cosmetics).map((product) => {
+                        const inCart = newServiceRetailCart.some((it) => it.productId === product.id);
+                        return (
+                          <div key={product.id} className="flex items-center justify-between p-2 hover:bg-soft-cream/30 text-xs">
+                            <div>
+                              <p className="font-semibold text-charcoal">{product.name}</p>
+                              <p className="text-[10px] text-muted-gray">
+                                {product.price.toLocaleString()} FCFA · Stock: {product.stock}
+                              </p>
+                            </div>
+                            <Button
+                              variant="secondary"
+                              className="h-[30px] px-2.5 text-xs font-semibold"
+                              disabled={product.stock <= 0}
+                              onClick={() => addRetailToServiceCart(product)}
+                            >
+                              {inCart ? 'Add More' : '+ Add'}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Notes */}
+              <div>
+                <label className="block text-[11px] font-semibold text-muted-gray mb-1">
+                  Technician Notes / Client Observations (Optional)
+                </label>
+                <textarea
+                  value={newServiceNotes}
+                  onChange={(e) => setNewServiceNotes(e.target.value)}
+                  placeholder="Any preferences or skin observations..."
+                  rows={2}
+                  className="w-full p-3 bg-white border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage resize-none"
+                />
+              </div>
+
+              {/* 5. Payment Selection (for instant checkout) */}
+              <div className="p-4 rounded-[14px] bg-warm-ivory/60 border border-border/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-charcoal uppercase tracking-wider">
+                    Select Workflow:
+                  </label>
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-[10px] border border-border text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setNewServiceActionChoice('pending')}
+                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${
+                        newServiceActionChoice === 'pending'
+                          ? 'bg-[#4F6748] text-white shadow-xs'
+                          : 'text-muted-gray hover:text-charcoal'
+                      }`}
+                    >
+                      Pending Invoice
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewServiceActionChoice('pay_now')}
+                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${
+                        newServiceActionChoice === 'pay_now'
+                          ? 'bg-[#4F6748] text-white shadow-xs'
+                          : 'text-muted-gray hover:text-charcoal'
+                      }`}
+                    >
+                      Collect Now
+                    </button>
+                  </div>
+                </div>
+
+                {newServiceActionChoice === 'pay_now' ? (
+                  <div>
+                    <label className="block text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1.5">
+                      Payment Method:
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {PAYMENT_METHODS.map((pm) => {
+                        const isSelected = newServicePaymentMethod === pm.key;
+                        return (
+                          <button
+                            key={pm.key}
+                            type="button"
+                            onClick={() => setNewServicePaymentMethod(pm.key)}
+                            className={`h-[40px] px-2.5 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                                : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
+                            }`}
+                          >
+                            <span
+                              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                                isSelected ? 'border-sage bg-sage' : 'border-muted-gray/50 bg-white'
+                              }`}
+                            >
+                              {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </span>
+                            <span>{pm.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-gray">
+                    Invoice will be created in <strong>Pending</strong> status so Reception can review and collect payment when the client is ready.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-5 sm:px-6 py-4 border-t border-border bg-soft-cream/40 shrink-0">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">
+                  Grand Total ({newServiceLines.length} service{newServiceLines.length !== 1 ? 's' : ''})
+                </span>
+                <span className="text-lg font-black text-charcoal">
+                  {newServiceGrandTotal.toLocaleString('en-US')} FCFA
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1 sm:flex-none"
+                  disabled={isSubmittingServiceInvoice}
+                  onClick={closeNewServiceModal}
+                >
+                  Cancel
+                </Button>
+
+                {newServiceActionChoice === 'pay_now' ? (
+                  <Button
+                    className="flex-1 sm:flex-none min-w-[210px]"
+                    disabled={isSubmittingServiceInvoice || newServiceGrandTotal <= 0}
+                    onClick={() => handleSubmitWalkInServiceInvoice(true)}
+                  >
+                    {isSubmittingServiceInvoice ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
+                        <span>Processing Payment...</span>
+                      </>
+                    ) : (
+                      <>
+                        <DollarSign size={16} strokeWidth={2} className="shrink-0" />
+                        <span>Collect Payment ({newServiceGrandTotal.toLocaleString('en-US')} FCFA)</span>
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    className="flex-1 sm:flex-none min-w-[190px]"
+                    disabled={isSubmittingServiceInvoice || newServiceGrandTotal <= 0}
+                    onClick={() => handleSubmitWalkInServiceInvoice(false)}
+                  >
+                    {isSubmittingServiceInvoice ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
+                        <span>Creating Invoice...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={16} strokeWidth={2.5} className="shrink-0" />
+                        <span>Create as Pending</span>
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
           </div>

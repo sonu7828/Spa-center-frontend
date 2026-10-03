@@ -13,6 +13,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { invoicesApi, paymentsApi } from '../services/api';
 import { useAuth } from './AuthContext';
+import { isUUID } from '../utils/uuid';
 
 const InvoiceContext = createContext();
 
@@ -210,7 +211,7 @@ export function InvoiceProvider({ children }) {
       const today = new Date().toISOString().slice(0, 10);
 
       // Backend invoice creation if appointmentId is UUID
-      if (targetAptId && typeof targetAptId === 'string' && targetAptId.includes('-')) {
+      if (targetAptId && isUUID(targetAptId)) {
         try {
           const res = await invoicesApi.create({
             appointmentId: targetAptId,
@@ -343,7 +344,7 @@ export function InvoiceProvider({ children }) {
       const amountToPay = Number(paymentDetails.finalTotal || paymentDetails.amount || 0);
 
       // Backend payment if invoiceId is UUID
-      if (typeof invoiceId === 'string' && invoiceId.includes('-')) {
+      if (isUUID(invoiceId)) {
         try {
           if (paymentDetails.discount !== undefined && Number(paymentDetails.discount) > 0) {
             await invoicesApi.update(invoiceId, {
@@ -424,7 +425,7 @@ export function InvoiceProvider({ children }) {
           ? 'ORANGE_MONEY'
           : 'CASH';
 
-      if (typeof invoiceId === 'string' && invoiceId.includes('-')) {
+      if (isUUID(invoiceId)) {
         try {
           await paymentsApi.create({
             invoiceId,
@@ -688,7 +689,7 @@ export function InvoiceProvider({ children }) {
       // Build backend payload for retail products
       const retailProductsPayload = [];
       for (const it of formattedItems) {
-        if (it.productId && String(it.productId).includes('-')) {
+        if (it.productId && isUUID(it.productId)) {
           retailProductsPayload.push({
             retailProductId: String(it.productId),
             quantity: it.qty,
@@ -700,9 +701,9 @@ export function InvoiceProvider({ children }) {
       if (retailProductsPayload.length > 0) {
         try {
           const targetClientId =
-            client?.id && String(client.id).includes('-')
+            client?.id && isUUID(client.id)
               ? client.id
-              : clientId && String(clientId).includes('-')
+              : clientId && isUUID(clientId)
               ? clientId
               : undefined;
 
@@ -755,6 +756,121 @@ export function InvoiceProvider({ children }) {
           localStorage.setItem('omega_local_invoices', JSON.stringify(list));
         } catch (_) {}
       }
+
+      setInvoices((prev) => [newInvoice, ...prev.filter((inv) => String(inv.id) !== String(newInvoice.id))]);
+      return newInvoice;
+    },
+    []
+  );
+
+  // Create a Walk-In / Direct Service Invoice (Pending or Instant Paid)
+  const createWalkInServiceInvoice = useCallback(
+    async ({
+      client,
+      clientId,
+      clientName,
+      clientPhone,
+      services = [],
+      retailItems = [],
+      status = 'PENDING_PAYMENT',
+      paymentMethod = 'CASH',
+      notes = '',
+      introducedBy = null,
+      introducedById = null,
+      discount = 0,
+    }) => {
+      const today = new Date().toISOString().slice(0, 10);
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const generatedId = `INV-${Date.now()}`;
+      const invNumber = formatInvoiceNumber(Date.now());
+
+      const cleanServiceItems = (services || []).map((s, idx) => {
+        const numPrice =
+          typeof s.price === 'number'
+            ? s.price
+            : parseInt(String(s.price).replace(/[^0-9]/g, ''), 10) || 0;
+        return {
+          id: `svc-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+          serviceId: s.serviceId || s.id || null,
+          service: s.service || s.name,
+          name: s.service || s.name,
+          technician: s.technician || 'Staff',
+          technicianId: s.technicianId || null,
+          price: numPrice,
+          product: s.product || null,
+          category: s.category || 'SERVICES',
+          type: 'service',
+        };
+      });
+
+      const cleanRetailItems = (retailItems || []).map((r, idx) => {
+        const numPrice =
+          typeof r.price === 'number'
+            ? r.price
+            : parseInt(String(r.price).replace(/[^0-9]/g, ''), 10) || 0;
+        const qty = Math.max(1, parseInt(r.qty, 10) || 1);
+        return {
+          id: `retail-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+          productId: r.productId || r.id,
+          service: r.name || r.service,
+          name: r.name || r.service,
+          unitPrice: numPrice,
+          qty,
+          price: numPrice * qty,
+          type: r.type || 'drink',
+          category: r.type === 'drink' ? 'DRINKS' : 'COSMETICS',
+          technician: 'Reception',
+        };
+      });
+
+      const allItems = [...cleanServiceItems, ...cleanRetailItems];
+      const total = allItems.reduce((sum, it) => sum + (it.price || 0), 0);
+      const finalTotal = Math.max(0, total - (discount || 0));
+      const isPaid = status === 'PAID';
+
+      const resolvedClientName = client?.name?.trim() || clientName?.trim() || 'Walk in';
+      const resolvedClientId = client?.id || clientId || null;
+      const resolvedPhone = client?.phone || clientPhone || '';
+
+      const newInvoice = {
+        id: generatedId,
+        invoiceNumber: invNumber,
+        clientId: resolvedClientId,
+        clientName: resolvedClientName,
+        clientPhone: resolvedPhone,
+        status: isPaid ? 'PAID' : 'PENDING_PAYMENT',
+        date: today,
+        items: allItems,
+        total,
+        discount: discount || 0,
+        finalTotal,
+        paidAmount: isPaid ? finalTotal : 0,
+        remainingAmount: isPaid ? 0 : finalTotal,
+        paymentMethod: isPaid ? paymentMethod : null,
+        paidAt: isPaid ? now.toISOString() : null,
+        paidTime: isPaid ? timeStr : null,
+        payments: isPaid ? [{ amount: finalTotal, paymentMethod, paidAt: now.toISOString() }] : [],
+        pointsEarned: 0,
+        pointsRedeemed: 0,
+        notes: notes || null,
+        introducedBy: introducedBy || null,
+        introducedById: introducedById || null,
+        createdAt: now.toISOString(),
+        submittedAt: now.toISOString(),
+        isWalkIn: !resolvedClientId,
+      };
+
+      // Persist in localStorage
+      try {
+        const raw = localStorage.getItem('omega_local_invoices');
+        const list = raw ? JSON.parse(raw) : [];
+        list.unshift(newInvoice);
+        localStorage.setItem('omega_local_invoices', JSON.stringify(list));
+      } catch (_) {}
 
       setInvoices((prev) => [newInvoice, ...prev.filter((inv) => String(inv.id) !== String(newInvoice.id))]);
       return newInvoice;
@@ -855,7 +971,7 @@ export function InvoiceProvider({ children }) {
               : String(appointmentId))
           : null;
 
-      const isBackendApt = Boolean(targetAptId && typeof targetAptId === 'string' && String(targetAptId).includes('-'));
+      const isBackendApt = Boolean(targetAptId && isUUID(targetAptId));
       if (isBackendApt) {
         try {
           const res = await invoicesApi.create({
@@ -970,7 +1086,7 @@ export function InvoiceProvider({ children }) {
           ? String(appointmentId)
           : null;
       const today = new Date().toISOString().slice(0, 10);
-      const isBackendApt = Boolean(targetAptId && targetAptId.includes('-'));
+      const isBackendApt = Boolean(targetAptId && isUUID(targetAptId));
 
       // 1. Try Backend Invoice Creation if UUID
       if (isBackendApt) {
@@ -1112,6 +1228,7 @@ export function InvoiceProvider({ children }) {
         addRetailItemToInvoice,
         removeRetailItemFromInvoice,
         createRetailSaleInvoice,
+        createWalkInServiceInvoice,
         addServiceToInvoice,
         removeServiceFromInvoice,
         getOpenVisits,

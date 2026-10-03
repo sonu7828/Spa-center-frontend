@@ -11,6 +11,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { stockApi } from '../services/api';
 import { useAuth } from './AuthContext';
+import { isUUID } from '../utils/uuid';
 
 const RetailContext = createContext();
 
@@ -219,18 +220,18 @@ export function RetailProvider({ children }) {
         const payloadItems = [];
         for (const it of invoiceItems) {
           let prodId = it.productId || it.id;
-          if (!prodId || !String(prodId).includes('-')) {
+          if (!isUUID(prodId)) {
             const found = retailProducts.find(
               (p) =>
-                (it.name && p.name.toLowerCase() === it.name.toLowerCase()) ||
-                (it.service && p.name.toLowerCase() === it.service.toLowerCase())
+                (it.name && p.name?.toLowerCase() === it.name.toLowerCase()) ||
+                (it.service && p.name?.toLowerCase() === it.service.toLowerCase())
             );
-            if (found && String(found.id).includes('-')) {
+            if (found && isUUID(found.id)) {
               prodId = found.id;
             }
           }
 
-          if (prodId && String(prodId).includes('-')) {
+          if (isUUID(prodId)) {
             const qty = Math.max(1, parseInt(it.qty !== undefined ? it.qty : it.quantity, 10) || 1);
             payloadItems.push({ productId: prodId, quantity: qty });
           }
