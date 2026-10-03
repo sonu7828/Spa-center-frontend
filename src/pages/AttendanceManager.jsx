@@ -36,7 +36,6 @@ import {
   X,
   Plus,
   UserPlus,
-  Upload,
   Camera,
   Info,
   RotateCcw,
@@ -81,7 +80,11 @@ export default function AttendanceManager() {
   const [canOverrideRecord, setCanOverrideRecord] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fileInputRef = useRef(null);
+  // Live camera states for manager verification photo (live capture only, no upload)
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
 
   // Today attendance filter: 'all' | 'present' | 'working' | 'completed' | 'absent'
   const [todayFilter, setTodayFilter] = useState('all');
@@ -225,8 +228,60 @@ export default function AttendanceManager() {
 
   const hasActiveFilters = filterDate || filterEmployee || filterStatus;
 
+  // Camera cleanup & capture functions for live photo verification
+  const stopLiveCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const startLiveCamera = async () => {
+    setCameraError(null);
+    setIsCameraActive(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 100);
+    } catch (err) {
+      console.warn('Camera access failed:', err);
+      setCameraError('Camera access denied or not available. Please allow camera permission.');
+      setIsCameraActive(false);
+    }
+  };
+
+  const captureLivePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    setManualPhoto(dataUrl);
+    stopLiveCamera();
+  };
+
   // Manual entry handlers
   const resetManualForm = () => {
+    stopLiveCamera();
     setManualEmployee('');
     setManualDate(getDoualaTodayStr());
     setManualClockIn(getDoualaCurrentTimeStr());
@@ -235,21 +290,7 @@ export default function AttendanceManager() {
     setManualReason('');
     setManualPhoto(null);
     setCanOverrideRecord(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handlePhotoUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setFeedback({ type: 'error', message: 'Please select a valid image file.' });
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setManualPhoto(reader.result);
-    };
-    reader.readAsDataURL(file);
+    setCameraError(null);
   };
 
   // Derived states for currently selected employee in manual modal
@@ -1050,7 +1091,7 @@ export default function AttendanceManager() {
                 </div>
               </div>
               <button
-                onClick={() => setShowManualForm(false)}
+                onClick={() => { stopLiveCamera(); setShowManualForm(false); }}
                 className="w-8 h-8 rounded-full bg-warm-ivory hover:bg-border flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X size={16} className="text-muted-gray" />
@@ -1209,53 +1250,109 @@ export default function AttendanceManager() {
                 </div>
               </div>
 
-              {/* Optional Verification Photo */}
+              {/* Live Verification Photo (Live Capture Only — No File Upload) */}
               <div>
                 <label className="text-[10px] font-semibold text-muted-gray uppercase tracking-wider mb-1.5 block">
-                  Verification Photo (Optional)
+                  Verification Photo (Optional Live Photo)
                 </label>
                 {manualPhoto ? (
-                  <div className="rounded-[12px] border border-border p-3 bg-warm-ivory flex items-center justify-between gap-3">
+                  /* 1. Captured Photo Preview */
+                  <div className="rounded-[12px] border border-border p-3 bg-warm-ivory flex items-center justify-between gap-3 shadow-xs">
                     <div className="flex items-center gap-3">
                       <img
                         src={manualPhoto}
-                        alt="Preview"
-                        className="w-14 h-14 rounded-[8px] object-cover border border-border"
+                        alt="Live Verification Preview"
+                        className="w-14 h-14 rounded-[8px] object-cover border border-sage/40 shadow-xs"
                       />
                       <div>
-                        <p className="text-xs font-semibold text-charcoal">Photo Attached</p>
-                        <p className="text-[10px] text-success flex items-center gap-1 mt-0.5">
-                          <CheckCircle size={11} /> Photo ready to save
+                        <p className="text-xs font-bold text-charcoal flex items-center gap-1.5">
+                          <CheckCircle size={13} className="text-[#4F6748]" />
+                          Live Photo Captured
+                        </p>
+                        <p className="text-[10px] text-muted-gray mt-0.5">
+                          Verified & ready to save with attendance
                         </p>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setManualPhoto(null);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                      }}
-                      className="px-2.5 py-1.5 rounded-[8px] border border-error/30 text-error hover:bg-error-soft text-xs font-medium transition-colors cursor-pointer"
-                    >
-                      Remove
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={startLiveCamera}
+                        className="px-2.5 py-1.5 rounded-[8px] border border-border bg-white hover:bg-warm-ivory text-charcoal text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1"
+                      >
+                        <RotateCcw size={12} />
+                        Retake
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManualPhoto(null);
+                          stopLiveCamera();
+                        }}
+                        className="px-2.5 py-1.5 rounded-[8px] border border-error/30 text-error hover:bg-error-soft text-xs font-medium transition-colors cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : isCameraActive ? (
+                  /* 2. Active Live Camera Viewfinder */
+                  <div className="space-y-2.5 p-3 rounded-[14px] bg-charcoal/5 border border-border">
+                    <div className="relative rounded-[12px] overflow-hidden bg-black aspect-4/3 max-h-[240px] flex items-center justify-center border border-border shadow-inner">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover scale-x-[-1]"
+                      />
+                      <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-medium backdrop-blur-xs">
+                        <span className="w-2 h-2 rounded-full bg-error animate-pulse"></span>
+                        <span>Live Camera</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={captureLivePhoto}
+                        className="flex items-center gap-2 px-4 py-2 rounded-[10px] bg-sage text-white text-xs font-semibold hover:bg-sage-hover transition-all shadow-xs cursor-pointer active:scale-95"
+                      >
+                        <Camera size={14} />
+                        <span>Capture Photo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopLiveCamera}
+                        className="px-3 py-2 rounded-[10px] border border-border bg-white text-xs font-medium text-muted-gray hover:text-charcoal transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ) : (
+                  /* 3. Initial State: Button to Open Live Camera (No file upload) */
                   <div>
-                    <label className="flex flex-col items-center justify-center p-3.5 border border-dashed border-border hover:border-sage rounded-[12px] bg-warm-ivory cursor-pointer transition-colors group">
-                      <Upload size={16} className="text-muted-gray group-hover:text-sage mb-1 transition-colors" />
-                      <span className="text-xs font-medium text-charcoal group-hover:text-sage transition-colors">
-                        Upload / Add Verification Photo
+                    <div className="flex flex-col items-center justify-center p-4 border border-dashed border-border/80 hover:border-sage rounded-[12px] bg-warm-ivory/60 transition-all text-center">
+                      <button
+                        type="button"
+                        onClick={startLiveCamera}
+                        className="flex items-center gap-2 px-4 py-2 rounded-[10px] bg-sage text-white text-xs font-semibold hover:bg-sage-hover transition-all shadow-xs cursor-pointer active:scale-95"
+                      >
+                        <Camera size={15} />
+                        <span>Take Live Photo</span>
+                      </button>
+                      <span className="text-[10px] text-muted-gray mt-2">
+                        Take a live verification photo with device camera (no upload)
                       </span>
-                      <span className="text-[9px] text-muted-gray mt-0.5">Optional for manager manual entry</span>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handlePhotoUpload}
-                      />
-                    </label>
+                    </div>
+
+                    {cameraError && (
+                      <div className="mt-2 p-2.5 rounded-[9px] bg-error-soft border border-error/20 text-xs text-error flex items-center gap-2">
+                        <AlertCircle size={14} className="shrink-0" />
+                        <span>{cameraError}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
