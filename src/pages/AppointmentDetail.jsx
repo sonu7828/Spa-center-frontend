@@ -131,7 +131,7 @@ export default function AppointmentDetail() {
   };
   const canMarkLate = role === 'manager' || role === 'reception';
   const canMarkNoShow = role === 'manager' || role === 'reception';
-  const canCloseService = role === 'manager' || role === 'technician';
+  const canCloseService = role === 'manager' || role === 'technician' || role === 'reception';
   const canCancel = role === 'manager' || role === 'reception';
 
   const handleCancelAppointment = async () => {
@@ -365,7 +365,7 @@ export default function AppointmentDetail() {
 
       {/* Actions — role-aware */}
       {!isClosed && apt.status !== 'cancelled' && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
           {canMarkLate && (
             <Button
               variant="secondary"

@@ -36,7 +36,7 @@ const RECEPTION_ROUTES = [
   '/', '/dashboard',
   '/clients', '/clients/new', '/clients/:id',
   '/appointments', '/appointments/new', '/appointments/:id',
-  '/appointments/:id/late', '/appointments/:id/no-show',
+  '/appointments/:id/late', '/appointments/:id/no-show', '/appointments/:id/close',
   '/referrals', '/rebooking', '/invoices', '/expenses', '/expenses/new', '/attendance',
   '/whatsapp-automations', '/client-feedback',
   '/services', '/products', '/retail', '/stock',

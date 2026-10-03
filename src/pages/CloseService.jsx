@@ -56,12 +56,9 @@ export default function CloseService() {
   const alreadyClosed = isAppointmentClosed(id) || apt?.status === 'completed';
   const alreadyInvoiced = isAppointmentInvoiced(id);
 
-  // Technician: block if not own appointment. Reception: no close service access.
+  // Technician: block if not own appointment.
   if (apt && user?.role === 'technician' && apt.technicianName !== user?.name) {
     return <Navigate to={ROLE_HOME[user.role] || '/appointments'} replace />;
-  }
-  if (user?.role === 'reception') {
-    return <Navigate to={ROLE_HOME[user.role] || '/clients'} replace />;
   }
 
   // Find linked client ID
