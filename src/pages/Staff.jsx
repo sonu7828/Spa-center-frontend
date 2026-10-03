@@ -54,7 +54,8 @@ const roleBadgeStyles = {
 };
 
 export default function Staff() {
-  const { allUsers, addUser, editUser, deactivateUser, activateUser, resetUserPassword, refreshUsers } = useAuth();
+  const { user, allUsers, addUser, editUser, deactivateUser, activateUser, resetUserPassword, refreshUsers } = useAuth();
+  const isManager = user?.role === 'manager';
   const { specialties, getActiveSpecialties, addSpecialty, editSpecialty, toggleSpecialtyActive, deleteSpecialty } = useServices();
 
   useEffect(() => {
@@ -290,22 +291,25 @@ export default function Staff() {
     <div>
       <PageHeader
         title="Staff / Users"
+        subtitle={isManager ? "Manage team members, roles, specialties, and access permissions." : "View team members, roles, specialties, and contact directory (View Only)."}
         action={
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => setShowSpecialtyPanel(!showSpecialtyPanel)}>
-              <Tags size={15} />
-              Specialties
-            </Button>
-            <Button onClick={openAddModal}>
-              <UserPlus size={16} strokeWidth={2} />
-              Add Staff
-            </Button>
-          </div>
+          isManager ? (
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" onClick={() => setShowSpecialtyPanel(!showSpecialtyPanel)}>
+                <Tags size={15} />
+                Specialties
+              </Button>
+              <Button onClick={openAddModal}>
+                <UserPlus size={16} strokeWidth={2} />
+                Add Staff
+              </Button>
+            </div>
+          ) : null
         }
       />
 
       {/* ── Specialty Management Panel ── */}
-      {showSpecialtyPanel && (
+      {isManager && showSpecialtyPanel && (
         <div className="bg-white border border-border rounded-[16px] shadow-card p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-charcoal uppercase tracking-wider">
@@ -452,7 +456,9 @@ export default function Staff() {
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Phone</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Role</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Specialties</th>
-                <th className="text-right px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Actions</th>
+                {isManager && (
+                  <th className="text-right px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -485,31 +491,33 @@ export default function Staff() {
                       <span className="text-sm text-muted-gray">—</span>
                     )}
                   </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => openEditModal(u)}
-                        className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer flex items-center gap-1"
-                        title="Edit"
-                      >
-                        <Pencil size={12} /> Edit
-                      </button>
-                      <button
-                        onClick={() => openResetModal(u)}
-                        className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center gap-1"
-                        title="Reset Password"
-                      >
-                        <RotateCcw size={11} /> Reset PW
-                      </button>
-                      <button
-                        onClick={() => deactivateUser(u.id)}
-                        className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center gap-1"
-                        title="Deactivate"
-                      >
-                        <UserX size={12} /> Deactivate
-                      </button>
-                    </div>
-                  </td>
+                  {isManager && (
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => openEditModal(u)}
+                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer flex items-center gap-1"
+                          title="Edit"
+                        >
+                          <Pencil size={12} /> Edit
+                        </button>
+                        <button
+                          onClick={() => openResetModal(u)}
+                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center gap-1"
+                          title="Reset Password"
+                        >
+                          <RotateCcw size={11} /> Reset PW
+                        </button>
+                        <button
+                          onClick={() => deactivateUser(u.id)}
+                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center gap-1"
+                          title="Deactivate"
+                        >
+                          <UserX size={12} /> Deactivate
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -546,26 +554,28 @@ export default function Staff() {
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-border/40">
-                <button
-                  onClick={() => openEditModal(u)}
-                  className="h-[38px] px-2 rounded-[9px] text-xs font-semibold text-charcoal bg-soft-cream border border-border hover:bg-sage-soft transition-all cursor-pointer flex items-center justify-center gap-1"
-                >
-                  <Pencil size={12} /> Edit
-                </button>
-                <button
-                  onClick={() => openResetModal(u)}
-                  className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center justify-center gap-1"
-                >
-                  <RotateCcw size={11} /> Reset PW
-                </button>
-                <button
-                  onClick={() => deactivateUser(u.id)}
-                  className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center justify-center gap-1"
-                >
-                  <UserX size={12} /> Deact
-                </button>
-              </div>
+              {isManager && (
+                <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-border/40">
+                  <button
+                    onClick={() => openEditModal(u)}
+                    className="h-[38px] px-2 rounded-[9px] text-xs font-semibold text-charcoal bg-soft-cream border border-border hover:bg-sage-soft transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Pencil size={12} /> Edit
+                  </button>
+                  <button
+                    onClick={() => openResetModal(u)}
+                    className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <RotateCcw size={11} /> Reset PW
+                  </button>
+                  <button
+                    onClick={() => deactivateUser(u.id)}
+                    className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <UserX size={12} /> Deact
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -594,14 +604,16 @@ export default function Staff() {
                         {u.role}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right">
-                      <button
-                        onClick={() => activateUser(u.id)}
-                        className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-success bg-success-soft border border-success/20 hover:bg-success/15 transition-all cursor-pointer flex items-center gap-1 ml-auto"
-                      >
-                        <UserCheck size={12} /> Reactivate
-                      </button>
-                    </td>
+                    {isManager && (
+                      <td className="px-5 py-3 text-right">
+                        <button
+                          onClick={() => activateUser(u.id)}
+                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-success bg-success-soft border border-success/20 hover:bg-success/15 transition-all cursor-pointer flex items-center gap-1 ml-auto"
+                        >
+                          <UserCheck size={12} /> Reactivate
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -617,12 +629,14 @@ export default function Staff() {
                     <h4 className="text-sm font-semibold text-muted-gray line-through">{u.name}</h4>
                     <p className="text-xs text-muted-gray">{u.email} {u.phone ? `· ${u.phone}` : ''} · {u.role}</p>
                   </div>
-                  <button
-                    onClick={() => activateUser(u.id)}
-                    className="h-[36px] px-3 rounded-[9px] text-xs font-semibold text-success bg-success-soft border border-success/20 hover:bg-success/20 transition-all cursor-pointer flex items-center gap-1 shrink-0"
-                  >
-                    <UserCheck size={13} /> Reactivate
-                  </button>
+                  {isManager && (
+                    <button
+                      onClick={() => activateUser(u.id)}
+                      className="h-[36px] px-3 rounded-[9px] text-xs font-semibold text-success bg-success-soft border border-success/20 hover:bg-success/20 transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                    >
+                      <UserCheck size={13} /> Reactivate
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

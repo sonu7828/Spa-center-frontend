@@ -41,7 +41,7 @@ const navSections = [
   {
     title: 'MAIN',
     items: [
-      { to: '/',             label: 'Dashboard',    icon: LayoutDashboard, roles: ['manager', 'technician'] },
+      { to: '/',             label: 'Dashboard',    icon: LayoutDashboard, roles: ['manager', 'reception', 'technician'] },
       { to: '/appointments', label: 'Appointments', icon: CalendarDays,    roles: ['manager', 'reception', 'technician'] },
       { to: '/clients',      label: 'Clients',      icon: Users,           roles: ['manager', 'reception'] },
     ],
@@ -51,24 +51,24 @@ const navSections = [
     items: [
       { to: '/invoices',         label: 'Invoices',        icon: FileText,       roles: ['manager', 'reception'] },
       { to: '/expenses',         label: 'Expenses',        icon: Receipt,        roles: ['manager', 'reception'] },
-      { to: '/shared-work',      label: 'Shared Work',     icon: Users,          roles: ['manager', 'technician'] },
-      { to: '/services',         label: 'Services',        icon: Sparkles,       roles: ['manager'] },
-      { to: '/stock',            label: 'Service Stock',   icon: Package,        roles: ['manager'] },
-      { to: '/products',         label: 'Retail Products', icon: ShoppingBag,    roles: ['manager'] },
-      { to: '/technicians/daily', label: 'Tech Summary',    icon: ClipboardList,  roles: ['manager', 'technician'] },
-      { to: '/cleaning-records', label: 'Cleaning',        icon: ClipboardCheck, roles: ['manager'] },
+      { to: '/shared-work',      label: 'Shared Work',     icon: Users,          roles: ['manager', 'reception', 'technician'] },
+      { to: '/services',         label: 'Services',        icon: Sparkles,       roles: ['manager', 'reception'] },
+      { to: '/stock',            label: 'Service Stock',   icon: Package,        roles: ['manager', 'reception'] },
+      { to: '/products',         label: 'Retail Products', icon: ShoppingBag,    roles: ['manager', 'reception'] },
+      { to: '/technicians/daily', label: 'Tech Summary',    icon: ClipboardList,  roles: ['manager', 'reception', 'technician'] },
+      { to: '/cleaning-records', label: 'Cleaning',        icon: ClipboardCheck, roles: ['manager', 'reception'] },
       { to: '/cleaning',         label: 'Cleaning',        icon: Camera,         roles: ['cleaner'] },
-      { to: '/staff',            label: 'Staff',           icon: UserCog,        roles: ['manager'] },
-      { to: '/daily-close',      label: 'Daily Close',     icon: FileCheck,      roles: ['manager'] },
-      { to: '/attendance/manager', label: 'Attendance',    icon: Clock,          roles: ['manager'] },
+      { to: '/staff',            label: 'Staff',           icon: UserCog,        roles: ['manager', 'reception'] },
+      { to: '/daily-close',      label: 'Daily Close',     icon: FileCheck,      roles: ['manager', 'reception'] },
+      { to: '/attendance/manager', label: 'Staff Attendance', icon: Clock,        roles: ['manager', 'reception'] },
       { to: '/attendance',       label: 'My Attendance',   icon: Clock,          roles: ['technician', 'reception'] },
     ],
   },
   {
     title: 'CLIENT GROWTH',
     items: [
-      { to: '/social-media',          label: 'Social Media', icon: Share2,        roles: ['manager'] },
-      { to: '/loyalty-settings',      label: 'Loyalty',      icon: Award,         roles: ['manager'] },
+      { to: '/social-media',          label: 'Social Media', icon: Share2,        roles: ['manager', 'reception'] },
+      { to: '/loyalty-settings',      label: 'Loyalty',      icon: Award,         roles: ['manager', 'reception'] },
       { to: '/referrals',             label: 'Referrals',    icon: UserRoundPlus, roles: ['manager', 'reception'] },
       { to: '/rebooking',             label: 'Rebooking',    icon: RefreshCw,     roles: ['manager', 'reception'] },
       { to: '/whatsapp-automations',  label: 'WhatsApp',     icon: MessageCircle, roles: ['manager', 'reception'] },
@@ -97,7 +97,7 @@ export default function Sidebar({ isOpen, onClose }) {
     navigate('/login', { replace: true });
   };
 
-  const showSectionTitles = role === 'manager';
+  const showSectionTitles = role === 'manager' || role === 'reception';
 
   return (
     <>
@@ -157,7 +157,7 @@ export default function Sidebar({ isOpen, onClose }) {
                       <li key={to}>
                         <NavLink
                           to={to}
-                          end={to === '/'}
+                          end={to !== '/clients' && to !== '/appointments'}
                           onClick={onClose}
                           className={({ isActive }) =>
                             `flex items-center gap-2.5 px-2.5 h-[38px] sm:h-[40px] rounded-[10px] text-xs sm:text-sm font-medium transition-all duration-150 ${

@@ -70,6 +70,8 @@ export default function DailyClose() {
 
   const role = (user?.role || '').toLowerCase();
   const isManager = role === 'manager';
+  const isReception = role === 'reception';
+  const canAccess = isManager || isReception;
 
   const today = new Date().toLocaleDateString('en-GB', {
     day: 'numeric',
@@ -79,7 +81,7 @@ export default function DailyClose() {
 
   // Fetch real reports analytics for today
   const fetchDailyReports = useCallback(async () => {
-    if (!isManager) return;
+    if (!canAccess) return;
     setLoadingReports(true);
     try {
       const [dashRes, revRes, techRes, stockRes, custRes] = await Promise.allSettled([
@@ -110,16 +112,16 @@ export default function DailyClose() {
     } finally {
       setLoadingReports(false);
     }
-  }, [isManager]);
+  }, [canAccess]);
 
   useEffect(() => {
     fetchDailyReports();
   }, [fetchDailyReports]);
 
   // =========================================================================
-  // RBAC GUARD: MANAGER ONLY
+  // RBAC GUARD: MANAGER & RECEPTION ONLY
   // =========================================================================
-  if (!isManager) {
+  if (!canAccess) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center p-6 bg-white rounded-[16px] border border-border shadow-card my-8">
         <div className="w-14 h-14 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mb-4 border border-rose-100">
@@ -127,7 +129,7 @@ export default function DailyClose() {
         </div>
         <h2 className="text-xl font-bold text-charcoal mb-2">Access Denied (403)</h2>
         <p className="text-sm text-muted-gray max-w-md mb-6">
-          Daily Close financial summary is restricted to the General Manager.
+          Daily Close financial summary is restricted to Management and Reception staff.
         </p>
         <Button variant="primary" onClick={() => navigate('/')}>
           Back to Dashboard
@@ -285,40 +287,47 @@ export default function DailyClose() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-          <div className="flex flex-col">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-gray mb-1 flex items-center gap-1">
-              <Phone size={11} className="text-sage" />
-              Boss WhatsApp Number
-            </label>
-            <input
-              type="text"
-              placeholder="+2376XXXXXXXX or +91..."
-              value={bossPhone}
-              onChange={(e) => handleBossPhoneChange(e.target.value)}
-              className="h-11 px-3.5 bg-soft-cream/40 border border-border rounded-[10px] text-xs font-mono font-semibold text-charcoal focus:border-sage outline-none min-w-[210px]"
-            />
-          </div>
+        {isManager ? (
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex flex-col">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-gray mb-1 flex items-center gap-1">
+                <Phone size={11} className="text-sage" />
+                Boss WhatsApp Number
+              </label>
+              <input
+                type="text"
+                placeholder="+2376XXXXXXXX or +91..."
+                value={bossPhone}
+                onChange={(e) => handleBossPhoneChange(e.target.value)}
+                className="h-11 px-3.5 bg-soft-cream/40 border border-border rounded-[10px] text-xs font-mono font-semibold text-charcoal focus:border-sage outline-none min-w-[210px]"
+              />
+            </div>
 
-          <Button
-            variant={sent ? 'secondary' : 'primary'}
-            onClick={handleSend}
-            disabled={sending || sent || !bossPhone.trim()}
-            className="h-11 px-6 text-sm font-semibold shrink-0 cursor-pointer"
-          >
-            {sent ? (
-              <>
-                <Check size={16} className="text-success" />
-                Sent to Boss WhatsApp
-              </>
-            ) : (
-              <>
-                <MessageCircle size={16} />
-                {sending ? 'Sending...' : 'Send to Boss WhatsApp'}
-              </>
-            )}
-          </Button>
-        </div>
+            <Button
+              variant={sent ? 'secondary' : 'primary'}
+              onClick={handleSend}
+              disabled={sending || sent || !bossPhone.trim()}
+              className="h-11 px-6 text-sm font-semibold shrink-0 cursor-pointer"
+            >
+              {sent ? (
+                <>
+                  <Check size={16} className="text-success" />
+                  Sent to Boss WhatsApp
+                </>
+              ) : (
+                <>
+                  <MessageCircle size={16} />
+                  {sending ? 'Sending...' : 'Send to Boss WhatsApp'}
+                </>
+              )}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-[12px] bg-soft-cream border border-border text-xs text-charcoal font-medium">
+            <span className="w-2 h-2 rounded-full bg-sage shrink-0" />
+            <span>Reception View: Verified end-of-day tally. Official dispatch to Boss is handled by General Manager.</span>
+          </div>
+        )}
       </div>
 
       {sendError && (

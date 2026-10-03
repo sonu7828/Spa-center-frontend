@@ -14,8 +14,12 @@ import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useLoyalty } from '../context/LoyaltyContext';
 import { useServices } from '../context/ServicesContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function LoyaltySettings() {
+  const { user } = useAuth();
+  const isManager = user?.role === 'manager';
+
   const { settings, updateSettings } = useLoyalty();
   const { services: existingServices } = useServices();
 
@@ -96,10 +100,18 @@ export default function LoyaltySettings() {
     <div className="w-full space-y-6">
       <PageHeader
         title="Loyalty Settings"
-        subtitle="Configure rules for earning and redeeming loyalty points."
+        subtitle={isManager ? "Configure rules for earning and redeeming loyalty points." : "View rules for earning and redeeming loyalty points (View Only)."}
       />
 
+      {!isManager && (
+        <div className="flex items-center gap-2.5 p-4 bg-soft-cream border border-border rounded-[14px] text-xs font-medium text-charcoal">
+          <AlertCircle size={16} className="text-sage shrink-0" />
+          <span>View-Only Mode: You are viewing loyalty reward rules. Only Managers can edit point ratios, redemption discounts, and expiry periods.</span>
+        </div>
+      )}
+
       <form onSubmit={handleSave} className="space-y-6 w-full">
+        <fieldset disabled={!isManager} className="space-y-6 w-full border-0 p-0 m-0">
         {/* ROW 1: Default Spending Rule (Left) & Redeem Rule (Right) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full">
           {/* 1. Default Spending Rule */}
@@ -359,23 +371,25 @@ export default function LoyaltySettings() {
                         <span className="text-xs text-muted-gray font-medium">pts</span>
                       </div>
 
-                      {hasCustom ? (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveServiceRule(svcName)}
-                          className="h-[36px] px-3 rounded-[8px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer inline-flex items-center gap-1"
-                        >
-                          <Trash2 size={12} />
-                          Reset
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleServicePointsChange(svcName, 20)}
-                          className="h-[36px] px-3 rounded-[8px] text-xs font-medium text-sage bg-white border border-sage/30 hover:bg-sage-soft transition-all cursor-pointer"
-                        >
-                          + Set Fixed
-                        </button>
+                      {isManager && (
+                        hasCustom ? (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveServiceRule(svcName)}
+                            className="h-[36px] px-3 rounded-[8px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <Trash2 size={12} />
+                            Reset
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleServicePointsChange(svcName, 20)}
+                            className="h-[36px] px-3 rounded-[8px] text-xs font-medium text-sage bg-white border border-sage/30 hover:bg-sage-soft transition-all cursor-pointer"
+                          >
+                            + Set Fixed
+                          </button>
+                        )
                       )}
                     </div>
                   </div>
@@ -422,19 +436,22 @@ export default function LoyaltySettings() {
             </div>
           )}
         </div>
+        </fieldset>
 
         {/* Save Button */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-2">
-          {saved && (
-            <span className="text-xs font-semibold text-success flex items-center justify-center gap-1.5 animate-fadeIn">
-              <Check size={14} /> Settings Saved Successfully!
-            </span>
-          )}
-          <Button type="submit" className="w-full sm:w-auto h-[44px] px-6">
-            <Save size={16} strokeWidth={2} />
-            Save Settings
-          </Button>
-        </div>
+        {isManager && (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-2">
+            {saved && (
+              <span className="text-xs font-semibold text-success flex items-center justify-center gap-1.5 animate-fadeIn">
+                <Check size={14} /> Settings Saved Successfully!
+              </span>
+            )}
+            <Button type="submit" className="w-full sm:w-auto h-[44px] px-6">
+              <Save size={16} strokeWidth={2} />
+              Save Settings
+            </Button>
+          </div>
+        )}
       </form>
     </div>
   );

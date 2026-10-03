@@ -61,6 +61,7 @@ const QUICK_REASONS = [
 
 export default function AttendanceManager() {
   const { user, allUsers } = useAuth();
+  const isManager = user?.role === 'manager';
   const { todayAllRecords, allRecordsSorted, addManualAttendance } = useAttendance();
 
   const [activeTab, setActiveTab] = useState('today');
@@ -191,12 +192,17 @@ export default function AttendanceManager() {
     { label: 'Not Started', value: notStartedCount, icon: AlertCircle, color: 'text-muted-gray', bg: 'bg-[#F3F0EC]' },
   ];
 
-  // Unique employee names for filter dropdown
+  // Unique employee names for filter dropdown (all trackable staff + any from records)
   const uniqueEmployees = useMemo(() => {
     const names = new Set();
-    allRecordsSorted.forEach((r) => names.add(r.employeeName));
-    return [...names].sort();
-  }, [allRecordsSorted]);
+    employees.forEach((e) => {
+      if (e.name) names.add(e.name);
+    });
+    allRecordsSorted.forEach((r) => {
+      if (r.employeeName) names.add(r.employeeName);
+    });
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [employees, allRecordsSorted]);
 
   // Filtered history records
   const filteredHistory = useMemo(() => {
@@ -359,17 +365,19 @@ export default function AttendanceManager() {
             </span>
           </div>
 
-          {/* Add Manual Attendance Button */}
-          <button
-            onClick={() => {
-              resetManualForm();
-              setShowManualForm(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-[11px] bg-[#4F6748] hover:bg-[#3E5238] text-white text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer shadow-sm active:scale-[0.98]"
-          >
-            <Plus size={15} strokeWidth={2.5} />
-            <span>Add Manual Attendance</span>
-          </button>
+          {/* Add Manual Attendance Button (Manager Only) */}
+          {isManager && (
+            <button
+              onClick={() => {
+                resetManualForm();
+                setShowManualForm(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-[11px] bg-[#4F6748] hover:bg-[#3E5238] text-white text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer shadow-sm active:scale-[0.98]"
+            >
+              <Plus size={15} strokeWidth={2.5} />
+              <span>Add Manual Attendance</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -513,9 +521,11 @@ export default function AttendanceManager() {
                       <th className="text-left text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
                         Type / Notes
                       </th>
-                      <th className="text-right text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
-                        Action
-                      </th>
+                      {isManager && (
+                        <th className="text-right text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
+                          Action
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40">
@@ -713,35 +723,37 @@ export default function AttendanceManager() {
                             )}
                           </td>
 
-                          {/* Action */}
-                          <td className="py-3 px-4 text-right whitespace-nowrap">
-                            {status === 'not_started' ? (
-                              <button
-                                type="button"
-                                onClick={() => openManualForEmployee(emp.id, 'working')}
-                                title="Add manual attendance for this employee"
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[8px] bg-warm-ivory hover:bg-white text-charcoal text-[11px] font-semibold border border-border hover:border-sage/60 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
-                              >
-                                <Plus size={12} strokeWidth={2.5} />
-                                <span>Manual In</span>
-                              </button>
-                            ) : status === 'working' ? (
-                              <button
-                                type="button"
-                                onClick={() => openManualForEmployee(emp.id, 'completed')}
-                                title="Record clock out for this employee"
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[8px] bg-warm-ivory hover:bg-white text-charcoal text-[11px] font-semibold border border-border hover:border-sage/60 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
-                              >
-                                <LogOut size={12} />
-                                <span>Clock Out</span>
-                              </button>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#4F6748]">
-                                <CheckCircle size={12} />
-                                <span>Done</span>
-                              </span>
-                            )}
-                          </td>
+                          {/* Action (Manager only) */}
+                          {isManager && (
+                            <td className="py-3 px-4 text-right whitespace-nowrap">
+                              {status === 'not_started' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openManualForEmployee(emp.id, 'working')}
+                                  title="Add manual attendance for this employee"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[8px] bg-warm-ivory hover:bg-white text-charcoal text-[11px] font-semibold border border-border hover:border-sage/60 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+                                >
+                                  <Plus size={12} strokeWidth={2.5} />
+                                  <span>Manual In</span>
+                                </button>
+                              ) : status === 'working' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openManualForEmployee(emp.id, 'completed')}
+                                  title="Record clock out for this employee"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[8px] bg-warm-ivory hover:bg-white text-charcoal text-[11px] font-semibold border border-border hover:border-sage/60 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+                                >
+                                  <LogOut size={12} />
+                                  <span>Clock Out</span>
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#4F6748]">
+                                  <CheckCircle size={12} />
+                                  <span>Done</span>
+                                </span>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -1007,7 +1019,7 @@ export default function AttendanceManager() {
       </div>
 
       {/* ===================== MANUAL ATTENDANCE MODAL ===================== */}
-      {showManualForm && (
+      {isManager && showManualForm && (
         <div className="fixed inset-0 bg-charcoal/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowManualForm(false)}>
           <div
             className="bg-soft-cream rounded-[16px] border border-border shadow-card max-w-lg w-full overflow-hidden max-h-[90vh] overflow-y-auto"
@@ -1057,12 +1069,12 @@ export default function AttendanceManager() {
                     setManualEmployee(selectedId);
                     const empRec = attendanceMap[selectedId];
                     if (empRec) {
-                      const preloadedIn = parseTo24Hour(empRec.clockIn, empRec.clockInRaw);
+                      const preloadedIn = parseToDouala24Hour(empRec.clockIn, empRec.clockInRaw);
                       if (preloadedIn) setManualClockIn(preloadedIn);
                       setCanOverrideRecord(true);
                       if (empRec.status === 'working') {
                         setManualStatus('completed');
-                        setManualClockOut(getCurrentTimeStr());
+                        setManualClockOut(getDoualaCurrentTimeStr());
                         if (!manualReason) setManualReason('Manager recorded employee clock out');
                       }
                     } else {

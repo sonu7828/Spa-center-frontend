@@ -41,6 +41,7 @@ export default function TechnicianDailySummary() {
 
   const role = (user?.role || '').toLowerCase();
   const isTechnicianRole = role === 'technician';
+  const isReception = role === 'reception';
   const isCleaner = role === 'cleaner';
 
   const dynamicTechnicians = allUsers.filter(
@@ -238,9 +239,15 @@ export default function TechnicianDailySummary() {
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-charcoal font-medium">Referral Commission</span>
-            <span className="font-extrabold text-[#4F6748] bg-sage-soft border border-sage/20 px-2.5 py-1 rounded-[6px] text-xs">
-              {commissionEarned.toLocaleString('en-US')} FCFA
-            </span>
+            {isReception ? (
+              <span className="font-mono text-xs text-muted-gray bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
+                [Confidential - Manager Only]
+              </span>
+            ) : (
+              <span className="font-extrabold text-[#4F6748] bg-sage-soft border border-sage/20 px-2.5 py-1 rounded-[6px] text-xs">
+                {commissionEarned.toLocaleString('en-US')} FCFA
+              </span>
+            )}
           </div>
 
           <div className="flex items-center justify-between text-sm">

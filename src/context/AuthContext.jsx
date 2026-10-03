@@ -33,11 +33,15 @@ const MANAGER_ROUTES = [
 ];
 
 const RECEPTION_ROUTES = [
+  '/', '/dashboard',
   '/clients', '/clients/new', '/clients/:id',
   '/appointments', '/appointments/new', '/appointments/:id',
   '/appointments/:id/late', '/appointments/:id/no-show',
   '/referrals', '/rebooking', '/invoices', '/expenses', '/expenses/new', '/attendance',
   '/whatsapp-automations', '/client-feedback',
+  '/services', '/products', '/retail', '/stock',
+  '/staff', '/attendance/manager', '/technicians/daily', '/shared-work',
+  '/cleaning-records', '/loyalty-settings', '/social-media', '/daily-close',
 ];
 
 const TECHNICIAN_ROUTES = [
@@ -63,8 +67,8 @@ export const ROLE_ROUTES = {
 export const ROLE_HOME = {
   manager: '/',
   MANAGER: '/',
-  reception: '/appointments',
-  RECEPTION: '/appointments',
+  reception: '/',
+  RECEPTION: '/',
   technician: '/',
   TECHNICIAN: '/',
   cleaner: '/cleaning',

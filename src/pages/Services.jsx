@@ -15,6 +15,7 @@ import { Plus, Pencil, Check, X, Sparkles, Clock, DollarSign, ToggleLeft, Toggle
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useServices } from '../context/ServicesContext';
+import { useAuth } from '../context/AuthContext';
 
 // Categories are now dynamic from specialties
 
@@ -26,6 +27,9 @@ const categoryBadgeStyles = {
 };
 
 export default function Services() {
+  const { user } = useAuth();
+  const isManager = user?.role === 'manager';
+
   const { 
     services, addService, editService, toggleServiceActive, deleteService, getActiveSpecialties,
     specialties, addSpecialty, editSpecialty, toggleSpecialtyActive, deleteSpecialty
@@ -167,20 +171,22 @@ export default function Services() {
     <div className="w-full space-y-6">
       <PageHeader
         title="Services"
-        subtitle="Manage spa services, pricing, duration, and categories."
+        subtitle={isManager ? "Manage spa services, pricing, duration, and categories." : "View spa services, pricing, duration, and categories (View Only)."}
         action={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowCategoryModal(true)}
-              className="h-[40px] px-3.5 rounded-[10px] text-sm font-semibold text-charcoal bg-white border border-border hover:bg-soft-cream transition-all flex items-center gap-1.5"
-            >
-              <FolderTree size={16} /> Manage Categories
-            </button>
-            <Button onClick={openAddModal}>
-              <Plus size={16} strokeWidth={2} />
-              Add Service
-            </Button>
-          </div>
+          isManager ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowCategoryModal(true)}
+                className="h-[40px] px-3.5 rounded-[10px] text-sm font-semibold text-charcoal bg-white border border-border hover:bg-soft-cream transition-all flex items-center gap-1.5"
+              >
+                <FolderTree size={16} /> Manage Categories
+              </button>
+              <Button onClick={openAddModal}>
+                <Plus size={16} strokeWidth={2} />
+                Add Service
+              </Button>
+            </div>
+          ) : null
         }
       />
 
@@ -212,9 +218,11 @@ export default function Services() {
                 <th className="text-center px-5 py-3 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">
                   Status
                 </th>
-                <th className="text-right px-5 py-3 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">
-                  Actions
-                </th>
+                {isManager && (
+                  <th className="text-right px-5 py-3 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -246,48 +254,50 @@ export default function Services() {
                       Active
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => openEditModal(svc)}
-                        className="h-[32px] px-2.5 rounded-[7px] text-[11px] font-medium text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer inline-flex items-center gap-1"
-                        title="Edit Service"
-                      >
-                        <Pencil size={12} /> Edit
-                      </button>
-                      <button
-                        onClick={() => toggleServiceActive(svc.id)}
-                        className="h-[32px] px-2.5 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer inline-flex items-center gap-1"
-                        title="Deactivate Service"
-                      >
-                        Deactivate
-                      </button>
-                      {confirmDeleteId === svc.id ? (
-                        <div className="inline-flex items-center gap-1">
-                          <button
-                            onClick={() => handleDelete(svc.id)}
-                            className="h-[32px] px-2.5 rounded-[7px] text-[11px] font-semibold text-white bg-[#B34040] hover:bg-[#962d2d] transition-all cursor-pointer inline-flex items-center gap-1 shadow-xs"
-                          >
-                            <Trash2 size={11} /> Confirm
-                          </button>
-                          <button
-                            onClick={() => setConfirmDeleteId(null)}
-                            className="h-[32px] px-2 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ) : (
+                  {isManager && (
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => setConfirmDeleteId(svc.id)}
-                          className="h-[32px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer inline-flex items-center gap-1"
-                          title="Delete Service"
+                          onClick={() => openEditModal(svc)}
+                          className="h-[32px] px-2.5 rounded-[7px] text-[11px] font-medium text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer inline-flex items-center gap-1"
+                          title="Edit Service"
                         >
-                          <Trash2 size={12} />
+                          <Pencil size={12} /> Edit
                         </button>
-                      )}
-                    </div>
-                  </td>
+                        <button
+                          onClick={() => toggleServiceActive(svc.id)}
+                          className="h-[32px] px-2.5 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer inline-flex items-center gap-1"
+                          title="Deactivate Service"
+                        >
+                          Deactivate
+                        </button>
+                        {confirmDeleteId === svc.id ? (
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => handleDelete(svc.id)}
+                              className="h-[32px] px-2.5 rounded-[7px] text-[11px] font-semibold text-white bg-[#B34040] hover:bg-[#962d2d] transition-all cursor-pointer inline-flex items-center gap-1 shadow-xs"
+                            >
+                              <Trash2 size={11} /> Confirm
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="h-[32px] px-2 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(svc.id)}
+                            className="h-[32px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer inline-flex items-center gap-1"
+                            title="Delete Service"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -322,44 +332,46 @@ export default function Services() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2 border-t border-border/40">
-                <button
-                  onClick={() => openEditModal(svc)}
-                  className="flex-1 h-[40px] px-3 rounded-[10px] text-xs font-semibold text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer inline-flex items-center justify-center gap-1.5"
-                >
-                  <Pencil size={13} /> Edit
-                </button>
-                <button
-                  onClick={() => toggleServiceActive(svc.id)}
-                  className="flex-1 h-[40px] px-3 rounded-[10px] text-xs font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer inline-flex items-center justify-center"
-                >
-                  Deactivate
-                </button>
-                {confirmDeleteId === svc.id ? (
-                  <div className="inline-flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => handleDelete(svc.id)}
-                      className="h-[40px] px-3 rounded-[10px] text-xs font-semibold text-white bg-[#B34040] hover:bg-[#962d2d] transition-all cursor-pointer inline-flex items-center gap-1"
-                    >
-                      <Trash2 size={13} /> Confirm
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="h-[40px] px-2.5 rounded-[10px] text-xs font-medium text-muted-gray bg-white border border-border cursor-pointer"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ) : (
+              {isManager && (
+                <div className="flex items-center gap-2 pt-2 border-t border-border/40">
                   <button
-                    onClick={() => setConfirmDeleteId(svc.id)}
-                    className="h-[40px] px-3 rounded-[10px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer inline-flex items-center justify-center shrink-0"
-                    title="Delete Service"
+                    onClick={() => openEditModal(svc)}
+                    className="flex-1 h-[40px] px-3 rounded-[10px] text-xs font-semibold text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer inline-flex items-center justify-center gap-1.5"
                   >
-                    <Trash2 size={14} />
+                    <Pencil size={13} /> Edit
                   </button>
-                )}
-              </div>
+                  <button
+                    onClick={() => toggleServiceActive(svc.id)}
+                    className="flex-1 h-[40px] px-3 rounded-[10px] text-xs font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer inline-flex items-center justify-center"
+                  >
+                    Deactivate
+                  </button>
+                  {confirmDeleteId === svc.id ? (
+                    <div className="inline-flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleDelete(svc.id)}
+                        className="h-[40px] px-3 rounded-[10px] text-xs font-semibold text-white bg-[#B34040] hover:bg-[#962d2d] transition-all cursor-pointer inline-flex items-center gap-1"
+                      >
+                        <Trash2 size={13} /> Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="h-[40px] px-2.5 rounded-[10px] text-xs font-medium text-muted-gray bg-white border border-border cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(svc.id)}
+                      className="h-[40px] px-3 rounded-[10px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer inline-flex items-center justify-center shrink-0"
+                      title="Delete Service"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -402,40 +414,42 @@ export default function Services() {
                         Inactive
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => toggleServiceActive(svc.id)}
-                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-success bg-success-soft border border-success/20 hover:bg-success/20 transition-all cursor-pointer inline-flex items-center gap-1"
-                        >
-                          Reactivate
-                        </button>
-                        {confirmDeleteId === svc.id ? (
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              onClick={() => handleDelete(svc.id)}
-                              className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-semibold text-white bg-[#B34040] hover:bg-[#962d2d] transition-all cursor-pointer inline-flex items-center gap-1 shadow-xs"
-                            >
-                              <Trash2 size={11} /> Confirm
-                            </button>
-                            <button
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="h-[30px] px-2 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ) : (
+                    {isManager && (
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => setConfirmDeleteId(svc.id)}
-                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer inline-flex items-center gap-1"
-                            title="Delete Service"
+                            onClick={() => toggleServiceActive(svc.id)}
+                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-success bg-success-soft border border-success/20 hover:bg-success/20 transition-all cursor-pointer inline-flex items-center gap-1"
                           >
-                            <Trash2 size={12} />
+                            Reactivate
                           </button>
-                        )}
-                      </div>
-                    </td>
+                          {confirmDeleteId === svc.id ? (
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => handleDelete(svc.id)}
+                                className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-semibold text-white bg-[#B34040] hover:bg-[#962d2d] transition-all cursor-pointer inline-flex items-center gap-1 shadow-xs"
+                              >
+                                <Trash2 size={11} /> Confirm
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="h-[30px] px-2 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmDeleteId(svc.id)}
+                              className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer inline-flex items-center gap-1"
+                              title="Delete Service"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -459,38 +473,40 @@ export default function Services() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-2 border-t border-border/40">
-                  <button
-                    onClick={() => toggleServiceActive(svc.id)}
-                    className="flex-1 h-[38px] px-3 rounded-[9px] text-xs font-semibold text-success bg-success-soft border border-success/20 hover:bg-success/20 transition-all cursor-pointer inline-flex items-center justify-center"
-                  >
-                    Reactivate
-                  </button>
-                  {confirmDeleteId === svc.id ? (
-                    <div className="inline-flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => handleDelete(svc.id)}
-                        className="h-[38px] px-3 rounded-[9px] text-xs font-semibold text-white bg-[#B34040] hover:bg-[#962d2d] transition-all cursor-pointer inline-flex items-center gap-1"
-                      >
-                        <Trash2 size={12} /> Confirm
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-muted-gray bg-white border border-border cursor-pointer"
-                      >
-                        <X size={13} />
-                      </button>
-                    </div>
-                  ) : (
+                {isManager && (
+                  <div className="flex items-center gap-2 pt-2 border-t border-border/40">
                     <button
-                      onClick={() => setConfirmDeleteId(svc.id)}
-                      className="h-[38px] px-3 rounded-[9px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer inline-flex items-center justify-center shrink-0"
-                      title="Delete Service"
+                      onClick={() => toggleServiceActive(svc.id)}
+                      className="flex-1 h-[38px] px-3 rounded-[9px] text-xs font-semibold text-success bg-success-soft border border-success/20 hover:bg-success/20 transition-all cursor-pointer inline-flex items-center justify-center"
                     >
-                      <Trash2 size={13} />
+                      Reactivate
                     </button>
-                  )}
-                </div>
+                    {confirmDeleteId === svc.id ? (
+                      <div className="inline-flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleDelete(svc.id)}
+                          className="h-[38px] px-3 rounded-[9px] text-xs font-semibold text-white bg-[#B34040] hover:bg-[#962d2d] transition-all cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <Trash2 size={12} /> Confirm
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-muted-gray bg-white border border-border cursor-pointer"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(svc.id)}
+                        className="h-[38px] px-3 rounded-[9px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer inline-flex items-center justify-center shrink-0"
+                        title="Delete Service"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

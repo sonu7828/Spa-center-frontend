@@ -51,21 +51,23 @@ export default function SharedWork() {
   const { deductServiceStock, isAppointmentClosed } = useOperations();
 
   const isManager = user?.role === 'manager';
+  const isReception = user?.role === 'reception';
+  const canViewAll = isManager || isReception;
   const activeCatalogServices = getActiveServices ? getActiveServices() : catalogServices.filter((s) => s.active !== false);
   const activeTechnicians = allUsers.filter((u) => u.role === 'technician' && u.active !== false);
 
-  // 1. FILTER VISITS: Only show appointments where logged-in user is MAIN TECHNICIAN (or Manager sees all)
+  // 1. FILTER VISITS: Only show appointments where logged-in user is MAIN TECHNICIAN (or Manager / Reception sees all)
   const eligibleAppointments = useMemo(() => {
     return appointments.filter((apt) => {
       // Must not be no-show or cancelled
       if (apt.status === 'no-show' || apt.status === 'cancelled') return false;
       // Main Technician check: technician can only access their own assigned appointments
-      if (!isManager && apt.technicianName !== user?.name && apt.technicianId !== user?.id) {
+      if (!canViewAll && apt.technicianName !== user?.name && apt.technicianId !== user?.id) {
         return false;
       }
       return true;
     });
-  }, [appointments, isManager, user]);
+  }, [appointments, canViewAll, user]);
 
   // Selected appointment currently being edited in Shared Work
   const initialAptId = searchParams.get('appointmentId');
@@ -368,6 +370,8 @@ export default function SharedWork() {
               <p className="font-semibold text-xs sm:text-sm text-charcoal truncate">
                 {isManager ? (
                   <>Manager View: <span className="text-sage font-bold">All Client Visits</span></>
+                ) : isReception ? (
+                  <>Reception View: <span className="text-sage font-bold">All Client Visits (View Only)</span></>
                 ) : (
                   <>Main Technician: <span className="text-sage font-bold">{user?.name}</span></>
                 )}
@@ -379,6 +383,8 @@ export default function SharedWork() {
             <p className="text-[11px] text-muted-gray truncate">
               {isManager
                 ? 'Review and manage shared technician visits across all staff.'
+                : isReception
+                ? 'View-only review of collaborative technician visits across all staff.'
                 : 'You are viewing only appointments assigned to you as Main Technician.'}
             </p>
           </div>
@@ -394,7 +400,7 @@ export default function SharedWork() {
             No Assigned Visits Found
           </h3>
           <p className="text-xs sm:text-sm text-muted-gray leading-relaxed mb-4">
-            {isManager
+            {canViewAll
               ? 'No active client visits or scheduled appointments for today.'
               : `You have no appointments assigned to you as Main Technician today. Other technicians' visits cannot be accessed.`}
           </p>
@@ -545,7 +551,7 @@ export default function SharedWork() {
                       Work Performed During This Visit ({currentDraftLines.length})
                     </p>
 
-                    {!isPaid && !isPending && (
+                    {!isPaid && !isPending && !isReception && (
                       <Button
                         variant="secondary"
                         onClick={handleOpenAddModal}
@@ -561,19 +567,21 @@ export default function SharedWork() {
                     {currentDraftLines.length === 0 ? (
                       <div className="p-6 text-center bg-soft-cream/40 border border-dashed border-border rounded-[12px]">
                         <p className="text-xs text-muted-gray mb-2">No services recorded in this draft visit.</p>
-                        <Button
-                          variant="secondary"
-                          onClick={handleOpenAddModal}
-                          className="text-xs h-8 px-3 gap-1 mx-auto"
-                        >
-                          <Plus size={13} />
-                          <span>Add Performed Service</span>
-                        </Button>
+                        {!isReception && (
+                          <Button
+                            variant="secondary"
+                            onClick={handleOpenAddModal}
+                            className="text-xs h-8 px-3 gap-1 mx-auto"
+                          >
+                            <Plus size={13} />
+                            <span>Add Performed Service</span>
+                          </Button>
+                        )}
                       </div>
                     ) : (
                       currentDraftLines.map((line, idx) => {
                         const isMain = line.technician === activeApt.technicianName;
-                        const canDelete = !isPaid && !isPending;
+                        const canDelete = !isPaid && !isPending && !isReception;
 
                         return (
                           <div
@@ -597,7 +605,7 @@ export default function SharedWork() {
                               </div>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[11px] text-muted-gray">Performed by:</span>
-                                {!isPaid && !isPending ? (
+                                {!isPaid && !isPending && !isReception ? (
                                   <select
                                     value={line.technician}
                                     onChange={(e) => handleUpdateLineTechnician(line.id, e.target.value)}
@@ -658,14 +666,21 @@ export default function SharedWork() {
                 </div>
 
                 {!isPaid && !isPending && (
-                  <Button
-                    variant="primary"
-                    onClick={handleCompleteAndSubmit}
-                    className="w-full sm:w-auto text-xs sm:text-sm h-11 px-5 justify-center gap-2 font-bold shadow-sm"
-                  >
-                    <CheckCircle2 size={16} strokeWidth={2.2} />
-                    <span>Complete Shared Work & Submit</span>
-                  </Button>
+                  !isReception ? (
+                    <Button
+                      variant="primary"
+                      onClick={handleCompleteAndSubmit}
+                      className="w-full sm:w-auto text-xs sm:text-sm h-11 px-5 justify-center gap-2 font-bold shadow-sm"
+                    >
+                      <CheckCircle2 size={16} strokeWidth={2.2} />
+                      <span>Complete Shared Work & Submit</span>
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs font-semibold text-muted-gray bg-soft-cream px-3 py-2 rounded-[10px] border border-border">
+                      <FileCheck size={14} className="text-sage" />
+                      <span>View Only · Managed by Main Tech / Manager</span>
+                    </div>
+                  )
                 )}
 
                 {isPending && (

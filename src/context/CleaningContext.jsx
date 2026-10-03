@@ -18,7 +18,7 @@ export function CleaningProvider({ children }) {
   const [loading, setLoading] = useState(false);
 
   const role = (user?.role || '').toLowerCase();
-  const canAccessCleaning = isAuthenticated && (role === 'cleaner' || role === 'manager');
+  const canAccessCleaning = isAuthenticated && (role === 'cleaner' || role === 'manager' || role === 'reception');
 
   const refreshRecords = useCallback(async () => {
     if (!canAccessCleaning) {

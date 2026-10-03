@@ -81,13 +81,6 @@ export default function Dashboard() {
   const isManager = role === 'manager';
   const isCleaner = role === 'cleaner';
 
-  // =========================================================================
-  // RECEPTIONIST ACCESS BLOCKED (REDIRECT TO /appointments)
-  // =========================================================================
-  if (isReception) {
-    return <Navigate to="/appointments" replace />;
-  }
-
   const today = new Date().toLocaleDateString('en-GB', {
     timeZone: 'Africa/Douala',
     day: 'numeric',
