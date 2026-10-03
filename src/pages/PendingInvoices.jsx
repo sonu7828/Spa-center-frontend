@@ -396,7 +396,7 @@ export default function PendingInvoices() {
     ? rawActiveServices
     : (DEFAULT_SERVICES || []).filter((s) => s.active !== false);
   const activeTechnicians = (allUsers || []).filter(
-    (u) => u.active !== false && u.role?.toLowerCase() !== 'cleaner'
+    (u) => u.active !== false && u.role?.toLowerCase() === 'technician'
   );
   const referralStaff = (allUsers || []).filter(
     (u) =>
