@@ -226,6 +226,32 @@ export function RetailProvider({ children }) {
     [retailProducts, refreshRetail]
   );
 
+  const deleteDrink = useCallback(
+    async (id) => {
+      setRetailProducts((prev) => prev.filter((d) => String(d.id) !== String(id)));
+      try {
+        await stockApi.deleteRetail(id);
+        await refreshRetail();
+      } catch (err) {
+        console.warn('Failed to delete retail drink on server:', err.message);
+      }
+    },
+    [refreshRetail]
+  );
+
+  const deleteCosmetic = useCallback(
+    async (id) => {
+      setRetailProducts((prev) => prev.filter((c) => String(c.id) !== String(id)));
+      try {
+        await stockApi.deleteRetail(id);
+        await refreshRetail();
+      } catch (err) {
+        console.warn('Failed to delete retail cosmetic on server:', err.message);
+      }
+    },
+    [refreshRetail]
+  );
+
   // --- Refill Action ---
   const refillRetailProduct = useCallback(
     async (id, quantity, reason = 'Restock') => {
@@ -307,9 +333,11 @@ export function RetailProvider({ children }) {
         refreshRetail,
         addDrink,
         updateDrink,
+        deleteDrink,
         toggleDrinkActive,
         addCosmetic,
         updateCosmetic,
+        deleteCosmetic,
         toggleCosmeticActive,
         refillRetailProduct,
         deductRetailStock,

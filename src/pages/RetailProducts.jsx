@@ -12,7 +12,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { Coffee, Sparkles, Plus, Pencil, CheckCircle2, XCircle, AlertCircle, X, Check } from 'lucide-react';
+import { Coffee, Sparkles, Plus, Pencil, Trash2, CheckCircle2, XCircle, AlertCircle, X, Check } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useRetail } from '../context/RetailContext';
@@ -27,14 +27,17 @@ export default function RetailProducts() {
     cosmetics,
     addDrink,
     updateDrink,
+    deleteDrink,
     toggleDrinkActive,
     addCosmetic,
     updateCosmetic,
+    deleteCosmetic,
     toggleCosmeticActive,
   } = useRetail();
 
   // Active tab: 'drinks' | 'cosmetics'
   const [activeTab, setActiveTab] = useState('drinks');
+  const [productToDelete, setProductToDelete] = useState(null);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -160,6 +163,16 @@ export default function RetailProducts() {
     } else {
       toggleCosmeticActive(product.id);
     }
+  };
+
+  const handleConfirmDelete = () => {
+    if (!productToDelete) return;
+    if (activeTab === 'drinks') {
+      deleteDrink(productToDelete.id);
+    } else {
+      deleteCosmetic(productToDelete.id);
+    }
+    setProductToDelete(null);
   };
 
   return (
@@ -365,7 +378,7 @@ export default function RetailProducts() {
                   </td>
                   {isManager && (
                     <td className="py-3.5 px-5 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
                           onClick={() => openEditModal(product)}
@@ -373,6 +386,15 @@ export default function RetailProducts() {
                         >
                           <Pencil size={13} />
                           <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProductToDelete(product)}
+                          className="h-8 px-2.5 rounded-[8px] bg-error-soft/60 hover:bg-error-soft text-error font-semibold text-xs transition-colors flex items-center gap-1 cursor-pointer border border-error/20"
+                          title="Delete Product"
+                        >
+                          <Trash2 size={13} />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </td>
@@ -446,14 +468,24 @@ export default function RetailProducts() {
                 </button>
 
                 {isManager && (
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(product)}
-                    className="h-9 px-4 rounded-[9px] bg-sage-soft hover:bg-sage/20 text-charcoal font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-sage/30"
-                  >
-                    <Pencil size={13} />
-                    <span>Edit</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(product)}
+                      className="h-9 px-3.5 rounded-[9px] bg-sage-soft hover:bg-sage/20 text-charcoal font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-sage/30"
+                    >
+                      <Pencil size={13} />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProductToDelete(product)}
+                      className="h-9 px-3 rounded-[9px] bg-error-soft/60 hover:bg-error-soft text-error font-semibold text-xs transition-colors flex items-center gap-1 cursor-pointer border border-error/20"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -592,6 +624,45 @@ export default function RetailProducts() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Modal ── */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-charcoal/50 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-[20px] max-w-sm w-full shadow-2xl p-5 sm:p-6 overflow-hidden">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-error-soft flex items-center justify-center text-error shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-sm text-charcoal">Delete Product</h3>
+                <p className="text-xs text-muted-gray">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-charcoal/80 mb-5 leading-relaxed">
+              Are you sure you want to delete <strong className="text-charcoal font-bold">"{productToDelete.name}"</strong>?
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setProductToDelete(null)}
+                className="w-full h-10 text-xs"
+              >
+                Cancel
+              </Button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="w-full h-10 rounded-[9px] bg-error text-white font-bold text-xs hover:bg-error/90 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 size={14} />
+                <span>Delete</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
