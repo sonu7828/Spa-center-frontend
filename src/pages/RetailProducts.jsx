@@ -427,7 +427,7 @@ export default function RetailProducts() {
                   <input
                     type="number"
                     min="0"
-                    step="500"
+                    step="any"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="e.g. 1500"
