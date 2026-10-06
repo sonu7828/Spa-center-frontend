@@ -24,6 +24,7 @@ import {
   ClipboardCheck,
   AlertCircle,
   CheckCircle2,
+  XCircle,
   Sliders,
   Scissors,
   History,
@@ -125,10 +126,54 @@ export default function Stock() {
     return true;
   });
 
+  // ── 8. Active/Inactive Status Filter & Sorting ──
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
+  const [productToDelete, setProductToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Sort active products first, then alphabetically
+  const sortedServiceStock = [...serviceStock].sort((a, b) => {
+    if (a.active !== b.active) return a.active ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const activeCount = serviceStock.filter((p) => p.active).length;
+  const inactiveCount = serviceStock.filter((p) => !p.active).length;
+  const totalCount = serviceStock.length;
+
+  const displayedStock = sortedServiceStock.filter((prod) => {
+    if (statusFilter === 'active') return prod.active;
+    if (statusFilter === 'inactive') return !prod.active;
+    return true;
+  });
+
   // ── Helpers ──
   const showToast = (msg) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(''), 2500);
+  };
+
+  const handleToggleActive = async (prod) => {
+    try {
+      await toggleProductActive(prod.id);
+      showToast(`"${prod.name}" marked as ${prod.active ? 'Inactive' : 'Active'}`);
+    } catch (err) {
+      console.error('Failed to toggle product status:', err);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!productToDelete) return;
+    try {
+      setIsDeleting(true);
+      await deleteProduct(productToDelete.id || productToDelete.name);
+      showToast(`Product "${productToDelete.name}" deleted successfully`);
+      setProductToDelete(null);
+    } catch (err) {
+      console.error('Failed to delete product:', err);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Open Stock Check Modal
@@ -424,13 +469,82 @@ export default function Stock() {
 
       {/* Service Stock Overview: Table (Desktop/Landscape) + Cards (Mobile/Portrait) */}
       <div className="bg-white border border-border rounded-[16px] shadow-card overflow-hidden w-full">
-        <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-3 border-b border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-          <h3 className="text-sm font-semibold text-charcoal uppercase tracking-wider">
-            Service Products ({serviceStock.length})
-          </h3>
-          <span className="text-xs text-muted-gray">
-            Live Expected Stock calculated from completed services
-          </span>
+        <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-3 border-b border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-charcoal uppercase tracking-wider">
+                Service Products
+              </h3>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-soft-cream text-charcoal">
+                {totalCount}
+              </span>
+            </div>
+            <p className="text-xs text-muted-gray mt-0.5">
+              Live Expected Stock calculated from completed services
+            </p>
+          </div>
+
+          {/* Status Filter Tabs: All / Active / Inactive */}
+          <div className="flex items-center gap-1.5 bg-soft-cream/60 p-1 rounded-[12px] border border-border self-start sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                statusFilter === 'all'
+                  ? 'bg-charcoal text-white shadow-2xs'
+                  : 'text-muted-gray hover:text-charcoal'
+              }`}
+            >
+              <span>All</span>
+              <span
+                className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                  statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-white text-charcoal'
+                }`}
+              >
+                {totalCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter('active')}
+              className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                statusFilter === 'active'
+                  ? 'bg-[#14532D] text-white shadow-2xs'
+                  : 'text-muted-gray hover:text-charcoal'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === 'active' ? 'bg-white' : 'bg-[#16A34A]'}`} />
+              <span>Active</span>
+              <span
+                className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                  statusFilter === 'active' ? 'bg-white/20 text-white' : 'bg-success-soft text-success'
+                }`}
+              >
+                {activeCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter('inactive')}
+              className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                statusFilter === 'inactive'
+                  ? 'bg-muted-gray text-white shadow-2xs'
+                  : 'text-muted-gray hover:text-charcoal'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === 'inactive' ? 'bg-white' : 'bg-muted-gray'}`} />
+              <span>Inactive</span>
+              <span
+                className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                  statusFilter === 'inactive' ? 'bg-white/20 text-white' : 'bg-muted-gray/10 text-muted-gray'
+                }`}
+              >
+                {inactiveCount}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Desktop / Tablet Landscape Table View (lg:block) */}
@@ -447,14 +561,14 @@ export default function Stock() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {serviceStock.length === 0 ? (
+              {displayedStock.length === 0 ? (
                 <tr>
                   <td colSpan={isManager ? 6 : 5} className="py-12 text-center text-sm text-muted-gray">
-                    No stock records available.
+                    No {statusFilter === 'all' ? '' : statusFilter + ' '}service stock records found.
                   </td>
                 </tr>
               ) : (
-                serviceStock.map((prod) => {
+                displayedStock.map((prod) => {
                 const metrics = getProductMetrics(prod.name);
                 const isOutOfStock = prod.quantity <= 0;
                 const isLowStock =
@@ -490,13 +604,17 @@ export default function Stock() {
                     key={prod.id}
                     className="hover:bg-sage-soft/10 transition-colors"
                   >
-                    <td className="px-5 py-3.5 font-bold text-charcoal text-sm">
-                      {prod.name}
-                      {!prod.active && (
-                        <span className="ml-2 text-[10px] text-muted-gray uppercase font-normal">
-                          (Inactive)
+                    <td className="px-5 py-3.5 font-bold text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className={prod.active ? 'text-charcoal' : 'text-muted-gray'}>
+                          {prod.name}
                         </span>
-                      )}
+                        {!prod.active && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-muted-gray/10 text-muted-gray uppercase">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 font-extrabold text-charcoal font-mono text-sm">
                       {prod.quantity.toLocaleString('en-US')}{' '}
@@ -523,10 +641,37 @@ export default function Stock() {
                         <span className="text-muted-gray font-normal">—</span>
                       )}
                     </td>
-                    <td className="px-5 py-3.5">{statusBadge}</td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={!isManager}
+                          onClick={() => handleToggleActive(prod)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] text-[11px] font-bold border transition-colors ${
+                            prod.active
+                              ? 'bg-success-soft text-success border-success/30 hover:bg-success/15'
+                              : 'bg-muted-gray/10 text-muted-gray border-border hover:bg-muted-gray/20'
+                          } ${isManager ? 'cursor-pointer' : 'cursor-default'}`}
+                          title={isManager ? `Click to mark ${prod.active ? 'Inactive' : 'Active'}` : undefined}
+                        >
+                          {prod.active ? (
+                            <>
+                              <CheckCircle2 size={13} className="text-success shrink-0" />
+                              <span>Active</span>
+                            </>
+                          ) : (
+                            <>
+                              <XCircle size={13} className="text-muted-gray shrink-0" />
+                              <span>Inactive</span>
+                            </>
+                          )}
+                        </button>
+                        {statusBadge}
+                      </div>
+                    </td>
                     {isManager && (
                       <td className="px-5 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => {
@@ -534,7 +679,7 @@ export default function Stock() {
                               setRefillQuantity('');
                               setActiveModal('add_stock');
                             }}
-                            className="h-8 px-3 rounded-[7px] bg-sage-soft/60 hover:bg-sage-soft text-charcoal font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                            className="h-8 px-2.5 rounded-[7px] bg-sage-soft/60 hover:bg-sage-soft text-charcoal font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                             title="Refill Stock"
                           >
                             <Plus size={13} />
@@ -551,7 +696,7 @@ export default function Stock() {
                               setAdjustError('');
                               setActiveModal('adjust_stock');
                             }}
-                            className="h-8 px-3 rounded-[7px] bg-warning-soft hover:bg-warning-soft/80 text-warning font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                            className="h-8 px-2.5 rounded-[7px] bg-warning-soft hover:bg-warning-soft/80 text-warning font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                             title="Adjust Stock (Wastage / Damaged / Expired)"
                           >
                             <Scissors size={13} />
@@ -568,10 +713,21 @@ export default function Stock() {
                               setEditProdActive(prod.active);
                               setActiveModal('edit_product');
                             }}
-                            className="h-8 px-3 rounded-[7px] bg-soft-cream hover:bg-border/60 text-charcoal font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                            className="h-8 px-2.5 rounded-[7px] bg-soft-cream hover:bg-border/60 text-charcoal font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                            title="Edit Product"
                           >
                             <Pencil size={13} />
                             <span>Edit</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setProductToDelete(prod)}
+                            className="h-8 px-2.5 rounded-[7px] bg-error-soft/60 hover:bg-error-soft text-error font-semibold text-xs transition-colors flex items-center gap-1 cursor-pointer border border-error/20"
+                            title="Delete Product"
+                          >
+                            <Trash2 size={13} />
+                            <span>Delete</span>
                           </button>
                         </div>
                       </td>
@@ -586,12 +742,12 @@ export default function Stock() {
 
         {/* Mobile / Tablet Portrait Product Cards (lg:hidden) */}
         <div className="block lg:hidden divide-y divide-border/60">
-          {serviceStock.length === 0 ? (
+          {displayedStock.length === 0 ? (
             <div className="py-10 text-center text-sm text-muted-gray">
-              No stock records available.
+              No {statusFilter === 'all' ? '' : statusFilter + ' '}service stock records found.
             </div>
           ) : (
-            serviceStock.map((prod) => {
+            displayedStock.map((prod) => {
             const metrics = getProductMetrics(prod.name);
             const isOutOfStock = prod.quantity <= 0;
             const isLowStock =
@@ -627,16 +783,40 @@ export default function Stock() {
                 {/* Header: Product name & Status badge */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h4 className="font-bold text-charcoal text-base truncate">
+                    <h4 className={`font-bold text-base truncate ${prod.active ? 'text-charcoal' : 'text-muted-gray'}`}>
                       {prod.name}
                     </h4>
                     {!prod.active && (
-                      <span className="text-[10px] text-muted-gray uppercase font-normal block">
-                        (Inactive)
+                      <span className="text-[10px] text-muted-gray uppercase font-semibold block mt-0.5">
+                        Inactive
                       </span>
                     )}
                   </div>
-                  <div className="shrink-0">{statusBadge}</div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      disabled={!isManager}
+                      onClick={() => handleToggleActive(prod)}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[10px] font-bold border transition-colors ${
+                        prod.active
+                          ? 'bg-success-soft text-success border-success/30 hover:bg-success/15'
+                          : 'bg-muted-gray/10 text-muted-gray border-border hover:bg-muted-gray/20'
+                      } ${isManager ? 'cursor-pointer' : 'cursor-default'}`}
+                    >
+                      {prod.active ? (
+                        <>
+                          <CheckCircle2 size={11} className="text-success shrink-0" />
+                          <span>Active</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle size={11} className="text-muted-gray shrink-0" />
+                          <span>Inactive</span>
+                        </>
+                      )}
+                    </button>
+                    {statusBadge}
+                  </div>
                 </div>
 
                 {/* Info Grid: Current/Expected & Estimated Days Left */}
@@ -676,7 +856,7 @@ export default function Stock() {
 
                 {/* Actions: Minimum touch height 40px, non-overlapping */}
                 {isManager && (
-                  <div className="grid grid-cols-3 gap-2 pt-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => {
@@ -720,6 +900,15 @@ export default function Stock() {
                     >
                       <Pencil size={13} className="shrink-0" />
                       <span>Edit</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setProductToDelete(prod)}
+                      className="h-10 px-2 rounded-[8px] bg-error-soft/60 hover:bg-error-soft text-error font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-error/20"
+                    >
+                      <Trash2 size={13} className="shrink-0" />
+                      <span>Delete</span>
                     </button>
                   </div>
                 )}
@@ -1278,28 +1467,57 @@ export default function Stock() {
 
               <div>
                 <label className="block font-bold text-charcoal mb-1">Status</label>
-                <label className="flex items-center gap-2 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={editProdActive}
-                    onChange={(e) => setEditProdActive(e.target.checked)}
-                    className="w-4 h-4 rounded text-sage accent-sage"
-                  />
-                  <span className="font-semibold text-charcoal">Active Product</span>
-                </label>
+                <button
+                  type="button"
+                  onClick={() => setEditProdActive(!editProdActive)}
+                  className={`w-full h-11 px-3 rounded-[9px] border font-bold text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                    editProdActive
+                      ? 'bg-success-soft text-success border-success/30'
+                      : 'bg-muted-gray/10 text-muted-gray border-border'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {editProdActive ? (
+                      <CheckCircle2 size={16} className="text-success shrink-0" />
+                    ) : (
+                      <XCircle size={16} className="text-muted-gray shrink-0" />
+                    )}
+                    <span>{editProdActive ? 'Product is Active' : 'Product is Inactive'}</span>
+                  </span>
+                  <span className="text-[10px] uppercase font-bold underline">
+                    Click to {editProdActive ? 'Deactivate' : 'Activate'}
+                  </span>
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => setActiveModal(null)}
-                  className="w-full h-11"
+              <div className="pt-2 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setActiveModal(null)}
+                    className="w-full h-11"
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="w-full h-11">
+                    Save Changes
+                  </Button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const found = serviceStock.find((p) => p.name === editingOriginalName);
+                    if (found) {
+                      setActiveModal(null);
+                      setProductToDelete(found);
+                    }
+                  }}
+                  className="w-full h-9 rounded-[8px] text-error hover:bg-error-soft text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  Cancel
-                </Button>
-                <Button type="submit" className="w-full h-11">
-                  Save Changes
-                </Button>
+                  <Trash2 size={13} />
+                  <span>Delete This Product</span>
+                </button>
               </div>
             </form>
           </div>
@@ -1767,6 +1985,49 @@ export default function Stock() {
               <Button onClick={() => setActiveModal(null)} className="w-full sm:w-auto h-11">
                 Close
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          8. MODAL: DELETE PRODUCT CONFIRMATION
+          ============================================================ */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-charcoal/50 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-[20px] max-w-sm w-full shadow-2xl p-5 sm:p-6 overflow-hidden">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-error-soft flex items-center justify-center text-error shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-sm text-charcoal">Delete Product</h3>
+                <p className="text-xs text-muted-gray">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-charcoal/80 mb-5 leading-relaxed">
+              Are you sure you want to delete <strong className="text-charcoal font-bold">"{productToDelete.name}"</strong> from Service Stock?
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setProductToDelete(null)}
+                disabled={isDeleting}
+                className="w-full h-10 text-xs"
+              >
+                Cancel
+              </Button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="w-full h-10 rounded-[9px] bg-error text-white font-bold text-xs hover:bg-error/90 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 size={14} />
+                <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
+              </button>
             </div>
           </div>
         </div>

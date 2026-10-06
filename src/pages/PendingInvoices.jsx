@@ -3348,7 +3348,7 @@ export default function PendingInvoices() {
                           <input
                             type="number"
                             min="0"
-                            step="500"
+                            step="any"
                             value={line.price}
                             onChange={(e) => handlePriceLineChange(idx, e.target.value)}
                             placeholder="Price in FCFA"

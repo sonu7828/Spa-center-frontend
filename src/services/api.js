@@ -319,6 +319,19 @@ export const stockApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  updateRetail: (id, data) =>
+    apiRequest(`/stock/retail/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    apiRequest(`/stock/${id}`, {
+      method: 'DELETE',
+    }),
+  deleteRetail: (id) =>
+    apiRequest(`/stock/retail/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 export const commissionsApi = {

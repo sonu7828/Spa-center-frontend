@@ -11,8 +11,8 @@
  *   - Quick Toggle Active / Deactivate
  */
 
-import { useState } from 'react';
-import { Coffee, Sparkles, Plus, Pencil, CheckCircle2, XCircle, AlertCircle, X, Check, Barcode as BarcodeIcon } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Coffee, Sparkles, Plus, Pencil, Trash2, CheckCircle2, XCircle, AlertCircle, X, Check, Barcode as BarcodeIcon } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useRetail } from '../context/RetailContext';
@@ -27,14 +27,17 @@ export default function RetailProducts() {
     cosmetics,
     addDrink,
     updateDrink,
+    deleteDrink,
     toggleDrinkActive,
     addCosmetic,
     updateCosmetic,
+    deleteCosmetic,
     toggleCosmeticActive,
   } = useRetail();
 
   // Active tab: 'drinks' | 'cosmetics'
   const [activeTab, setActiveTab] = useState('drinks');
+  const [productToDelete, setProductToDelete] = useState(null);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,7 +51,35 @@ export default function RetailProducts() {
   const [isActive, setIsActive] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const currentProducts = activeTab === 'drinks' ? drinks : cosmetics;
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [toastMsg, setToastMsg] = useState('');
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 2500);
+  };
+
+  const currentCategoryProducts = activeTab === 'drinks' ? drinks : cosmetics;
+  const activeCount = currentCategoryProducts.filter((p) => p.active).length;
+  const inactiveCount = currentCategoryProducts.filter((p) => !p.active).length;
+  const totalCount = currentCategoryProducts.length;
+
+  const currentProducts = useMemo(() => {
+    let list = currentCategoryProducts;
+    if (statusFilter === 'active') {
+      list = list.filter((p) => p.active);
+    } else if (statusFilter === 'inactive') {
+      list = list.filter((p) => !p.active);
+    }
+
+    // Always sort active products first
+    return [...list].sort((a, b) => {
+      if (a.active !== b.active) {
+        return a.active ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [currentCategoryProducts, statusFilter]);
 
   const openAddModal = () => {
     setEditingProduct(null);
@@ -146,6 +177,23 @@ export default function RetailProducts() {
     }
   };
 
+  const handleConfirmDelete = async () => {
+    if (!productToDelete) return;
+    const prodName = productToDelete.name;
+    try {
+      if (activeTab === 'drinks') {
+        await deleteDrink(productToDelete.id);
+      } else {
+        await deleteCosmetic(productToDelete.id);
+      }
+      showToast(`Product "${prodName}" deleted successfully`);
+    } catch (err) {
+      console.error('Failed to delete product:', err);
+    } finally {
+      setProductToDelete(null);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -161,47 +209,120 @@ export default function RetailProducts() {
         }
       />
 
-      {/* ── Tabs ── */}
-      <div className="flex items-center gap-2 sm:gap-3 mb-6 overflow-x-auto pb-0.5 scrollbar-none">
-        <button
-          type="button"
-          onClick={() => setActiveTab('drinks')}
-          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-[12px] text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
-            activeTab === 'drinks'
-              ? 'bg-charcoal text-white shadow-sm'
-              : 'bg-white border border-border text-muted-gray hover:text-charcoal hover:bg-soft-cream/40'
-          }`}
-        >
-          <Coffee size={15} />
-          <span>Drinks</span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'drinks' ? 'bg-white/20 text-white' : 'bg-soft-cream text-charcoal'
-            }`}
-          >
-            {drinks.length}
-          </span>
-        </button>
+      {/* Success Notification */}
+      {toastMsg && (
+        <div className="mb-4 p-3.5 rounded-[12px] bg-success-soft border border-success/30 text-success text-xs font-bold flex items-center gap-2 animate-fade-in shadow-2xs">
+          <Check size={16} strokeWidth={2.5} className="shrink-0" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
 
-        <button
-          type="button"
-          onClick={() => setActiveTab('cosmetics')}
-          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-[12px] text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
-            activeTab === 'cosmetics'
-              ? 'bg-charcoal text-white shadow-sm'
-              : 'bg-white border border-border text-muted-gray hover:text-charcoal hover:bg-soft-cream/40'
-          }`}
-        >
-          <Sparkles size={15} />
-          <span>Cosmetics</span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'cosmetics' ? 'bg-white/20 text-white' : 'bg-soft-cream text-charcoal'
+      {/* ── Tabs & Status Filters ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        {/* Category Tabs: Drinks & Cosmetics */}
+        <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-0.5 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setActiveTab('drinks')}
+            className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-[12px] text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'drinks'
+                ? 'bg-charcoal text-white shadow-sm'
+                : 'bg-white border border-border text-muted-gray hover:text-charcoal hover:bg-soft-cream/40'
             }`}
           >
-            {cosmetics.length}
-          </span>
-        </button>
+            <Coffee size={15} />
+            <span>Drinks</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === 'drinks' ? 'bg-white/20 text-white' : 'bg-soft-cream text-charcoal'
+              }`}
+            >
+              {drinks.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('cosmetics')}
+            className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-[12px] text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'cosmetics'
+                ? 'bg-charcoal text-white shadow-sm'
+                : 'bg-white border border-border text-muted-gray hover:text-charcoal hover:bg-soft-cream/40'
+            }`}
+          >
+            <Sparkles size={15} />
+            <span>Cosmetics</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === 'cosmetics' ? 'bg-white/20 text-white' : 'bg-soft-cream text-charcoal'
+              }`}
+            >
+              {cosmetics.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Status Filter: All / Active / Inactive */}
+        <div className="flex items-center gap-1.5 bg-white p-1 rounded-[12px] border border-border shadow-2xs self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'all'
+                ? 'bg-charcoal text-white shadow-2xs'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <span>All</span>
+            <span
+              className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-soft-cream text-charcoal'
+              }`}
+            >
+              {totalCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('active')}
+            className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'active'
+                ? 'bg-[#14532D] text-white shadow-2xs'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === 'active' ? 'bg-white' : 'bg-[#16A34A]'}`} />
+            <span>Active</span>
+            <span
+              className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                statusFilter === 'active' ? 'bg-white/20 text-white' : 'bg-success-soft text-success'
+              }`}
+            >
+              {activeCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('inactive')}
+            className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'inactive'
+                ? 'bg-muted-gray text-white shadow-2xs'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === 'inactive' ? 'bg-white' : 'bg-muted-gray'}`} />
+            <span>Inactive</span>
+            <span
+              className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                statusFilter === 'inactive' ? 'bg-white/20 text-white' : 'bg-muted-gray/10 text-muted-gray'
+              }`}
+            >
+              {inactiveCount}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* ── Products List / Table ── */}
@@ -223,7 +344,7 @@ export default function RetailProducts() {
               {currentProducts.length === 0 ? (
                 <tr>
                   <td colSpan={isManager ? 6 : 5} className="py-12 text-center text-sm text-muted-gray">
-                    No products found in this category.
+                    No {statusFilter === 'all' ? '' : statusFilter + ' '}products found in this category.
                   </td>
                 </tr>
               ) : (
@@ -284,7 +405,7 @@ export default function RetailProducts() {
                   </td>
                   {isManager && (
                     <td className="py-3.5 px-5 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
                           onClick={() => openEditModal(product)}
@@ -292,6 +413,15 @@ export default function RetailProducts() {
                         >
                           <Pencil size={13} />
                           <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProductToDelete(product)}
+                          className="h-8 px-2.5 rounded-[8px] bg-error-soft/60 hover:bg-error-soft text-error font-semibold text-xs transition-colors flex items-center gap-1 cursor-pointer border border-error/20"
+                          title="Delete Product"
+                        >
+                          <Trash2 size={13} />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </td>
@@ -307,7 +437,7 @@ export default function RetailProducts() {
         <div className="block md:hidden divide-y divide-border/60">
           {currentProducts.length === 0 ? (
             <div className="py-10 text-center text-sm text-muted-gray">
-              No products found in this category.
+              No {statusFilter === 'all' ? '' : statusFilter + ' '}products found in this category.
             </div>
           ) : (
             currentProducts.map((product) => (
@@ -365,14 +495,24 @@ export default function RetailProducts() {
                 </button>
 
                 {isManager && (
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(product)}
-                    className="h-9 px-4 rounded-[9px] bg-sage-soft hover:bg-sage/20 text-charcoal font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-sage/30"
-                  >
-                    <Pencil size={13} />
-                    <span>Edit</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(product)}
+                      className="h-9 px-3.5 rounded-[9px] bg-sage-soft hover:bg-sage/20 text-charcoal font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-sage/30"
+                    >
+                      <Pencil size={13} />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProductToDelete(product)}
+                      className="h-9 px-3 rounded-[9px] bg-error-soft/60 hover:bg-error-soft text-error font-semibold text-xs transition-colors flex items-center gap-1 cursor-pointer border border-error/20"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -452,7 +592,7 @@ export default function RetailProducts() {
                   <input
                     type="number"
                     min="0"
-                    step="500"
+                    step="any"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="e.g. 1500"
@@ -529,6 +669,45 @@ export default function RetailProducts() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Modal ── */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-charcoal/50 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-[20px] max-w-sm w-full shadow-2xl p-5 sm:p-6 overflow-hidden">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-error-soft flex items-center justify-center text-error shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-sm text-charcoal">Delete Product</h3>
+                <p className="text-xs text-muted-gray">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-charcoal/80 mb-5 leading-relaxed">
+              Are you sure you want to delete <strong className="text-charcoal font-bold">"{productToDelete.name}"</strong>?
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setProductToDelete(null)}
+                className="w-full h-10 text-xs"
+              >
+                Cancel
+              </Button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="w-full h-10 rounded-[9px] bg-error text-white font-bold text-xs hover:bg-error/90 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 size={14} />
+                <span>Delete</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

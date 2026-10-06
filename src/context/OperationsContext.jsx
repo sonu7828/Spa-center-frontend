@@ -447,11 +447,14 @@ export function OperationsProvider({ children }) {
       const trimmedNew = newName?.trim() || oldName?.trim();
       if (!trimmedOld) return false;
 
-      const prod = serviceStock.find((p) => p.name.toLowerCase() === trimmedOld);
+      const prod = serviceStock.find((p) => p.name.toLowerCase() === trimmedOld || p.id === oldName);
       if (prod && prod.id && typeof prod.id === 'string' && prod.id.length > 10) {
         try {
+          const qtyNum = quantity !== undefined ? Math.max(0, parseInt(quantity, 10) || 0) : undefined;
           await stockApi.update(prod.id, {
             name: trimmedNew,
+            quantity: qtyNum,
+            unit: unit !== undefined ? unit : undefined,
             isActive: active !== undefined ? Boolean(active) : prod.active,
           });
           await refreshStock();
@@ -463,7 +466,7 @@ export function OperationsProvider({ children }) {
 
       setServiceStock((prev) =>
         prev.map((p) => {
-          if (p.name.toLowerCase() !== trimmedOld) return p;
+          if (p.name.toLowerCase() !== trimmedOld && p.id !== oldName) return p;
           return {
             ...p,
             name: trimmedNew,
@@ -481,24 +484,37 @@ export function OperationsProvider({ children }) {
     [serviceStock, refreshStock]
   );
 
-  // Delete / deactivate product via backend API
+  // Delete product permanently via backend API (with soft-deactivate fallback)
   const deleteProduct = useCallback(
-    async (productName) => {
-      const trimmed = productName?.trim().toLowerCase();
-      if (!trimmed) return false;
+    async (idOrName) => {
+      if (!idOrName) return false;
+      const trimmed = String(idOrName).trim().toLowerCase();
 
-      const prod = serviceStock.find((p) => p.name.toLowerCase() === trimmed);
-      if (prod && prod.id && typeof prod.id === 'string' && prod.id.length > 10) {
+      const prod = serviceStock.find(
+        (p) => p.id === idOrName || p.name.toLowerCase() === trimmed
+      );
+      if (!prod) return false;
+
+      if (prod.id && typeof prod.id === 'string' && prod.id.length > 10) {
         try {
-          await stockApi.update(prod.id, { isActive: false });
+          await stockApi.delete(prod.id);
           await refreshStock();
           return true;
         } catch (err) {
-          console.error('Failed to deactivate product on backend:', err);
+          console.error('Failed to delete product on backend:', err);
+          try {
+            await stockApi.update(prod.id, { isActive: false });
+            await refreshStock();
+            return true;
+          } catch (deactivateErr) {
+            console.error('Failed to deactivate fallback on backend:', deactivateErr);
+          }
         }
       }
 
-      setServiceStock((prev) => prev.filter((p) => p.name.toLowerCase() !== trimmed));
+      setServiceStock((prev) =>
+        prev.filter((p) => p.id !== prod.id && p.name.toLowerCase() !== trimmed)
+      );
       return true;
     },
     [serviceStock, refreshStock]
