@@ -50,8 +50,13 @@ export default function RetailProducts() {
   const [isActive, setIsActive] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Status Filter: 'all' | 'active' | 'inactive'
   const [statusFilter, setStatusFilter] = useState('all');
+  const [toastMsg, setToastMsg] = useState('');
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 2500);
+  };
 
   const currentCategoryProducts = activeTab === 'drinks' ? drinks : cosmetics;
   const activeCount = currentCategoryProducts.filter((p) => p.active).length;
@@ -165,14 +170,21 @@ export default function RetailProducts() {
     }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!productToDelete) return;
-    if (activeTab === 'drinks') {
-      deleteDrink(productToDelete.id);
-    } else {
-      deleteCosmetic(productToDelete.id);
+    const prodName = productToDelete.name;
+    try {
+      if (activeTab === 'drinks') {
+        await deleteDrink(productToDelete.id);
+      } else {
+        await deleteCosmetic(productToDelete.id);
+      }
+      showToast(`Product "${prodName}" deleted successfully`);
+    } catch (err) {
+      console.error('Failed to delete product:', err);
+    } finally {
+      setProductToDelete(null);
     }
-    setProductToDelete(null);
   };
 
   return (
@@ -189,6 +201,14 @@ export default function RetailProducts() {
           )
         }
       />
+
+      {/* Success Notification */}
+      {toastMsg && (
+        <div className="mb-4 p-3.5 rounded-[12px] bg-success-soft border border-success/30 text-success text-xs font-bold flex items-center gap-2 animate-fade-in shadow-2xs">
+          <Check size={16} strokeWidth={2.5} className="shrink-0" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
 
       {/* ── Tabs & Status Filters ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
