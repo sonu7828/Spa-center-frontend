@@ -11,7 +11,7 @@
  *   - Quick Toggle Active / Deactivate
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Coffee, Sparkles, Plus, Pencil, CheckCircle2, XCircle, AlertCircle, X, Check } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -47,7 +47,30 @@ export default function RetailProducts() {
   const [isActive, setIsActive] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const currentProducts = activeTab === 'drinks' ? drinks : cosmetics;
+  // Status Filter: 'all' | 'active' | 'inactive'
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const currentCategoryProducts = activeTab === 'drinks' ? drinks : cosmetics;
+  const activeCount = currentCategoryProducts.filter((p) => p.active).length;
+  const inactiveCount = currentCategoryProducts.filter((p) => !p.active).length;
+  const totalCount = currentCategoryProducts.length;
+
+  const currentProducts = useMemo(() => {
+    let list = currentCategoryProducts;
+    if (statusFilter === 'active') {
+      list = list.filter((p) => p.active);
+    } else if (statusFilter === 'inactive') {
+      list = list.filter((p) => !p.active);
+    }
+
+    // Always sort active products first
+    return [...list].sort((a, b) => {
+      if (a.active !== b.active) {
+        return a.active ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [currentCategoryProducts, statusFilter]);
 
   const openAddModal = () => {
     setEditingProduct(null);
@@ -154,47 +177,112 @@ export default function RetailProducts() {
         }
       />
 
-      {/* ── Tabs ── */}
-      <div className="flex items-center gap-2 sm:gap-3 mb-6 overflow-x-auto pb-0.5 scrollbar-none">
-        <button
-          type="button"
-          onClick={() => setActiveTab('drinks')}
-          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-[12px] text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
-            activeTab === 'drinks'
-              ? 'bg-charcoal text-white shadow-sm'
-              : 'bg-white border border-border text-muted-gray hover:text-charcoal hover:bg-soft-cream/40'
-          }`}
-        >
-          <Coffee size={15} />
-          <span>Drinks</span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'drinks' ? 'bg-white/20 text-white' : 'bg-soft-cream text-charcoal'
+      {/* ── Tabs & Status Filters ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        {/* Category Tabs: Drinks & Cosmetics */}
+        <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-0.5 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setActiveTab('drinks')}
+            className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-[12px] text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'drinks'
+                ? 'bg-charcoal text-white shadow-sm'
+                : 'bg-white border border-border text-muted-gray hover:text-charcoal hover:bg-soft-cream/40'
             }`}
           >
-            {drinks.length}
-          </span>
-        </button>
+            <Coffee size={15} />
+            <span>Drinks</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === 'drinks' ? 'bg-white/20 text-white' : 'bg-soft-cream text-charcoal'
+              }`}
+            >
+              {drinks.length}
+            </span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab('cosmetics')}
-          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-[12px] text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
-            activeTab === 'cosmetics'
-              ? 'bg-charcoal text-white shadow-sm'
-              : 'bg-white border border-border text-muted-gray hover:text-charcoal hover:bg-soft-cream/40'
-          }`}
-        >
-          <Sparkles size={15} />
-          <span>Cosmetics</span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'cosmetics' ? 'bg-white/20 text-white' : 'bg-soft-cream text-charcoal'
+          <button
+            type="button"
+            onClick={() => setActiveTab('cosmetics')}
+            className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-[12px] text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'cosmetics'
+                ? 'bg-charcoal text-white shadow-sm'
+                : 'bg-white border border-border text-muted-gray hover:text-charcoal hover:bg-soft-cream/40'
             }`}
           >
-            {cosmetics.length}
-          </span>
-        </button>
+            <Sparkles size={15} />
+            <span>Cosmetics</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === 'cosmetics' ? 'bg-white/20 text-white' : 'bg-soft-cream text-charcoal'
+              }`}
+            >
+              {cosmetics.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Status Filter: All / Active / Inactive */}
+        <div className="flex items-center gap-1.5 bg-white p-1 rounded-[12px] border border-border shadow-2xs self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'all'
+                ? 'bg-charcoal text-white shadow-2xs'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <span>All</span>
+            <span
+              className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-soft-cream text-charcoal'
+              }`}
+            >
+              {totalCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('active')}
+            className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'active'
+                ? 'bg-[#14532D] text-white shadow-2xs'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === 'active' ? 'bg-white' : 'bg-[#16A34A]'}`} />
+            <span>Active</span>
+            <span
+              className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                statusFilter === 'active' ? 'bg-white/20 text-white' : 'bg-success-soft text-success'
+              }`}
+            >
+              {activeCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('inactive')}
+            className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              statusFilter === 'inactive'
+                ? 'bg-muted-gray text-white shadow-2xs'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === 'inactive' ? 'bg-white' : 'bg-muted-gray'}`} />
+            <span>Inactive</span>
+            <span
+              className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                statusFilter === 'inactive' ? 'bg-white/20 text-white' : 'bg-muted-gray/10 text-muted-gray'
+              }`}
+            >
+              {inactiveCount}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* ── Products List / Table ── */}
@@ -216,7 +304,7 @@ export default function RetailProducts() {
               {currentProducts.length === 0 ? (
                 <tr>
                   <td colSpan={isManager ? 6 : 5} className="py-12 text-center text-sm text-muted-gray">
-                    No products found in this category.
+                    No {statusFilter === 'all' ? '' : statusFilter + ' '}products found in this category.
                   </td>
                 </tr>
               ) : (
@@ -300,7 +388,7 @@ export default function RetailProducts() {
         <div className="block md:hidden divide-y divide-border/60">
           {currentProducts.length === 0 ? (
             <div className="py-10 text-center text-sm text-muted-gray">
-              No products found in this category.
+              No {statusFilter === 'all' ? '' : statusFilter + ' '}products found in this category.
             </div>
           ) : (
             currentProducts.map((product) => (

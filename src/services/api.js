@@ -319,6 +319,11 @@ export const stockApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  updateRetail: (id, data) =>
+    apiRequest(`/stock/retail/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 };
 
 export const commissionsApi = {

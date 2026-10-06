@@ -109,28 +109,51 @@ export function RetailProvider({ children }) {
 
   const updateDrink = useCallback(
     async (id, updates) => {
-      // Local state optimistic update if needed
+      const cleanPrice = updates.price !== undefined ? Math.max(0, parseInt(updates.price, 10) || 0) : undefined;
+      const cleanStock = updates.stock !== undefined ? Math.max(0, parseInt(updates.stock, 10) || 0) : undefined;
       setRetailProducts((prev) =>
         prev.map((d) => {
           if (String(d.id) !== String(id)) return d;
           return {
             ...d,
             name: updates.name !== undefined ? updates.name.trim() : d.name,
-            price: updates.price !== undefined ? Math.max(0, parseInt(updates.price, 10) || 0) : d.price,
-            quantity: updates.stock !== undefined ? Math.max(0, parseInt(updates.stock, 10) || 0) : d.quantity,
+            price: cleanPrice !== undefined ? cleanPrice : d.price,
+            quantity: cleanStock !== undefined ? cleanStock : d.quantity,
             isActive: updates.active !== undefined ? Boolean(updates.active) : d.isActive,
           };
         })
       );
+      try {
+        await stockApi.updateRetail(id, {
+          ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
+          ...(cleanPrice !== undefined ? { price: cleanPrice } : {}),
+          ...(cleanStock !== undefined ? { quantity: cleanStock } : {}),
+          ...(updates.active !== undefined ? { isActive: Boolean(updates.active) } : {}),
+        });
+        await refreshRetail();
+      } catch (err) {
+        console.warn('Failed to update retail drink on server:', err.message);
+      }
     },
-    []
+    [refreshRetail]
   );
 
-  const toggleDrinkActive = useCallback((id) => {
-    setRetailProducts((prev) =>
-      prev.map((d) => (String(d.id) === String(id) ? { ...d, isActive: !d.isActive } : d))
-    );
-  }, []);
+  const toggleDrinkActive = useCallback(
+    async (id) => {
+      const current = retailProducts.find((d) => String(d.id) === String(id));
+      const nextActive = current ? !current.isActive : false;
+      setRetailProducts((prev) =>
+        prev.map((d) => (String(d.id) === String(id) ? { ...d, isActive: nextActive } : d))
+      );
+      try {
+        await stockApi.updateRetail(id, { isActive: nextActive });
+        await refreshRetail();
+      } catch (err) {
+        console.warn('Failed to toggle retail drink status on server:', err.message);
+      }
+    },
+    [retailProducts, refreshRetail]
+  );
 
   // --- Cosmetics Actions ---
   const addCosmetic = useCallback(
@@ -157,27 +180,51 @@ export function RetailProvider({ children }) {
 
   const updateCosmetic = useCallback(
     async (id, updates) => {
+      const cleanPrice = updates.price !== undefined ? Math.max(0, parseInt(updates.price, 10) || 0) : undefined;
+      const cleanStock = updates.stock !== undefined ? Math.max(0, parseInt(updates.stock, 10) || 0) : undefined;
       setRetailProducts((prev) =>
         prev.map((c) => {
           if (String(c.id) !== String(id)) return c;
           return {
             ...c,
             name: updates.name !== undefined ? updates.name.trim() : c.name,
-            price: updates.price !== undefined ? Math.max(0, parseInt(updates.price, 10) || 0) : c.price,
-            quantity: updates.stock !== undefined ? Math.max(0, parseInt(updates.stock, 10) || 0) : c.quantity,
+            price: cleanPrice !== undefined ? cleanPrice : c.price,
+            quantity: cleanStock !== undefined ? cleanStock : c.quantity,
             isActive: updates.active !== undefined ? Boolean(updates.active) : c.isActive,
           };
         })
       );
+      try {
+        await stockApi.updateRetail(id, {
+          ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
+          ...(cleanPrice !== undefined ? { price: cleanPrice } : {}),
+          ...(cleanStock !== undefined ? { quantity: cleanStock } : {}),
+          ...(updates.active !== undefined ? { isActive: Boolean(updates.active) } : {}),
+        });
+        await refreshRetail();
+      } catch (err) {
+        console.warn('Failed to update retail cosmetic on server:', err.message);
+      }
     },
-    []
+    [refreshRetail]
   );
 
-  const toggleCosmeticActive = useCallback((id) => {
-    setRetailProducts((prev) =>
-      prev.map((c) => (String(c.id) === String(id) ? { ...c, isActive: !c.isActive } : c))
-    );
-  }, []);
+  const toggleCosmeticActive = useCallback(
+    async (id) => {
+      const current = retailProducts.find((c) => String(c.id) === String(id));
+      const nextActive = current ? !current.isActive : false;
+      setRetailProducts((prev) =>
+        prev.map((c) => (String(c.id) === String(id) ? { ...c, isActive: nextActive } : c))
+      );
+      try {
+        await stockApi.updateRetail(id, { isActive: nextActive });
+        await refreshRetail();
+      } catch (err) {
+        console.warn('Failed to toggle retail cosmetic status on server:', err.message);
+      }
+    },
+    [retailProducts, refreshRetail]
+  );
 
   // --- Refill Action ---
   const refillRetailProduct = useCallback(
