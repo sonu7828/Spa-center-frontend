@@ -62,6 +62,7 @@ export function RetailProvider({ children }) {
       .map((p) => ({
         id: p.id,
         name: p.name,
+        barcode: p.barcode,
         price: Number(p.price),
         stock: p.quantity,
         quantity: p.quantity,
@@ -76,6 +77,7 @@ export function RetailProvider({ children }) {
       .map((p) => ({
         id: p.id,
         name: p.name,
+        barcode: p.barcode,
         price: Number(p.price),
         stock: p.quantity,
         quantity: p.quantity,
@@ -86,13 +88,14 @@ export function RetailProvider({ children }) {
 
   // --- Drinks Actions ---
   const addDrink = useCallback(
-    async ({ name, price, stock, active = true }) => {
+    async ({ name, price, stock, barcode, active = true }) => {
       const cleanPrice = Math.max(0, parseInt(String(price || 0).replace(/[^0-9]/g, ''), 10) || 0);
       const cleanStock = Math.max(0, parseInt(String(stock || 0).replace(/[^0-9]/g, ''), 10) || 0);
 
       try {
         const res = await stockApi.createRetail({
           name: name.trim(),
+          barcode: barcode || undefined,
           category: 'DRINKS',
           price: cleanPrice,
           quantity: cleanStock,
@@ -134,13 +137,14 @@ export function RetailProvider({ children }) {
 
   // --- Cosmetics Actions ---
   const addCosmetic = useCallback(
-    async ({ name, price, stock, active = true }) => {
+    async ({ name, price, stock, barcode, active = true }) => {
       const cleanPrice = Math.max(0, parseInt(String(price || 0).replace(/[^0-9]/g, ''), 10) || 0);
       const cleanStock = Math.max(0, parseInt(String(stock || 0).replace(/[^0-9]/g, ''), 10) || 0);
 
       try {
         const res = await stockApi.createRetail({
           name: name.trim(),
+          barcode: barcode || undefined,
           category: 'COSMETICS',
           price: cleanPrice,
           quantity: cleanStock,

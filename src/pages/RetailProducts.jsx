@@ -12,7 +12,7 @@
  */
 
 import { useState } from 'react';
-import { Coffee, Sparkles, Plus, Pencil, CheckCircle2, XCircle, AlertCircle, X, Check } from 'lucide-react';
+import { Coffee, Sparkles, Plus, Pencil, CheckCircle2, XCircle, AlertCircle, X, Check, Barcode as BarcodeIcon } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useRetail } from '../context/RetailContext';
@@ -44,6 +44,7 @@ export default function RetailProducts() {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('');
+  const [barcode, setBarcode] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -54,6 +55,7 @@ export default function RetailProducts() {
     setName('');
     setPrice('');
     setStock('');
+    setBarcode('');
     setIsActive(true);
     setErrorMsg('');
     setIsModalOpen(true);
@@ -64,6 +66,7 @@ export default function RetailProducts() {
     setName(product.name);
     setPrice(String(product.price));
     setStock(String(product.stock));
+    setBarcode(product.barcode || '');
     setIsActive(product.active);
     setErrorMsg('');
     setIsModalOpen(true);
@@ -98,6 +101,7 @@ export default function RetailProducts() {
       if (editingProduct) {
         updateDrink(editingProduct.id, {
           name: name.trim(),
+          barcode: barcode.trim() || undefined,
           price: priceNum,
           stock: stockNum,
           active: isActive,
@@ -105,6 +109,7 @@ export default function RetailProducts() {
       } else {
         addDrink({
           name: name.trim(),
+          barcode: barcode.trim() || undefined,
           price: priceNum,
           stock: stockNum,
           active: isActive,
@@ -114,6 +119,7 @@ export default function RetailProducts() {
       if (editingProduct) {
         updateCosmetic(editingProduct.id, {
           name: name.trim(),
+          barcode: barcode.trim() || undefined,
           price: priceNum,
           stock: stockNum,
           active: isActive,
@@ -121,6 +127,7 @@ export default function RetailProducts() {
       } else {
         addCosmetic({
           name: name.trim(),
+          barcode: barcode.trim() || undefined,
           price: priceNum,
           stock: stockNum,
           active: isActive,
@@ -400,6 +407,24 @@ export default function RetailProducts() {
                   <span>{errorMsg}</span>
                 </div>
               )}
+
+              <div>
+                <label className="block text-xs font-bold text-charcoal mb-1">
+                  Scan Barcode <span className="text-muted-gray font-normal">(Optional)</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-gray">
+                    <BarcodeIcon size={16} />
+                  </div>
+                  <input
+                    type="text"
+                    value={barcode}
+                    onChange={(e) => setBarcode(e.target.value)}
+                    placeholder="Click here and scan item..."
+                    className="w-full h-[44px] pl-10 pr-3.5 py-2.5 rounded-[11px] border border-border text-sm focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage bg-sage-soft/30"
+                  />
+                </div>
+              </div>
 
               <div>
                 <label className="block text-xs font-bold text-charcoal mb-1">

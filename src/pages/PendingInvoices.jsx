@@ -499,6 +499,96 @@ export default function PendingInvoices() {
   const [isSubmittingServiceInvoice, setIsSubmittingServiceInvoice] = useState(false);
   const [newServiceError, setNewServiceError] = useState('');
 
+  // --- Global Barcode Scanner Listener ---
+  const barcodeBuffer = useRef('');
+  const lastKeyTime = useRef(Date.now());
+  
+  const retailProductsRef = useRef([]);
+  useEffect(() => {
+    retailProductsRef.current = [...(drinks || []), ...(cosmetics || [])];
+  }, [drinks, cosmetics]);
+
+  const showNewRetailSaleModalRef = useRef(showNewRetailSaleModal);
+  useEffect(() => {
+    showNewRetailSaleModalRef.current = showNewRetailSaleModal;
+  }, [showNewRetailSaleModal]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignore if user is typing in an input or textarea
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const currentTime = Date.now();
+      
+      // If time between keystrokes is too long (>30000ms), reset buffer
+      if (currentTime - lastKeyTime.current > 30000) {
+        barcodeBuffer.current = '';
+      }
+      lastKeyTime.current = currentTime;
+
+      if (e.key === 'Enter') {
+        if (barcodeBuffer.current.length >= 3) {
+          const scannedCode = barcodeBuffer.current;
+          barcodeBuffer.current = ''; // Reset immediately
+          
+          const product = retailProductsRef.current.find(p => p.barcode === scannedCode);
+          if (product) {
+            if (!showNewRetailSaleModalRef.current) {
+              setShowNewRetailSaleModal(true);
+            }
+            
+            setNewSaleCart((prevCart) => {
+              const existing = prevCart.find((item) => item.productId === product.id);
+              if (existing) {
+                return prevCart.map((item) =>
+                  item.productId === product.id
+                    ? { ...item, qty: item.qty + 1, price: (item.qty + 1) * item.unitPrice }
+                    : item
+                );
+              }
+              return [
+                ...prevCart,
+                {
+                  id: product.id,
+                  productId: product.id,
+                  name: product.name,
+                  type: product.type || 'drink',
+                  unitPrice: product.price,
+                  qty: 1,
+                  price: product.price,
+                },
+              ];
+            });
+            
+            setNewSaleQuantities((prev) => ({
+              ...prev,
+              [product.id]: (prev[product.id] || 0) + 1
+            }));
+            
+            setNewSaleNotice(`✅ Scanned: ${product.name}`);
+            setTimeout(() => setNewSaleNotice(''), 3000);
+          } else {
+             setNewSaleNotice(`❌ Not found: ${scannedCode}`);
+             setTimeout(() => setNewSaleNotice(''), 3000);
+             if (!showNewRetailSaleModalRef.current) {
+              setShowNewRetailSaleModal(true);
+             }
+          }
+        }
+        return;
+      }
+      
+      // Accumulate valid barcode characters (numbers and letters usually)
+      if (e.key.length === 1) {
+        barcodeBuffer.current += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+  // ---------------------------------------
+
   useEffect(() => {
     if (typeof refreshInvoices === 'function') {
       refreshInvoices();
