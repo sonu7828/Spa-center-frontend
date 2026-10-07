@@ -616,6 +616,11 @@ export const attendanceApi = {
 export const socialApi = {
   getAccounts: () => apiRequest('/social/accounts'),
   getPosts: () => apiRequest('/social/posts'),
+  uploadMedia: (formData) =>
+    apiRequest('/social/upload', {
+      method: 'POST',
+      body: formData,
+    }),
   createPost: (data) =>
     apiRequest('/social/posts', {
       method: 'POST',
