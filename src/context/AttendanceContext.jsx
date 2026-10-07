@@ -29,13 +29,14 @@ function dataUrlToFile(dataUrl, filename = 'attendance.jpg') {
 
 export function AttendanceProvider({ children }) {
   const { user, isAuthenticated } = useAuth();
+  const isCleaner = (user?.role || '').toLowerCase() === 'cleaner';
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Fetch all attendance records from backend
   const refreshAttendance = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isCleaner) {
       setRecords([]);
       setLoading(false);
       return;
@@ -55,12 +56,17 @@ export function AttendanceProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isCleaner]);
 
   // Load records on authentication change
   useEffect(() => {
-    refreshAttendance();
-  }, [refreshAttendance]);
+    if (isAuthenticated && !isCleaner) {
+      refreshAttendance();
+    } else {
+      setRecords([]);
+      setLoading(false);
+    }
+  }, [isAuthenticated, isCleaner, refreshAttendance]);
 
   // Clock In — uploads verification photo to Cloudinary & persists to MySQL
   const clockIn = useCallback(

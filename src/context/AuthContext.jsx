@@ -9,7 +9,7 @@
  *   - cleaner:    Cleaning Upload only
  */
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authApi, usersApi, setToken, getToken } from '../services/api';
 
 const AuthContext = createContext();
@@ -112,13 +112,16 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
+  const userRef = useRef(null);
+  userRef.current = user;
 
   // Fetch staff users from backend database (single source of truth)
   const refreshUsers = useCallback(async () => {
     if (!getToken()) {
       return [];
     }
-    if (user && (user.role || '').toLowerCase() === 'cleaner') {
+    const currentRole = (userRef.current?.role || '').toLowerCase();
+    if (currentRole === 'cleaner') {
       return [];
     }
     try {
@@ -151,7 +154,7 @@ export function AuthProvider({ children }) {
       setError(err.message || 'Failed to connect to backend server');
     }
     return [];
-  }, [user]);
+  }, []);
 
   // Clear any legacy localStorage on mount
   useEffect(() => {
@@ -160,8 +163,13 @@ export function AuthProvider({ children }) {
     } catch (e) {}
   }, []);
 
-  // Restore authenticated session on mount
+  const restoredOnceRef = useRef(false);
+
+  // Restore authenticated session on mount (ONLY ONCE)
   useEffect(() => {
+    if (restoredOnceRef.current) return;
+    restoredOnceRef.current = true;
+
     async function restoreSession() {
       const existingToken = getToken();
       if (!existingToken) {
@@ -175,7 +183,6 @@ export function AuthProvider({ children }) {
         if (userData && (userData.email || userData.id)) {
           const norm = normalizeUser(userData);
           setUser(norm);
-          // Attempt background sync of users only if role has access
           if ((norm.role || '').toLowerCase() !== 'cleaner') {
             refreshUsers();
           }
@@ -191,7 +198,7 @@ export function AuthProvider({ children }) {
     }
 
     restoreSession();
-  }, [refreshUsers]);
+  }, []);
 
   const login = useCallback(async (emailOrUsername, password) => {
     const input = (emailOrUsername || '').trim();
