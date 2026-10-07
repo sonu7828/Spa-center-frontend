@@ -168,13 +168,14 @@ export function formatBackendClient(c) {
 export function ClientsProvider({ children }) {
   const { isAuthenticated, user } = useAuth();
   const isManager = user?.role === 'manager' || user?.role === 'MANAGER';
+  const isCleaner = (user?.role || '').toLowerCase() === 'cleaner';
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Fetch real clients from backend on mount
   const refreshClients = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isCleaner) {
       setLoading(false);
       setError(null);
       return;
@@ -194,11 +195,15 @@ export function ClientsProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isCleaner]);
 
   useEffect(() => {
-    refreshClients();
-  }, [refreshClients]);
+    if (isAuthenticated && !isCleaner) {
+      refreshClients();
+    } else {
+      setLoading(false);
+    }
+  }, [isAuthenticated, isCleaner, refreshClients]);
 
   const getClient = useCallback(
     (id) => {

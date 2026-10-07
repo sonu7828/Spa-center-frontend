@@ -118,6 +118,9 @@ export function AuthProvider({ children }) {
     if (!getToken()) {
       return [];
     }
+    if (user && (user.role || '').toLowerCase() === 'cleaner') {
+      return [];
+    }
     try {
       setError(null);
       const res = await usersApi.getAll();
@@ -148,7 +151,7 @@ export function AuthProvider({ children }) {
       setError(err.message || 'Failed to connect to backend server');
     }
     return [];
-  }, []);
+  }, [user]);
 
   // Clear any legacy localStorage on mount
   useEffect(() => {
@@ -170,9 +173,12 @@ export function AuthProvider({ children }) {
         const res = await authApi.getMe();
         const userData = res?.data || res;
         if (userData && (userData.email || userData.id)) {
-          setUser(normalizeUser(userData));
-          // Attempt background sync of users
-          refreshUsers();
+          const norm = normalizeUser(userData);
+          setUser(norm);
+          // Attempt background sync of users only if role has access
+          if ((norm.role || '').toLowerCase() !== 'cleaner') {
+            refreshUsers();
+          }
         } else {
           setToken(null);
         }
@@ -208,7 +214,9 @@ export function AuthProvider({ children }) {
         setToken(token);
         const norm = normalizeUser(apiUser);
         setUser(norm);
-        refreshUsers();
+        if ((norm.role || '').toLowerCase() !== 'cleaner') {
+          refreshUsers();
+        }
         return norm;
       }
     } catch (apiError) {

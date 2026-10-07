@@ -123,7 +123,8 @@ function formatActivity(act) {
 }
 
 export function OperationsProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const isCleaner = (user?.role || '').toLowerCase() === 'cleaner';
   // Service stock items loaded from backend
   const [serviceStock, setServiceStock] = useState([]);
   const [isLoadingStock, setIsLoadingStock] = useState(true);
@@ -163,7 +164,7 @@ export function OperationsProvider({ children }) {
 
   // Load stock items and activity history from backend
   const refreshStock = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isCleaner) {
       setIsLoadingStock(false);
       return;
     }
@@ -210,15 +211,15 @@ export function OperationsProvider({ children }) {
     } finally {
       setIsLoadingStock(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isCleaner]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !isCleaner) {
       refreshStock();
     } else {
       setIsLoadingStock(false);
     }
-  }, [isAuthenticated, refreshStock]);
+  }, [isAuthenticated, isCleaner, refreshStock]);
 
   // Check if an appointment was already closed
   const isAppointmentClosed = useCallback(

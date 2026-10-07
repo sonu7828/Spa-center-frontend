@@ -95,14 +95,15 @@ export function formatBackendAppointment(apt) {
 }
 
 export function AppointmentsProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const isCleaner = (user?.role || '').toLowerCase() === 'cleaner';
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Fetch real appointments from backend on mount
   const refreshAppointments = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isCleaner) {
       setLoading(false);
       setError(null);
       return;
@@ -122,16 +123,16 @@ export function AppointmentsProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isCleaner]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !isCleaner) {
       refreshAppointments();
     } else {
       setAppointments([]);
       setLoading(false);
     }
-  }, [isAuthenticated, refreshAppointments]);
+  }, [isAuthenticated, isCleaner, refreshAppointments]);
 
   const addAppointment = useCallback(
     async (data) => {
