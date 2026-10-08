@@ -489,6 +489,7 @@ export default function SocialMedia() {
                   <input
                     type="date"
                     required
+                    min={new Date().toISOString().split('T')[0]}
                     value={scheduledDate}
                     onChange={(e) => setScheduledDate(e.target.value)}
                     className="w-full h-[40px] px-3 bg-white border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
