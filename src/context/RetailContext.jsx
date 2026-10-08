@@ -120,6 +120,7 @@ export function RetailProvider({ children }) {
           return {
             ...d,
             name: updates.name !== undefined ? updates.name.trim() : d.name,
+            barcode: updates.barcode !== undefined ? updates.barcode : d.barcode,
             price: cleanPrice !== undefined ? cleanPrice : d.price,
             quantity: cleanStock !== undefined ? cleanStock : d.quantity,
             isActive: updates.active !== undefined ? Boolean(updates.active) : d.isActive,
@@ -129,6 +130,7 @@ export function RetailProvider({ children }) {
       try {
         await stockApi.updateRetail(id, {
           ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
+          ...(updates.barcode !== undefined ? { barcode: updates.barcode } : {}),
           ...(cleanPrice !== undefined ? { price: cleanPrice } : {}),
           ...(cleanStock !== undefined ? { quantity: cleanStock } : {}),
           ...(updates.active !== undefined ? { isActive: Boolean(updates.active) } : {}),
@@ -192,6 +194,7 @@ export function RetailProvider({ children }) {
           return {
             ...c,
             name: updates.name !== undefined ? updates.name.trim() : c.name,
+            barcode: updates.barcode !== undefined ? updates.barcode : c.barcode,
             price: cleanPrice !== undefined ? cleanPrice : c.price,
             quantity: cleanStock !== undefined ? cleanStock : c.quantity,
             isActive: updates.active !== undefined ? Boolean(updates.active) : c.isActive,
@@ -201,6 +204,7 @@ export function RetailProvider({ children }) {
       try {
         await stockApi.updateRetail(id, {
           ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
+          ...(updates.barcode !== undefined ? { barcode: updates.barcode } : {}),
           ...(cleanPrice !== undefined ? { price: cleanPrice } : {}),
           ...(cleanStock !== undefined ? { quantity: cleanStock } : {}),
           ...(updates.active !== undefined ? { isActive: Boolean(updates.active) } : {}),
