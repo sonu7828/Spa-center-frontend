@@ -27,6 +27,7 @@ import {
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useSocial } from '../context/SocialContext';
+import { socialApi } from '../services/api';
 
 const platformBadges = {
   facebook: { name: 'Facebook', bg: 'bg-[#1877F2]/10', text: 'text-[#1877F2]', border: 'border-[#1877F2]/30' },
@@ -166,11 +167,32 @@ export default function SocialMedia() {
     setFeedbackMsg(null);
 
     try {
-      const urls = mediaList.map((m) => m.url);
+      // 1. Upload any local files to Cloudinary first so Meta gets real public HTTPS URLs
+      let uploadedUrls = [];
+      const filesToUpload = mediaList.filter((m) => m.file);
+
+      if (filesToUpload.length > 0) {
+        const formData = new FormData();
+        filesToUpload.forEach((m) => {
+          formData.append('files', m.file);
+        });
+        const uploadRes = await socialApi.uploadMedia(formData);
+        if (uploadRes?.data?.urls) {
+          uploadedUrls = uploadRes.data.urls;
+        }
+      }
+
+      // 2. Include any pre-existing public URLs (e.g. from Client Before/After photos)
+      const existingUrls = mediaList
+        .filter((m) => !m.file && m.url && !m.url.startsWith('blob:'))
+        .map((m) => m.url);
+
+      const finalUrls = [...uploadedUrls, ...existingUrls];
+
       const res = await createPost({
-        media: urls[0] || null,
-        mediaUrls: urls,
-        mediaType: urls.length > 1 ? 'CAROUSEL' : mediaType,
+        media: finalUrls[0] || null,
+        mediaUrls: finalUrls,
+        mediaType: finalUrls.length > 1 ? 'CAROUSEL' : mediaType,
         caption,
         platforms: selectedPlatforms,
         isScheduled: postMode === 'schedule',

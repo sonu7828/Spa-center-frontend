@@ -9,7 +9,7 @@
  *   - cleaner:    Cleaning Upload only
  */
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authApi, usersApi, setToken, getToken } from '../services/api';
 
 const AuthContext = createContext();
@@ -112,10 +112,16 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
+  const userRef = useRef(null);
+  userRef.current = user;
 
   // Fetch staff users from backend database (single source of truth)
   const refreshUsers = useCallback(async () => {
     if (!getToken()) {
+      return [];
+    }
+    const currentRole = (userRef.current?.role || '').toLowerCase();
+    if (currentRole === 'cleaner') {
       return [];
     }
     try {
@@ -157,8 +163,13 @@ export function AuthProvider({ children }) {
     } catch (e) {}
   }, []);
 
-  // Restore authenticated session on mount
+  const restoredOnceRef = useRef(false);
+
+  // Restore authenticated session on mount (ONLY ONCE)
   useEffect(() => {
+    if (restoredOnceRef.current) return;
+    restoredOnceRef.current = true;
+
     async function restoreSession() {
       const existingToken = getToken();
       if (!existingToken) {
@@ -170,9 +181,11 @@ export function AuthProvider({ children }) {
         const res = await authApi.getMe();
         const userData = res?.data || res;
         if (userData && (userData.email || userData.id)) {
-          setUser(normalizeUser(userData));
-          // Attempt background sync of users
-          refreshUsers();
+          const norm = normalizeUser(userData);
+          setUser(norm);
+          if ((norm.role || '').toLowerCase() !== 'cleaner') {
+            refreshUsers();
+          }
         } else {
           setToken(null);
         }
@@ -185,7 +198,7 @@ export function AuthProvider({ children }) {
     }
 
     restoreSession();
-  }, [refreshUsers]);
+  }, []);
 
   const login = useCallback(async (emailOrUsername, password) => {
     const input = (emailOrUsername || '').trim();
@@ -208,7 +221,9 @@ export function AuthProvider({ children }) {
         setToken(token);
         const norm = normalizeUser(apiUser);
         setUser(norm);
-        refreshUsers();
+        if ((norm.role || '').toLowerCase() !== 'cleaner') {
+          refreshUsers();
+        }
         return norm;
       }
     } catch (apiError) {
