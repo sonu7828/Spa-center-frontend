@@ -632,13 +632,35 @@ export default function SocialMedia() {
                       </button>
                     </>
                   ) : post.status === 'published' ? (
-                    <span className="inline-block px-2.5 py-0.5 rounded-[6px] text-[11px] font-semibold bg-success-soft text-success border border-success/20">
-                      Published
-                    </span>
+                    <>
+                      <span className="inline-block px-2.5 py-0.5 rounded-[6px] text-[11px] font-semibold bg-success-soft text-success border border-success/20">
+                        Published
+                      </span>
+                      {post.errorMessage && (
+                        <button
+                          type="button"
+                          onClick={() => handlePublishNow(post.id)}
+                          className="text-[11px] font-semibold px-2 py-1 rounded-[6px] bg-warning-soft text-warning hover:bg-warning/20 border border-warning/30 cursor-pointer"
+                          title="Retry failed platforms"
+                        >
+                          Retry
+                        </button>
+                      )}
+                    </>
                   ) : (
-                    <span className="inline-block px-2.5 py-0.5 rounded-[6px] text-[11px] font-semibold bg-[#FAECEC] text-[#B34040] border border-[#ECCACA]">
-                      Failed
-                    </span>
+                    <>
+                      <span className="inline-block px-2.5 py-0.5 rounded-[6px] text-[11px] font-semibold bg-[#FAECEC] text-[#B34040] border border-[#ECCACA]">
+                        Failed
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handlePublishNow(post.id)}
+                        className="text-[11px] font-semibold px-2 py-1 rounded-[6px] bg-sage-soft text-sage hover:bg-sage-soft/80 border border-sage/20 cursor-pointer"
+                        title="Retry publishing"
+                      >
+                        Retry
+                      </button>
+                    </>
                   )}
 
                   <button
