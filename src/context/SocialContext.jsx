@@ -38,7 +38,7 @@ export function SocialProvider({ children }) {
     try {
       const res = await socialApi.getAccounts();
       if (res?.data && Array.isArray(res.data)) {
-        setAccounts(res.data);
+        setAccounts(res.data.filter((a) => a.id !== 'tiktok'));
       }
     } catch (err) {
       console.warn('Could not fetch social accounts from backend:', err?.message || err);

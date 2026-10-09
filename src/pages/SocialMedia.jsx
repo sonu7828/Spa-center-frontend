@@ -9,7 +9,7 @@
  * 3. Recent Posts — Real feed from database with real statuses (Published, Scheduled, Failed)
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Upload,
   Image as ImageIcon,
@@ -48,6 +48,11 @@ export default function SocialMedia() {
 
   const fileInputRef = useRef(null);
 
+  // Filter accounts strictly to only supported platforms (Facebook and Instagram)
+  const displayAccounts = useMemo(() => {
+    return (accounts || []).filter((a) => a.id !== 'tiktok');
+  }, [accounts]);
+
   // Form State
   const [caption, setCaption] = useState('');
   const [mediaList, setMediaList] = useState([]); // Array of { url, label, file }
@@ -63,11 +68,11 @@ export default function SocialMedia() {
   // Keep selected platforms in sync with accounts if desired
   useEffect(() => {
     // If no platform selected yet, auto-select connected ones
-    const connectedIds = accounts.filter((a) => a.connected).map((a) => a.id);
+    const connectedIds = displayAccounts.filter((a) => a.connected).map((a) => a.id);
     if (connectedIds.length > 0 && selectedPlatforms.length === 0) {
       setSelectedPlatforms(connectedIds);
     }
-  }, [accounts]);
+  }, [displayAccounts]);
 
   // Load draft from Client Before/After if present
   useEffect(() => {
@@ -149,7 +154,7 @@ export default function SocialMedia() {
 
     // Check if any of the selected platforms are not connected (Keys missing)
     const unconfigured = selectedPlatforms.filter((pId) => {
-      const acc = accounts.find((a) => a.id === pId);
+      const acc = displayAccounts.find((a) => a.id === pId);
       return !acc || !acc.connected;
     });
 
@@ -299,7 +304,7 @@ export default function SocialMedia() {
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {accounts.map((acc) => (
+          {displayAccounts.map((acc) => (
             <div
               key={acc.id}
               className="flex items-center justify-between px-3.5 py-2.5 rounded-[12px] bg-soft-cream/40 border border-border/70"
@@ -424,7 +429,7 @@ export default function SocialMedia() {
               Select Platforms
             </label>
             <div className="flex flex-wrap gap-2">
-              {accounts.map((acc) => {
+              {displayAccounts.map((acc) => {
                 const isSelected = selectedPlatforms.includes(acc.id);
                 const badge = platformBadges[acc.id] || {};
 
