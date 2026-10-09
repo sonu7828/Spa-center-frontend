@@ -32,7 +32,6 @@ import { socialApi } from '../services/api';
 const platformBadges = {
   facebook: { name: 'Facebook', bg: 'bg-[#1877F2]/10', text: 'text-[#1877F2]', border: 'border-[#1877F2]/30' },
   instagram: { name: 'Instagram', bg: 'bg-[#E1306C]/10', text: 'text-[#E1306C]', border: 'border-[#E1306C]/30' },
-  tiktok: { name: 'TikTok', bg: 'bg-charcoal/10', text: 'text-charcoal', border: 'border-charcoal/20' },
 };
 
 export default function SocialMedia() {
@@ -299,7 +298,7 @@ export default function SocialMedia() {
           Connected Accounts
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {accounts.map((acc) => (
             <div
               key={acc.id}

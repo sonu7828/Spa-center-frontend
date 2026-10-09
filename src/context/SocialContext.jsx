@@ -16,14 +16,15 @@ import { useAuth } from './AuthContext';
 const SocialContext = createContext();
 
 const DEFAULT_ACCOUNTS = [
-  { id: 'facebook', name: 'Facebook', handle: 'Omega Spa Douala', connected: false, statusText: 'Checking...', iconColor: '#1877F2' },
-  { id: 'instagram', name: 'Instagram', handle: '@omegaspadouala', connected: false, statusText: 'Checking...', iconColor: '#E1306C' },
-  { id: 'tiktok', name: 'TikTok', handle: '@omegaspadouala', connected: false, statusText: 'Checking...', iconColor: '#000000' },
+  { id: 'facebook', name: 'Facebook', handle: 'OMEGA SPA', connected: false, statusText: 'Checking...', iconColor: '#1877F2' },
+  { id: 'instagram', name: 'Instagram', handle: '@omegaspa237', connected: false, statusText: 'Checking...', iconColor: '#E1306C' },
 ];
 
 export function SocialProvider({ children }) {
   const { user, isAuthenticated } = useAuth();
-  const isManager = user?.role === 'manager' || user?.role === 'MANAGER';
+  const isAuthorized = Boolean(
+    user?.role && ['manager', 'reception'].includes(user.role.toLowerCase())
+  );
 
   const [accounts, setAccounts] = useState(DEFAULT_ACCOUNTS);
   const [posts, setPosts] = useState([]);
@@ -31,9 +32,9 @@ export function SocialProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch real account connection statuses from backend (Manager only)
+  // Fetch real account connection statuses from backend (Manager & Reception)
   const refreshAccounts = useCallback(async () => {
-    if (!isAuthenticated || !isManager) return;
+    if (!isAuthenticated || !isAuthorized) return;
     try {
       const res = await socialApi.getAccounts();
       if (res?.data && Array.isArray(res.data)) {
@@ -43,16 +44,15 @@ export function SocialProvider({ children }) {
       console.warn('Could not fetch social accounts from backend:', err?.message || err);
       // Fallback: report API Key Required honestly
       setAccounts([
-        { id: 'facebook', name: 'Facebook', handle: 'Omega Spa Douala', connected: false, statusText: 'API Key Required', missingKeys: ['META_PAGE_ACCESS_TOKEN', 'META_PAGE_ID'], iconColor: '#1877F2' },
-        { id: 'instagram', name: 'Instagram', handle: '@omegaspadouala', connected: false, statusText: 'API Key Required', missingKeys: ['META_PAGE_ACCESS_TOKEN', 'INSTAGRAM_ACCOUNT_ID'], iconColor: '#E1306C' },
-        { id: 'tiktok', name: 'TikTok', handle: '@omegaspadouala', connected: false, statusText: 'API Key Required', missingKeys: ['TIKTOK_ACCESS_TOKEN'], iconColor: '#000000' },
+        { id: 'facebook', name: 'Facebook', handle: 'OMEGA SPA', connected: false, statusText: 'API Key Required', missingKeys: ['META_PAGE_ACCESS_TOKEN', 'META_PAGE_ID'], iconColor: '#1877F2' },
+        { id: 'instagram', name: 'Instagram', handle: '@omegaspa237', connected: false, statusText: 'API Key Required', missingKeys: ['META_PAGE_ACCESS_TOKEN', 'INSTAGRAM_ACCOUNT_ID'], iconColor: '#E1306C' },
       ]);
     }
-  }, [isAuthenticated, isManager]);
+  }, [isAuthenticated, isAuthorized]);
 
-  // Fetch all posts from backend (Manager only)
+  // Fetch all posts from backend (Manager & Reception)
   const refreshPosts = useCallback(async () => {
-    if (!isAuthenticated || !isManager) return;
+    if (!isAuthenticated || !isAuthorized) return;
     try {
       const res = await socialApi.getPosts();
       if (res?.data && Array.isArray(res.data)) {
@@ -61,14 +61,14 @@ export function SocialProvider({ children }) {
     } catch (err) {
       console.warn('Could not fetch social posts from backend:', err?.message || err);
     }
-  }, [isAuthenticated, isManager]);
+  }, [isAuthenticated, isAuthorized]);
 
   useEffect(() => {
-    if (isAuthenticated && isManager) {
+    if (isAuthenticated && isAuthorized) {
       refreshAccounts();
       refreshPosts();
     }
-  }, [isAuthenticated, isManager, refreshAccounts, refreshPosts]);
+  }, [isAuthenticated, isAuthorized, refreshAccounts, refreshPosts]);
 
   // Toggle account connection
   const toggleAccountConnection = useCallback((platformId) => {
