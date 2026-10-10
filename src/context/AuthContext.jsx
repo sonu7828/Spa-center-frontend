@@ -156,10 +156,12 @@ export function AuthProvider({ children }) {
     return [];
   }, []);
 
-  // Clear any legacy localStorage on mount
+  // Clear any legacy persistent storage on mount so browser restart always requires login
   useEffect(() => {
     try {
       localStorage.removeItem('omega_staff_users');
+      localStorage.removeItem('omega_token');
+      localStorage.removeItem('token');
     } catch (e) {}
   }, []);
 
@@ -237,6 +239,11 @@ export function AuthProvider({ children }) {
     setToken(null);
     setUser(null);
     setAllUsers([]);
+    try {
+      sessionStorage.clear();
+      localStorage.removeItem('omega_token');
+      localStorage.removeItem('token');
+    } catch (e) {}
   }, []);
 
   const addUser = useCallback(async (userData) => {

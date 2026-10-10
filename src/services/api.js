@@ -5,18 +5,33 @@
 
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) || 'http://localhost:5000/api/v1';
 
+// Clean up any legacy persistent localStorage tokens immediately so reopening browser requires login
+try {
+  localStorage.removeItem('omega_token');
+  localStorage.removeItem('token');
+} catch (e) {}
+
 export function getToken() {
-  return localStorage.getItem('omega_token') || localStorage.getItem('token') || null;
+  try {
+    return sessionStorage.getItem('omega_token') || sessionStorage.getItem('token') || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 export function setToken(token) {
-  if (token) {
-    localStorage.setItem('omega_token', token);
-    localStorage.setItem('token', token);
-  } else {
+  try {
+    if (token) {
+      sessionStorage.setItem('omega_token', token);
+      sessionStorage.setItem('token', token);
+    } else {
+      sessionStorage.removeItem('omega_token');
+      sessionStorage.removeItem('token');
+    }
+    // Wipe persistent localStorage tokens to prevent unauthorized auto-login across browser restarts
     localStorage.removeItem('omega_token');
     localStorage.removeItem('token');
-  }
+  } catch (e) {}
 }
 
 export async function apiRequest(endpoint, options = {}) {
