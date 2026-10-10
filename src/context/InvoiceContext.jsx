@@ -146,7 +146,7 @@ export function InvoiceProvider({ children }) {
     try {
       setLoading(true);
       setError(null);
-      const res = await invoicesApi.getAll({ limit: 100 });
+      const res = await invoicesApi.getAll({ limit: 500 });
       const apiList = res?.data?.invoices || res?.data || [];
       if (Array.isArray(apiList)) {
         const formattedList = apiList.map(formatBackendInvoice).filter(Boolean);

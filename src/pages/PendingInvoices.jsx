@@ -15,7 +15,7 @@
  *   - [ Send / Resend WhatsApp Receipt ] → Structure ready for WhatsApp API
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -24,6 +24,8 @@ import {
   Printer,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   MessageCircle,
   Award,
   Sparkles,
@@ -40,6 +42,8 @@ import {
   Loader2,
   Trash2,
   Search,
+  Filter,
+  ArrowUpDown,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -279,9 +283,8 @@ function SearchableSelect({
       <button
         type="button"
         onClick={handleToggle}
-        className={`w-full ${heightClass} px-3 bg-white border border-border rounded-[10px] text-xs text-charcoal flex items-center justify-between text-left transition-all cursor-pointer hover:border-sage/60 focus:outline-none focus:border-sage ${
-          isOpen ? 'border-sage ring-1 ring-sage/30' : ''
-        }`}
+        className={`w-full ${heightClass} px-3 bg-white border border-border rounded-[10px] text-xs text-charcoal flex items-center justify-between text-left transition-all cursor-pointer hover:border-sage/60 focus:outline-none focus:border-sage ${isOpen ? 'border-sage ring-1 ring-sage/30' : ''
+          }`}
       >
         <div className="truncate pr-2">
           {selectedOption ? (
@@ -292,17 +295,15 @@ function SearchableSelect({
         </div>
         <ChevronDown
           size={14}
-          className={`text-muted-gray shrink-0 transition-transform duration-200 ${
-            isOpen ? 'rotate-180 text-sage' : ''
-          }`}
+          className={`text-muted-gray shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-sage' : ''
+            }`}
         />
       </button>
 
       {isOpen && (
         <div
-          className={`absolute left-0 right-0 z-50 bg-white border border-border rounded-[12px] shadow-xl overflow-hidden animate-scale-up ${
-            openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
-          }`}
+          className={`absolute left-0 right-0 z-50 bg-white border border-border rounded-[12px] shadow-xl overflow-hidden animate-scale-up ${openUpward ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+            }`}
           style={{ minWidth: '100%' }}
         >
           {options.length > 5 && (
@@ -337,9 +338,8 @@ function SearchableSelect({
                       setIsOpen(false);
                       setSearchTerm('');
                     }}
-                    className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-soft-cream/70 transition-colors cursor-pointer ${
-                      isSelected ? 'bg-sage-soft/70 font-semibold text-[#3E5238]' : 'text-charcoal'
-                    }`}
+                    className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-soft-cream/70 transition-colors cursor-pointer ${isSelected ? 'bg-sage-soft/70 font-semibold text-[#3E5238]' : 'text-charcoal'
+                      }`}
                   >
                     <div className="truncate pr-2">
                       <span className="block truncate">{opt.label}</span>
@@ -502,7 +502,7 @@ export default function PendingInvoices() {
   // --- Global Barcode Scanner Listener ---
   const barcodeBuffer = useRef('');
   const lastKeyTime = useRef(Date.now());
-  
+
   const retailProductsRef = useRef([]);
   useEffect(() => {
     retailProductsRef.current = [...(drinks || []), ...(cosmetics || [])];
@@ -519,7 +519,7 @@ export default function PendingInvoices() {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
       const currentTime = Date.now();
-      
+
       // If time between keystrokes is too long (>30000ms), reset buffer
       if (currentTime - lastKeyTime.current > 30000) {
         barcodeBuffer.current = '';
@@ -530,13 +530,13 @@ export default function PendingInvoices() {
         if (barcodeBuffer.current.length >= 3) {
           const scannedCode = barcodeBuffer.current;
           barcodeBuffer.current = ''; // Reset immediately
-          
+
           const product = retailProductsRef.current.find(p => p.barcode === scannedCode);
           if (product) {
             if (!showNewRetailSaleModalRef.current) {
               setShowNewRetailSaleModal(true);
             }
-            
+
             setNewSaleCart((prevCart) => {
               const existing = prevCart.find((item) => item.productId === product.id);
               if (existing) {
@@ -559,25 +559,25 @@ export default function PendingInvoices() {
                 },
               ];
             });
-            
+
             setNewSaleQuantities((prev) => ({
               ...prev,
               [product.id]: (prev[product.id] || 0) + 1
             }));
-            
+
             setNewSaleNotice(`✅ Scanned: ${product.name}`);
             setTimeout(() => setNewSaleNotice(''), 3000);
           } else {
-             setNewSaleNotice(`❌ Not found: ${scannedCode}`);
-             setTimeout(() => setNewSaleNotice(''), 3000);
-             if (!showNewRetailSaleModalRef.current) {
+            setNewSaleNotice(`❌ Not found: ${scannedCode}`);
+            setTimeout(() => setNewSaleNotice(''), 3000);
+            if (!showNewRetailSaleModalRef.current) {
               setShowNewRetailSaleModal(true);
-             }
+            }
           }
         }
         return;
       }
-      
+
       // Accumulate valid barcode characters (numbers and letters usually)
       if (e.key.length === 1) {
         barcodeBuffer.current += e.key;
@@ -598,6 +598,147 @@ export default function PendingInvoices() {
   const pendingInvoices = typeof getPendingInvoices === 'function' ? getPendingInvoices() : [];
   const paidTodayInvoices = typeof getPaidTodayInvoices === 'function' ? getPaidTodayInvoices() : [];
   const historyInvoices = typeof getHistoryInvoices === 'function' ? getHistoryInvoices() : [];
+
+  // --- History Tab Search, Filter & Pagination State ---
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyDateFilter, setHistoryDateFilter] = useState('ALL'); // ALL, TODAY, YESTERDAY, WEEK, MONTH, CUSTOM
+  const [historyCustomDate, setHistoryCustomDate] = useState('');
+  const [historyPaymentFilter, setHistoryPaymentFilter] = useState('ALL'); // ALL, CASH, ORANGE MONEY, MTN MOMO, CARD
+  const [historySortBy, setHistorySortBy] = useState('DATE_DESC'); // DATE_DESC, DATE_ASC, TOTAL_DESC, TOTAL_ASC
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(15);
+
+  const filteredHistoryInvoices = useMemo(() => {
+    return (historyInvoices || []).filter((invoice) => {
+      // 1. Text Search (Invoice #, Client Name, Client Phone, Payment, Service, Technician)
+      if (historySearch.trim()) {
+        const query = historySearch.trim().toLowerCase();
+        const invNum = (formatInvoiceNumber(invoice) || '').toLowerCase();
+        const clientName = (invoice.clientName || '').toLowerCase();
+        const clientPhone = (invoice.clientPhone || '').toLowerCase();
+        const payment = (invoice.paymentMethod || '').toLowerCase();
+        const services = (invoice.items || [])
+          .map((it) => (it.service || it.name || '').toLowerCase())
+          .join(' ');
+        const techs = (invoice.items || [])
+          .map((it) => (it.technician || '').toLowerCase())
+          .join(' ');
+
+        const match =
+          invNum.includes(query) ||
+          clientName.includes(query) ||
+          clientPhone.includes(query) ||
+          payment.includes(query) ||
+          services.includes(query) ||
+          techs.includes(query);
+
+        if (!match) return false;
+      }
+
+      // 2. Payment Method Filter
+      if (historyPaymentFilter !== 'ALL') {
+        const pm = (invoice.paymentMethod || '').toUpperCase();
+        if (historyPaymentFilter === 'CASH' && !pm.includes('CASH')) return false;
+        if (historyPaymentFilter === 'ORANGE MONEY' && !pm.includes('ORANGE')) return false;
+        if (historyPaymentFilter === 'MTN MOMO' && !pm.includes('MTN') && !pm.includes('MOMO')) return false;
+        if (historyPaymentFilter === 'CARD' && !pm.includes('CARD') && !pm.includes('CREDIT')) return false;
+      }
+
+      // 3. Date Filter
+      if (historyDateFilter !== 'ALL') {
+        const invDateStr = invoice.paidAt
+          ? invoice.paidAt.slice(0, 10)
+          : invoice.date
+            ? invoice.date.slice(0, 10)
+            : '';
+
+        if (!invDateStr) return false;
+
+        const todayObj = new Date();
+        const todayIso = todayObj.toISOString().slice(0, 10);
+
+        if (historyDateFilter === 'TODAY') {
+          if (invDateStr !== todayIso) return false;
+        } else if (historyDateFilter === 'YESTERDAY') {
+          const yestObj = new Date();
+          yestObj.setDate(yestObj.getDate() - 1);
+          const yestIso = yestObj.toISOString().slice(0, 10);
+          if (invDateStr !== yestIso) return false;
+        } else if (historyDateFilter === 'WEEK') {
+          const weekAgo = new Date();
+          weekAgo.setDate(weekAgo.getDate() - 7);
+          const weekAgoIso = weekAgo.toISOString().slice(0, 10);
+          if (invDateStr < weekAgoIso) return false;
+        } else if (historyDateFilter === 'MONTH') {
+          const monthAgo = new Date();
+          monthAgo.setDate(monthAgo.getDate() - 30);
+          const monthAgoIso = monthAgo.toISOString().slice(0, 10);
+          if (invDateStr < monthAgoIso) return false;
+        } else if (historyDateFilter === 'CUSTOM' && historyCustomDate) {
+          if (invDateStr !== historyCustomDate) return false;
+        }
+      }
+
+      return true;
+    }).sort((a, b) => {
+      if (historySortBy === 'DATE_DESC') {
+        return (
+          new Date(b.paidAt || b.date || b.createdAt).getTime() -
+          new Date(a.paidAt || a.date || a.createdAt).getTime()
+        );
+      }
+      if (historySortBy === 'DATE_ASC') {
+        return (
+          new Date(a.paidAt || a.date || a.createdAt).getTime() -
+          new Date(b.paidAt || b.date || b.createdAt).getTime()
+        );
+      }
+      const totalA = a.finalTotal !== undefined ? a.finalTotal : a.total;
+      const totalB = b.finalTotal !== undefined ? b.finalTotal : b.total;
+      if (historySortBy === 'TOTAL_DESC') {
+        return totalB - totalA;
+      }
+      if (historySortBy === 'TOTAL_ASC') {
+        return totalA - totalB;
+      }
+      return 0;
+    });
+  }, [
+    historyInvoices,
+    historySearch,
+    historyPaymentFilter,
+    historyDateFilter,
+    historyCustomDate,
+    historySortBy,
+  ]);
+
+  const totalHistoryCount = filteredHistoryInvoices.length;
+  const totalHistoryPages = Math.max(1, Math.ceil(totalHistoryCount / historyPageSize));
+  const paginatedHistoryInvoices = useMemo(() => {
+    const startIndex = (historyPage - 1) * historyPageSize;
+    return filteredHistoryInvoices.slice(startIndex, startIndex + historyPageSize);
+  }, [filteredHistoryInvoices, historyPage, historyPageSize]);
+
+  const historyTotalRevenue = useMemo(() => {
+    return filteredHistoryInvoices.reduce((sum, inv) => {
+      const val = inv.finalTotal !== undefined ? inv.finalTotal : inv.total;
+      return sum + Number(val || 0);
+    }, 0);
+  }, [filteredHistoryInvoices]);
+
+  const isHistoryFiltered =
+    historySearch.trim() !== '' ||
+    historyDateFilter !== 'ALL' ||
+    historyPaymentFilter !== 'ALL';
+
+  const resetHistoryFilters = () => {
+    setHistorySearch('');
+    setHistoryDateFilter('ALL');
+    setHistoryCustomDate('');
+    setHistoryPaymentFilter('ALL');
+    setHistorySortBy('DATE_DESC');
+    setHistoryPage(1);
+  };
 
   const toggleExpand = (id) => {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -667,10 +808,10 @@ export default function PendingInvoices() {
         prev.map((it) =>
           it.productId === product.id
             ? {
-                ...it,
-                qty: it.qty + qty,
-                price: (it.unitPrice || product.price) * (it.qty + qty),
-              }
+              ...it,
+              qty: it.qty + qty,
+              price: (it.unitPrice || product.price) * (it.qty + qty),
+            }
             : it
         )
       );
@@ -831,8 +972,8 @@ export default function PendingInvoices() {
         if (i !== idx) return line;
         const defaultPrice = selectedSvc
           ? (typeof selectedSvc.numericPrice === 'number'
-              ? selectedSvc.numericPrice
-              : parseInt(String(selectedSvc.price).replace(/[^0-9]/g, ''), 10) || 0)
+            ? selectedSvc.numericPrice
+            : parseInt(String(selectedSvc.price).replace(/[^0-9]/g, ''), 10) || 0)
           : '';
         return {
           ...line,
@@ -913,10 +1054,10 @@ export default function PendingInvoices() {
         prev.map((it) =>
           it.productId === product.id
             ? {
-                ...it,
-                qty: it.qty + qty,
-                price: (it.unitPrice || product.price) * (it.qty + qty),
-              }
+              ...it,
+              qty: it.qty + qty,
+              price: (it.unitPrice || product.price) * (it.qty + qty),
+            }
             : it
         )
       );
@@ -1202,172 +1343,66 @@ export default function PendingInvoices() {
         year: 'numeric',
       });
 
-    // Revalidate retail stock before completing payment
-    const retailItemsToValidate = invoice.items.filter(
-      (it) => it.type === 'drink' || it.type === 'cosmetic'
-    );
-    for (const item of retailItemsToValidate) {
-      const source = item.type === 'drink' ? drinks : cosmetics;
-      const currentProduct = source.find(
-        (p) => p.id === item.productId || p.name?.toLowerCase() === (item.name || item.service)?.toLowerCase()
+      // Revalidate retail stock before completing payment
+      const retailItemsToValidate = invoice.items.filter(
+        (it) => it.type === 'drink' || it.type === 'cosmetic'
       );
-      const itemQty = item.qty || 1;
-      if (currentProduct && itemQty > currentProduct.stock) {
-        setPaymentSuccessNotice(
-          `Cannot complete: "${item.name || item.service}" only has ${currentProduct.stock} in stock (requested ${itemQty}).`
+      for (const item of retailItemsToValidate) {
+        const source = item.type === 'drink' ? drinks : cosmetics;
+        const currentProduct = source.find(
+          (p) => p.id === item.productId || p.name?.toLowerCase() === (item.name || item.service)?.toLowerCase()
         );
-        setTimeout(() => setPaymentSuccessNotice(null), 5000);
-        return;
-      }
-    }
-
-    const clientId = invoice.clientId;
-    const clientLoyalty = getClientLoyalty(clientId);
-
-    // Calculate loyalty redemption
-    const rs = redeemState[invoice.id] || {};
-    const enteredPts = parseInt(rs.points, 10) || 0;
-    const validPtsToRedeem =
-      rs.wantRedeem && enteredPts > 0
-        ? Math.min(clientLoyalty.balance, enteredPts)
-        : 0;
-    const discountAmount = calculateDiscount(validPtsToRedeem);
-    const finalTotal = Math.max(0, invoice.total - discountAmount);
-
-    // Loyalty: calculate earned points from SERVICE items ONLY (retail excluded)
-    const serviceItemsForLoyalty = invoice.items.filter(
-      (it) => it.type !== 'drink' && it.type !== 'cosmetic'
-    );
-    const serviceSubtotal = serviceItemsForLoyalty.reduce(
-      (sum, it) => sum + (typeof it.price === 'number' ? it.price : parseInt(String(it.price).replace(/[^0-9]/g, ''), 10) || 0),
-      0
-    );
-    // Apply discount ratio to service subtotal if discount was applied
-    const serviceSubtotalAfterDiscount = discountAmount > 0 && invoice.total > 0
-      ? Math.round(serviceSubtotal * (finalTotal / invoice.total))
-      : serviceSubtotal;
-    const firstServiceName = serviceItemsForLoyalty[0]?.service;
-    const earnedPts = serviceSubtotal > 0 ? calculateEarnedPoints(serviceSubtotalAfterDiscount, firstServiceName) : 0;
-
-    // 1. Redeem points if applicable
-    if (rs.wantRedeem && validPtsToRedeem >= settings.minPointsToRedeem) {
-      redeemPoints(clientId, {
-        pointsToRedeem: validPtsToRedeem,
-        serviceName: invoice.items.map((it) => it.service).join(', '),
-        date: today,
-      });
-    }
-
-    // 2. For each service item, record operations (idempotent)
-    const serviceItems = invoice.items.filter(
-      (it) => it.type !== 'drink' && it.type !== 'cosmetic'
-    );
-    serviceItems.forEach((item) => {
-      const itemPriceNum =
-        typeof item.price === 'number'
-          ? item.price
-          : parseInt(String(item.price).replace(/[^0-9]/g, ''), 10) || 0;
-
-      let itemFinalPrice = itemPriceNum;
-      if (discountAmount > 0 && invoice.total > 0) {
-        const ratio = itemPriceNum / invoice.total;
-        itemFinalPrice = Math.round(finalTotal * ratio);
+        const itemQty = item.qty || 1;
+        if (currentProduct && itemQty > currentProduct.stock) {
+          setPaymentSuccessNotice(
+            `Cannot complete: "${item.name || item.service}" only has ${currentProduct.stock} in stock (requested ${itemQty}).`
+          );
+          setTimeout(() => setPaymentSuccessNotice(null), 5000);
+          return;
+        }
       }
 
-      const itemFinalPriceStr = itemFinalPrice.toLocaleString('en-US');
-      const itemSvcId = item.appointmentServiceId || item.id;
+      const clientId = invoice.clientId;
+      const clientLoyalty = getClientLoyalty(clientId);
 
-      if (!isServiceClosed(itemSvcId, item.appointmentId)) {
-        closeServiceRecord({
-          appointmentId: item.appointmentId,
-          appointmentServiceId: itemSvcId,
-          clientId: clientId,
-          clientName: invoice.clientName,
-          service: item.service,
-          technician: item.technician,
-          product: item.product,
-          price: itemFinalPriceStr,
-          payment,
+      // Calculate loyalty redemption
+      const rs = redeemState[invoice.id] || {};
+      const enteredPts = parseInt(rs.points, 10) || 0;
+      const validPtsToRedeem =
+        rs.wantRedeem && enteredPts > 0
+          ? Math.min(clientLoyalty.balance, enteredPts)
+          : 0;
+      const discountAmount = calculateDiscount(validPtsToRedeem);
+      const finalTotal = Math.max(0, invoice.total - discountAmount);
+
+      // Loyalty: calculate earned points from SERVICE items ONLY (retail excluded)
+      const serviceItemsForLoyalty = invoice.items.filter(
+        (it) => it.type !== 'drink' && it.type !== 'cosmetic'
+      );
+      const serviceSubtotal = serviceItemsForLoyalty.reduce(
+        (sum, it) => sum + (typeof it.price === 'number' ? it.price : parseInt(String(it.price).replace(/[^0-9]/g, ''), 10) || 0),
+        0
+      );
+      // Apply discount ratio to service subtotal if discount was applied
+      const serviceSubtotalAfterDiscount = discountAmount > 0 && invoice.total > 0
+        ? Math.round(serviceSubtotal * (finalTotal / invoice.total))
+        : serviceSubtotal;
+      const firstServiceName = serviceItemsForLoyalty[0]?.service;
+      const earnedPts = serviceSubtotal > 0 ? calculateEarnedPoints(serviceSubtotalAfterDiscount, firstServiceName) : 0;
+
+      // 1. Redeem points if applicable
+      if (rs.wantRedeem && validPtsToRedeem >= settings.minPointsToRedeem) {
+        redeemPoints(clientId, {
+          pointsToRedeem: validPtsToRedeem,
+          serviceName: invoice.items.map((it) => it.service).join(', '),
           date: today,
         });
       }
 
-      addClientServiceHistory(clientId, {
-        date: today,
-        service: item.service,
-        technician: item.technician,
-        product: item.product,
-        price: itemFinalPriceStr,
-      });
-    });
-
-    // 3. Contribute retail portion to daily totals without double-counting
-    const retailItems = invoice.items.filter(
-      (it) => it.type === 'drink' || it.type === 'cosmetic'
-    );
-    if (retailItems.length > 0) {
-      const retailSubtotal = retailItems.reduce((sum, it) => sum + (it.price || 0), 0);
-      let retailFinalAmount = retailSubtotal;
-      if (discountAmount > 0 && invoice.total > 0) {
-        const ratio = retailSubtotal / invoice.total;
-        retailFinalAmount = Math.round(finalTotal * ratio);
-      }
-      recordRetailSale({
-        amount: retailFinalAmount,
-        payment,
-        items: retailItems,
-        clientName: invoice.clientName,
-        isWalkIn: false,
-      });
-    }
-
-    // 4. Deduct retail stock for sold drinks & cosmetics (never allows negative stock)
-    await deductRetailStock(invoice.items);
-
-    // 5. Earn loyalty points on SERVICE items only (retail excluded from loyalty)
-    if (serviceSubtotal > 0 && clientId) {
-      earnPoints(clientId, {
-        amount: serviceSubtotalAfterDiscount,
-        serviceName: serviceItemsForLoyalty.map((it) => it.service || it.name).join(', '),
-        date: today,
-      });
-    }
-
-    // 6. Create feedback request
-    try {
-      await createFeedbackRequest({
-        clientId: clientId,
-        clientName: invoice.clientName,
-        appointmentId: invoice.appointmentId,
-        service: invoice.items.map((it) => it.service || it.name).join(', '),
-        technician: invoice.items.map((it) => it.technician || 'Staff').join(', '),
-      });
-    } catch (fbErr) {
-      console.warn('Feedback token generation error:', fbErr);
-    }
-
-    // 6.5. Generate Employee Referral Commission (ONLY after successful payment)
-    const linkedClient = clients.find(
-      (c) => c.id === invoice.clientId || c.name?.toLowerCase() === invoice.clientName?.toLowerCase()
-    );
-    const linkedApt = appointments.find(
-      (a) => a.id === invoice.appointmentId || a.clientId === invoice.clientId
-    );
-    const referralEmployee = invoice.introducedBy || linkedApt?.introducedBy || linkedClient?.introducedBy || null;
-    const referralEmployeeId = invoice.introducedById || linkedApt?.introducedById || linkedClient?.introducedById || null;
-
-    // Verify referral employee is not a Manager (Manager client creation must never receive referral commission)
-    const isManagerEmployee =
-      allUsers?.some(
-        (u) =>
-          (u.role === 'manager' || u.role === 'MANAGER') &&
-          (String(u.id) === String(referralEmployeeId) ||
-            (referralEmployee && u.name?.toLowerCase() === referralEmployee.toLowerCase()))
-      ) ||
-      (referralEmployee && referralEmployee.toLowerCase() === 'manager');
-
-    let generatedCommissions = [];
-    if (referralEmployee && !isManagerEmployee) {
+      // 2. For each service item, record operations (idempotent)
+      const serviceItems = invoice.items.filter(
+        (it) => it.type !== 'drink' && it.type !== 'cosmetic'
+      );
       serviceItems.forEach((item) => {
         const itemPriceNum =
           typeof item.price === 'number'
@@ -1380,51 +1415,157 @@ export default function PendingInvoices() {
           itemFinalPrice = Math.round(finalTotal * ratio);
         }
 
-        const comm = calculateAndAddCommission({
+        const itemFinalPriceStr = itemFinalPrice.toLocaleString('en-US');
+        const itemSvcId = item.appointmentServiceId || item.id;
+
+        if (!isServiceClosed(itemSvcId, item.appointmentId)) {
+          closeServiceRecord({
+            appointmentId: item.appointmentId,
+            appointmentServiceId: itemSvcId,
+            clientId: clientId,
+            clientName: invoice.clientName,
+            service: item.service,
+            technician: item.technician,
+            product: item.product,
+            price: itemFinalPriceStr,
+            payment,
+            date: today,
+          });
+        }
+
+        addClientServiceHistory(clientId, {
           date: today,
-          clientName: invoice.clientName,
-          clientId: invoice.clientId,
           service: item.service,
-          serviceAmount: itemFinalPrice,
-          performingTechnician: item.technician,
-          performingTechnicianId: item.technicianId,
-          referralEmployee: referralEmployee,
-          referralEmployeeId: referralEmployeeId,
-          invoiceId: invoice.id,
-          appointmentId: invoice.appointmentId || item.appointmentId,
+          technician: item.technician,
+          product: item.product,
+          price: itemFinalPriceStr,
         });
-        if (comm) generatedCommissions.push(comm);
       });
+
+      // 3. Contribute retail portion to daily totals without double-counting
+      const retailItems = invoice.items.filter(
+        (it) => it.type === 'drink' || it.type === 'cosmetic'
+      );
+      if (retailItems.length > 0) {
+        const retailSubtotal = retailItems.reduce((sum, it) => sum + (it.price || 0), 0);
+        let retailFinalAmount = retailSubtotal;
+        if (discountAmount > 0 && invoice.total > 0) {
+          const ratio = retailSubtotal / invoice.total;
+          retailFinalAmount = Math.round(finalTotal * ratio);
+        }
+        recordRetailSale({
+          amount: retailFinalAmount,
+          payment,
+          items: retailItems,
+          clientName: invoice.clientName,
+          isWalkIn: false,
+        });
+      }
+
+      // 4. Deduct retail stock for sold drinks & cosmetics (never allows negative stock)
+      await deductRetailStock(invoice.items);
+
+      // 5. Earn loyalty points on SERVICE items only (retail excluded from loyalty)
+      if (serviceSubtotal > 0 && clientId) {
+        earnPoints(clientId, {
+          amount: serviceSubtotalAfterDiscount,
+          serviceName: serviceItemsForLoyalty.map((it) => it.service || it.name).join(', '),
+          date: today,
+        });
+      }
+
+      // 6. Create feedback request
+      try {
+        await createFeedbackRequest({
+          clientId: clientId,
+          clientName: invoice.clientName,
+          appointmentId: invoice.appointmentId,
+          service: invoice.items.map((it) => it.service || it.name).join(', '),
+          technician: invoice.items.map((it) => it.technician || 'Staff').join(', '),
+        });
+      } catch (fbErr) {
+        console.warn('Feedback token generation error:', fbErr);
+      }
+
+      // 6.5. Generate Employee Referral Commission (ONLY after successful payment)
+      const linkedClient = clients.find(
+        (c) => c.id === invoice.clientId || c.name?.toLowerCase() === invoice.clientName?.toLowerCase()
+      );
+      const linkedApt = appointments.find(
+        (a) => a.id === invoice.appointmentId || a.clientId === invoice.clientId
+      );
+      const referralEmployee = invoice.introducedBy || linkedApt?.introducedBy || linkedClient?.introducedBy || null;
+      const referralEmployeeId = invoice.introducedById || linkedApt?.introducedById || linkedClient?.introducedById || null;
+
+      // Verify referral employee is not a Manager (Manager client creation must never receive referral commission)
+      const isManagerEmployee =
+        allUsers?.some(
+          (u) =>
+            (u.role === 'manager' || u.role === 'MANAGER') &&
+            (String(u.id) === String(referralEmployeeId) ||
+              (referralEmployee && u.name?.toLowerCase() === referralEmployee.toLowerCase()))
+        ) ||
+        (referralEmployee && referralEmployee.toLowerCase() === 'manager');
+
+      let generatedCommissions = [];
+      if (referralEmployee && !isManagerEmployee) {
+        serviceItems.forEach((item) => {
+          const itemPriceNum =
+            typeof item.price === 'number'
+              ? item.price
+              : parseInt(String(item.price).replace(/[^0-9]/g, ''), 10) || 0;
+
+          let itemFinalPrice = itemPriceNum;
+          if (discountAmount > 0 && invoice.total > 0) {
+            const ratio = itemPriceNum / invoice.total;
+            itemFinalPrice = Math.round(finalTotal * ratio);
+          }
+
+          const comm = calculateAndAddCommission({
+            date: today,
+            clientName: invoice.clientName,
+            clientId: invoice.clientId,
+            service: item.service,
+            serviceAmount: itemFinalPrice,
+            performingTechnician: item.technician,
+            performingTechnicianId: item.technicianId,
+            referralEmployee: referralEmployee,
+            referralEmployeeId: referralEmployeeId,
+            invoiceId: invoice.id,
+            appointmentId: invoice.appointmentId || item.appointmentId,
+          });
+          if (comm) generatedCommissions.push(comm);
+        });
+      }
+
+      // 7. Mark invoice paid (NOT removed — moved to Paid Today & History)
+      const paidInv = await markInvoicePaid(invoice.id, payment, {
+        discount: discountAmount,
+        finalTotal,
+        pointsEarned: earnedPts,
+        pointsRedeemed: validPtsToRedeem,
+      });
+
+      // Switch to Paid Today tab and expand the paid invoice
+      const commTotal = generatedCommissions.reduce((sum, c) => sum + c.commissionAmount, 0);
+      const commNotice = commTotal > 0
+        ? ` Referral commission of ${commTotal.toLocaleString('en-US')} FCFA (${commissionRate}%) awarded to ${referralEmployee}.`
+        : '';
+
+      setActiveTab('paid-today');
+      setExpandedId(invoice.id);
+      setPaymentSuccessNotice(
+        `Payment collected for ${invoice.clientName} (${finalTotal.toLocaleString('en-US')} FCFA via ${payment.toUpperCase()}).${commNotice} Moved to Paid Today.`
+      );
+      setTimeout(() => setPaymentSuccessNotice(null), 6000);
+    } catch (err) {
+      console.error('Payment collection error:', err);
+      setPaymentSuccessNotice(`Payment error: ${err?.message || 'Could not complete payment'}`);
+      setTimeout(() => setPaymentSuccessNotice(null), 6000);
+    } finally {
+      setCollectingId(null);
     }
-
-    // 7. Mark invoice paid (NOT removed — moved to Paid Today & History)
-    const paidInv = await markInvoicePaid(invoice.id, payment, {
-      discount: discountAmount,
-      finalTotal,
-      pointsEarned: earnedPts,
-      pointsRedeemed: validPtsToRedeem,
-    });
-
-    // Switch to Paid Today tab and expand the paid invoice
-    const commTotal = generatedCommissions.reduce((sum, c) => sum + c.commissionAmount, 0);
-    const commNotice = commTotal > 0
-      ? ` Referral commission of ${commTotal.toLocaleString('en-US')} FCFA (${commissionRate}%) awarded to ${referralEmployee}.`
-      : '';
-
-    setActiveTab('paid-today');
-    setExpandedId(invoice.id);
-    setPaymentSuccessNotice(
-      `Payment collected for ${invoice.clientName} (${finalTotal.toLocaleString('en-US')} FCFA via ${payment.toUpperCase()}).${commNotice} Moved to Paid Today.`
-    );
-    setTimeout(() => setPaymentSuccessNotice(null), 6000);
-  } catch (err) {
-    console.error('Payment collection error:', err);
-    setPaymentSuccessNotice(`Payment error: ${err?.message || 'Could not complete payment'}`);
-    setTimeout(() => setPaymentSuccessNotice(null), 6000);
-  } finally {
-    setCollectingId(null);
-  }
-};
+  };
 
   // Real WhatsApp receipt action via backend API
   const handleSendWhatsAppReceipt = async (invoice, forceResend = false) => {
@@ -1489,7 +1630,7 @@ export default function PendingInvoices() {
             });
             feedbackUrl = fbRes?.url || '';
           }
-        } catch (_) {}
+        } catch (_) { }
 
         const message = buildReceiptWhatsAppMessage(
           invoice,
@@ -1575,11 +1716,10 @@ export default function PendingInvoices() {
       <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
         <div
           onClick={() => setActiveTab('pending')}
-          className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${
-            activeTab === 'pending'
+          className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${activeTab === 'pending'
               ? 'border-warning ring-2 ring-warning/20'
               : 'border-border hover:border-warning/50'
-          }`}
+            }`}
         >
           <p className="text-[10px] sm:text-xs text-muted-gray uppercase tracking-wider font-semibold truncate">
             Pending
@@ -1591,11 +1731,10 @@ export default function PendingInvoices() {
 
         <div
           onClick={() => setActiveTab('paid-today')}
-          className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${
-            activeTab === 'paid-today'
+          className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${activeTab === 'paid-today'
               ? 'border-success ring-2 ring-success/20'
               : 'border-border hover:border-success/50'
-          }`}
+            }`}
         >
           <p className="text-[10px] sm:text-xs text-muted-gray uppercase tracking-wider font-semibold truncate">
             Paid Today
@@ -1607,11 +1746,10 @@ export default function PendingInvoices() {
 
         <div
           onClick={() => setActiveTab('history')}
-          className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${
-            activeTab === 'history'
+          className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${activeTab === 'history'
               ? 'border-sage ring-2 ring-sage/20'
               : 'border-border hover:border-sage/50'
-          }`}
+            }`}
         >
           <p className="text-[10px] sm:text-xs text-muted-gray uppercase tracking-wider font-semibold truncate">
             History
@@ -1642,19 +1780,17 @@ export default function PendingInvoices() {
       <div className="flex border-b border-border mb-6 gap-1 sm:gap-2 overflow-x-auto pb-0.5 scrollbar-none">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-            activeTab === 'pending'
+          className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'pending'
               ? 'border-sage text-charcoal font-bold'
               : 'border-transparent text-muted-gray hover:text-charcoal'
-          }`}
+            }`}
         >
           <span>Pending</span>
           <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              activeTab === 'pending'
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${activeTab === 'pending'
                 ? 'bg-warning-soft text-warning'
                 : 'bg-soft-cream text-muted-gray'
-            }`}
+              }`}
           >
             {pendingInvoices.length}
           </span>
@@ -1662,19 +1798,17 @@ export default function PendingInvoices() {
 
         <button
           onClick={() => setActiveTab('paid-today')}
-          className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-            activeTab === 'paid-today'
+          className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'paid-today'
               ? 'border-sage text-charcoal font-bold'
               : 'border-transparent text-muted-gray hover:text-charcoal'
-          }`}
+            }`}
         >
           <span>Paid Today</span>
           <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              activeTab === 'paid-today'
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${activeTab === 'paid-today'
                 ? 'bg-success-soft text-success'
                 : 'bg-soft-cream text-muted-gray'
-            }`}
+              }`}
           >
             {paidTodayInvoices.length}
           </span>
@@ -1682,19 +1816,17 @@ export default function PendingInvoices() {
 
         <button
           onClick={() => setActiveTab('history')}
-          className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-            activeTab === 'history'
+          className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'history'
               ? 'border-sage text-charcoal font-bold'
               : 'border-transparent text-muted-gray hover:text-charcoal'
-          }`}
+            }`}
         >
           <span>History</span>
           <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              activeTab === 'history'
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${activeTab === 'history'
                 ? 'bg-sage-soft text-sage'
                 : 'bg-soft-cream text-muted-gray'
-            }`}
+              }`}
           >
             {historyInvoices.length}
           </span>
@@ -1939,18 +2071,16 @@ export default function PendingInvoices() {
                                   key={pm.key}
                                   type="button"
                                   onClick={() => setPaymentMethod(invoice.id, pm.key)}
-                                  className={`h-[44px] px-3.5 rounded-[11px] text-xs font-bold border transition-all duration-150 cursor-pointer flex items-center justify-start gap-2.5 ${
-                                    isSelected
+                                  className={`h-[44px] px-3.5 rounded-[11px] text-xs font-bold border transition-all duration-150 cursor-pointer flex items-center justify-start gap-2.5 ${isSelected
                                       ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
                                       : 'bg-white border-border text-charcoal/80 hover:border-sage/40 hover:bg-soft-cream/30'
-                                  }`}
+                                    }`}
                                 >
                                   <span
-                                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
-                                      isSelected
+                                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${isSelected
                                         ? 'border-sage bg-sage'
                                         : 'border-muted-gray/50 bg-white'
-                                    }`}
+                                      }`}
                                   >
                                     {isSelected && (
                                       <span className="w-1.5 h-1.5 rounded-full bg-white" />
@@ -1963,38 +2093,38 @@ export default function PendingInvoices() {
                           </div>
                         </div>
 
-                          {/* Collect Payment CTA */}
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
-                            <div className="text-xs text-muted-gray">
-                              Collecting will mark status as{' '}
-                              <span className="font-bold text-success">PAID</span> and move
-                              to Paid Today.
-                            </div>
-                            <Button
-                              className="w-full sm:w-auto min-w-[220px]"
-                              disabled={Boolean(collectingId)}
-                              onClick={() => handleCollectPayment(invoice)}
-                            >
-                              {collectingId === invoice.id ? (
-                                <>
-                                  <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
-                                  <span>Collecting Payment...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
-                                  <span>
-                                    Collect Payment (
-                                    {(discountAmount > 0
-                                      ? finalTotal
-                                      : invoice.total
-                                    ).toLocaleString('en-US')}{' '}
-                                    FCFA)
-                                  </span>
-                                </>
-                              )}
-                            </Button>
+                        {/* Collect Payment CTA */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
+                          <div className="text-xs text-muted-gray">
+                            Collecting will mark status as{' '}
+                            <span className="font-bold text-success">PAID</span> and move
+                            to Paid Today.
                           </div>
+                          <Button
+                            className="w-full sm:w-auto min-w-[220px]"
+                            disabled={Boolean(collectingId)}
+                            onClick={() => handleCollectPayment(invoice)}
+                          >
+                            {collectingId === invoice.id ? (
+                              <>
+                                <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
+                                <span>Collecting Payment...</span>
+                              </>
+                            ) : (
+                              <>
+                                <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
+                                <span>
+                                  Collect Payment (
+                                  {(discountAmount > 0
+                                    ? finalTotal
+                                    : invoice.total
+                                  ).toLocaleString('en-US')}{' '}
+                                  FCFA)
+                                </span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2033,9 +2163,9 @@ export default function PendingInvoices() {
                   invoice.paidTime ||
                   (invoice.paidAt
                     ? new Date(invoice.paidAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
                     : 'Today');
 
                 const totalAmount =
@@ -2228,33 +2358,306 @@ export default function PendingInvoices() {
       )}
 
       {/* ============================================================
-          TAB 3: HISTORY (All Paid Invoices Archive)
+          TAB 3: HISTORY (All Paid Invoices Archive with Search & Pagination)
           ============================================================ */}
       {activeTab === 'history' && (
-        <div>
+        <div className="space-y-4">
           {historyInvoices.length === 0 ? (
             <div className="bg-white border border-border rounded-[16px] p-8 shadow-card text-center">
               <Calendar size={40} className="text-border mx-auto mb-3" />
               <p className="text-sm font-semibold text-charcoal">No history invoices recorded.</p>
             </div>
           ) : (
-            <div className="bg-white border border-border rounded-[16px] shadow-card overflow-hidden">
-              {/* Desktop Table View */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-soft-cream/60 border-b border-border text-[10px] font-bold text-muted-gray uppercase tracking-wider">
-                    <tr>
-                      <th className="py-3 px-4">Invoice #</th>
-                      <th className="py-3 px-4">Date</th>
-                      <th className="py-3 px-4">Client</th>
-                      <th className="py-3 px-4">Total</th>
-                      <th className="py-3 px-4">Payment Method</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {historyInvoices.map((invoice) => {
+            <>
+              {/* Search & Filter Toolbar Card */}
+              <div className="bg-white border border-border rounded-[16px] p-4 shadow-card space-y-3">
+                {/* Search Bar Row */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  <div className="relative flex-1">
+                    <Search
+                      size={15}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-gray pointer-events-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Search by invoice # (e.g. 0001), client name, phone, service, technician, or payment..."
+                      value={historySearch}
+                      onChange={(e) => {
+                        setHistorySearch(e.target.value);
+                        setHistoryPage(1);
+                      }}
+                      className="w-full pl-9 pr-9 py-2 bg-soft-cream/30 hover:bg-soft-cream/50 focus:bg-white border border-border rounded-[10px] text-xs sm:text-sm text-charcoal placeholder:text-muted-gray focus:outline-hidden focus:border-sage transition-all"
+                    />
+                    {historySearch && (
+                      <button
+                        onClick={() => {
+                          setHistorySearch('');
+                          setHistoryPage(1);
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-gray hover:text-charcoal cursor-pointer p-0.5"
+                        title="Clear search"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Search Button */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      variant="primary"
+                      className="!h-[38px] !px-4 !text-xs font-semibold gap-1.5"
+                      onClick={() => setHistoryPage(1)}
+                    >
+                      <Search size={14} />
+                      <span>Search</span>
+                    </Button>
+
+                    {isHistoryFiltered && (
+                      <button
+                        onClick={resetHistoryFilters}
+                        className="h-[38px] px-3 bg-soft-cream hover:bg-danger-soft/40 text-muted-gray hover:text-danger rounded-[10px] border border-border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Reset all filters"
+                      >
+                        <RotateCcw size={13} />
+                        <span className="hidden sm:inline">Reset</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Filter Controls Row */}
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/60 text-xs">
+                  {/* Date Filter */}
+                  <div className="flex items-center gap-1.5">
+                    <Calendar size={13} className="text-muted-gray shrink-0" />
+                    <select
+                      value={historyDateFilter}
+                      onChange={(e) => {
+                        setHistoryDateFilter(e.target.value);
+                        setHistoryPage(1);
+                      }}
+                      className="px-2.5 py-1.5 bg-white border border-border rounded-[8px] text-xs text-charcoal font-medium focus:outline-hidden focus:border-sage transition-colors cursor-pointer"
+                    >
+                      <option value="ALL">All Dates</option>
+                      <option value="TODAY">Today</option>
+                      <option value="YESTERDAY">Yesterday</option>
+                      <option value="WEEK">Last 7 Days</option>
+                      <option value="MONTH">Last 30 Days</option>
+                      <option value="CUSTOM">Specific Date...</option>
+                    </select>
+                  </div>
+
+                  {/* Custom Date Picker (if selected) */}
+                  {historyDateFilter === 'CUSTOM' && (
+                    <input
+                      type="date"
+                      value={historyCustomDate}
+                      onChange={(e) => {
+                        setHistoryCustomDate(e.target.value);
+                        setHistoryPage(1);
+                      }}
+                      className="px-2.5 py-1 bg-white border border-border rounded-[8px] text-xs text-charcoal font-medium focus:outline-hidden focus:border-sage"
+                    />
+                  )}
+
+                  {/* Payment Method Filter */}
+                  <div className="flex items-center gap-1.5">
+                    <CreditCard size={13} className="text-muted-gray shrink-0" />
+                    <select
+                      value={historyPaymentFilter}
+                      onChange={(e) => {
+                        setHistoryPaymentFilter(e.target.value);
+                        setHistoryPage(1);
+                      }}
+                      className="px-2.5 py-1.5 bg-white border border-border rounded-[8px] text-xs text-charcoal font-medium focus:outline-hidden focus:border-sage transition-colors cursor-pointer"
+                    >
+                      <option value="ALL">All Payments</option>
+                      <option value="CASH">Cash</option>
+                      <option value="ORANGE MONEY">Orange Money</option>
+                      <option value="MTN MOMO">MTN MoMo</option>
+                    </select>
+                  </div>
+
+                  {/* Sort By Filter */}
+                  <div className="flex items-center gap-1.5">
+                    <ArrowUpDown size={13} className="text-muted-gray shrink-0" />
+                    <select
+                      value={historySortBy}
+                      onChange={(e) => {
+                        setHistorySortBy(e.target.value);
+                        setHistoryPage(1);
+                      }}
+                      className="px-2.5 py-1.5 bg-white border border-border rounded-[8px] text-xs text-charcoal font-medium focus:outline-hidden focus:border-sage transition-colors cursor-pointer"
+                    >
+                      <option value="DATE_DESC">Newest First</option>
+                      <option value="DATE_ASC">Oldest First</option>
+                      <option value="TOTAL_DESC">Amount: High → Low</option>
+                      <option value="TOTAL_ASC">Amount: Low → High</option>
+                    </select>
+                  </div>
+
+                  {/* Items Per Page */}
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <span className="text-[11px] text-muted-gray font-medium hidden sm:inline">Per page:</span>
+                    <select
+                      value={historyPageSize}
+                      onChange={(e) => {
+                        setHistoryPageSize(Number(e.target.value));
+                        setHistoryPage(1);
+                      }}
+                      className="px-2 py-1 bg-white border border-border rounded-[8px] text-xs text-charcoal font-medium focus:outline-hidden focus:border-sage transition-colors cursor-pointer"
+                    >
+                      <option value={10}>10</option>
+                      <option value={15}>15</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Results & Revenue Summary Strip */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-2 border-t border-border/40 text-xs">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-muted-gray font-medium">
+                      Showing{' '}
+                      <span className="font-bold text-charcoal">
+                        {totalHistoryCount === 0
+                          ? 0
+                          : (historyPage - 1) * historyPageSize + 1}
+                        –
+                        {Math.min(historyPage * historyPageSize, totalHistoryCount)}
+                      </span>{' '}
+                      of{' '}
+                      <span className="font-bold text-charcoal">{totalHistoryCount}</span>{' '}
+                      {totalHistoryCount === 1 ? 'invoice' : 'invoices'}
+                    </span>
+                    {isHistoryFiltered && (
+                      <span className="px-2 py-0.5 rounded-full bg-sage-soft text-sage font-bold text-[10px]">
+                        Filtered from {historyInvoices.length} total
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="text-left sm:text-right">
+                    <span className="text-muted-gray font-medium">Filtered Revenue: </span>
+                    <span className="font-extrabold text-charcoal">
+                      {historyTotalRevenue.toLocaleString('en-US')} FCFA
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Invoices List / Table */}
+              {filteredHistoryInvoices.length === 0 ? (
+                <div className="bg-white border border-border rounded-[16px] p-8 shadow-card text-center space-y-3">
+                  <Search size={36} className="text-muted-gray/50 mx-auto" />
+                  <p className="text-sm font-semibold text-charcoal">
+                    No invoices match your search or filter criteria.
+                  </p>
+                  <p className="text-xs text-muted-gray">
+                    Try adjusting your search query, selecting different date ranges or payment methods.
+                  </p>
+                  <Button
+                    variant="secondary"
+                    className="!h-[36px] !px-4 !text-xs font-semibold mx-auto"
+                    onClick={resetHistoryFilters}
+                  >
+                    <RotateCcw size={13} className="mr-1.5" />
+                    Reset Search & Filters
+                  </Button>
+                </div>
+              ) : (
+                <div className="bg-white border border-border rounded-[16px] shadow-card overflow-hidden">
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-soft-cream/60 border-b border-border text-[10px] font-bold text-muted-gray uppercase tracking-wider">
+                        <tr>
+                          <th className="py-3 px-4">Invoice #</th>
+                          <th className="py-3 px-4">Date</th>
+                          <th className="py-3 px-4">Client</th>
+                          <th className="py-3 px-4">Total</th>
+                          <th className="py-3 px-4">Payment Method</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {paginatedHistoryInvoices.map((invoice) => {
+                          const invNum = formatInvoiceNumber(invoice);
+                          const totalAmount =
+                            invoice.finalTotal !== undefined
+                              ? invoice.finalTotal
+                              : invoice.total;
+
+                          const dateDisplay = invoice.paidAt
+                            ? new Date(invoice.paidAt).toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                            : invoice.date;
+
+                          const paymentLabel_ = formatPaymentMethod(invoice.paymentMethod);
+
+                          return (
+                            <tr
+                              key={invoice.id}
+                              className="hover:bg-sage-soft/20 transition-colors cursor-pointer"
+                              onClick={() => setDetailInvoice(invoice)}
+                            >
+                              <td className="py-3.5 px-4 font-mono font-bold text-charcoal">
+                                {invNum}
+                              </td>
+                              <td className="py-3.5 px-4 text-muted-gray font-medium">
+                                {dateDisplay}
+                              </td>
+                              <td className="py-3.5 px-4 font-bold text-charcoal">
+                                {formatClientDisplay(invoice.clientName, invoice.clientId)}
+                              </td>
+                              <td className="py-3.5 px-4 font-extrabold text-charcoal">
+                                {totalAmount.toLocaleString('en-US')} FCFA
+                              </td>
+                              <td className="py-3.5 px-4 font-bold text-charcoal uppercase">
+                                {paymentLabel_}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-[5px] bg-success-soft text-success border border-success/30">
+                                  Paid
+                                </span>
+                              </td>
+                              <td
+                                className="py-3.5 px-4 text-right"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    variant="secondary"
+                                    className="!py-1 !px-2.5 !text-xs !h-[30px]"
+                                    onClick={() => setDetailInvoice(invoice)}
+                                  >
+                                    Details
+                                  </Button>
+                                  <button
+                                    onClick={() => setReceiptInvoice(invoice)}
+                                    title="Print Receipt"
+                                    className="w-8 h-8 rounded-[8px] bg-sage-soft/60 hover:bg-sage-soft flex items-center justify-center text-charcoal transition-colors cursor-pointer"
+                                  >
+                                    <Printer size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile / Tablet Portrait Card View */}
+                  <div className="block md:hidden divide-y divide-border/60">
+                    {paginatedHistoryInvoices.map((invoice) => {
                       const invNum = formatInvoiceNumber(invoice);
                       const totalAmount =
                         invoice.finalTotal !== undefined
@@ -2263,139 +2666,142 @@ export default function PendingInvoices() {
 
                       const dateDisplay = invoice.paidAt
                         ? new Date(invoice.paidAt).toLocaleDateString('en-GB', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })
                         : invoice.date;
 
                       const paymentLabel_ = formatPaymentMethod(invoice.paymentMethod);
 
                       return (
-                        <tr
+                        <div
                           key={invoice.id}
-                          className="hover:bg-sage-soft/20 transition-colors cursor-pointer"
                           onClick={() => setDetailInvoice(invoice)}
+                          className="p-4 hover:bg-sage-soft/10 transition-colors cursor-pointer space-y-3"
                         >
-                          <td className="py-3.5 px-4 font-mono font-bold text-charcoal">
-                            {invNum}
-                          </td>
-                          <td className="py-3.5 px-4 text-muted-gray font-medium">
-                            {dateDisplay}
-                          </td>
-                          <td className="py-3.5 px-4 font-bold text-charcoal">
-                            {formatClientDisplay(invoice.clientName, invoice.clientId)}
-                          </td>
-                          <td className="py-3.5 px-4 font-extrabold text-charcoal">
-                            {totalAmount.toLocaleString('en-US')} FCFA
-                          </td>
-                          <td className="py-3.5 px-4 font-bold text-charcoal uppercase">
-                            {paymentLabel_}
-                          </td>
-                          <td className="py-3.5 px-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-charcoal bg-soft-cream px-2 py-0.5 rounded">
+                                {invNum}
+                              </span>
+                              <span className="text-xs text-muted-gray font-medium">
+                                {dateDisplay}
+                              </span>
+                            </div>
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-[5px] bg-success-soft text-success border border-success/30">
                               Paid
                             </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="secondary"
-                                className="!py-1 !px-2.5 !text-xs !h-[30px]"
-                                onClick={() => setDetailInvoice(invoice)}
-                              >
-                                Details
-                              </Button>
-                              <button
-                                onClick={() => setReceiptInvoice(invoice)}
-                                title="Print Receipt"
-                                className="w-8 h-8 rounded-[8px] bg-sage-soft/60 hover:bg-sage-soft flex items-center justify-center text-charcoal transition-colors cursor-pointer"
-                              >
-                                <Printer size={14} />
-                              </button>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-bold text-charcoal">
+                                {formatClientDisplay(invoice.clientName, invoice.clientId)}
+                              </p>
+                              <p className="text-xs text-muted-gray uppercase font-semibold mt-0.5">
+                                {paymentLabel_}
+                              </p>
                             </div>
-                          </td>
-                        </tr>
+                            <div className="text-right">
+                              <p className="text-sm font-extrabold text-charcoal">
+                                {totalAmount.toLocaleString('en-US')} FCFA
+                              </p>
+                            </div>
+                          </div>
+
+                          <div
+                            className="flex items-center gap-2 pt-2 border-t border-border/50"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              variant="secondary"
+                              className="flex-1 !h-[38px] !text-xs font-semibold"
+                              onClick={() => setDetailInvoice(invoice)}
+                            >
+                              Details
+                            </Button>
+                            <Button
+                              className="flex-1 !h-[38px] !text-xs font-semibold"
+                              onClick={() => setReceiptInvoice(invoice)}
+                            >
+                              <Printer size={14} className="mr-1" />
+                              Receipt
+                            </Button>
+                          </div>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
 
-              {/* Mobile / Tablet Portrait Card View */}
-              <div className="block md:hidden divide-y divide-border/60">
-                {historyInvoices.map((invoice) => {
-                  const invNum = formatInvoiceNumber(invoice);
-                  const totalAmount =
-                    invoice.finalTotal !== undefined
-                      ? invoice.finalTotal
-                      : invoice.total;
-
-                  const dateDisplay = invoice.paidAt
-                    ? new Date(invoice.paidAt).toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })
-                    : invoice.date;
-
-                  const paymentLabel_ = formatPaymentMethod(invoice.paymentMethod);
-
-                  return (
-                    <div
-                      key={invoice.id}
-                      onClick={() => setDetailInvoice(invoice)}
-                      className="p-4 hover:bg-sage-soft/10 transition-colors cursor-pointer space-y-3"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-charcoal bg-soft-cream px-2 py-0.5 rounded">
-                            {invNum}
-                          </span>
-                          <span className="text-xs text-muted-gray font-medium">
-                            {dateDisplay}
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-[5px] bg-success-soft text-success border border-success/30">
-                          Paid
-                        </span>
+                  {/* Pagination Footer Controls */}
+                  {totalHistoryPages > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 bg-soft-cream/40 border-t border-border gap-3 text-xs">
+                      <div className="text-muted-gray font-medium">
+                        Page <span className="font-bold text-charcoal">{historyPage}</span> of{' '}
+                        <span className="font-bold text-charcoal">{totalHistoryPages}</span>
                       </div>
 
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-bold text-charcoal">{formatClientDisplay(invoice.clientName, invoice.clientId)}</p>
-                          <p className="text-xs text-muted-gray uppercase font-semibold mt-0.5">
-                            {paymentLabel_}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-extrabold text-charcoal">
-                            {totalAmount.toLocaleString('en-US')} FCFA
-                          </p>
-                        </div>
-                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          disabled={historyPage === 1}
+                          onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                          className={`px-3 py-1.5 rounded-[8px] border border-border text-xs font-semibold flex items-center gap-1 transition-all ${historyPage === 1
+                              ? 'bg-soft-cream/50 text-muted-gray/50 cursor-not-allowed'
+                              : 'bg-white hover:bg-sage-soft text-charcoal cursor-pointer shadow-2xs'
+                            }`}
+                        >
+                          <ChevronLeft size={13} />
+                          <span>Previous</span>
+                        </button>
 
-                      <div className="flex items-center gap-2 pt-2 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="secondary"
-                          className="flex-1 !h-[38px] !text-xs font-semibold"
-                          onClick={() => setDetailInvoice(invoice)}
+                        {/* Page Numbers */}
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: totalHistoryPages }, (_, idx) => idx + 1)
+                            .filter(
+                              (p) =>
+                                p === 1 ||
+                                p === totalHistoryPages ||
+                                Math.abs(p - historyPage) <= 1
+                            )
+                            .map((p, idx, arr) => {
+                              const showEllipsisBefore = idx > 0 && p - arr[idx - 1] > 1;
+                              return (
+                                <div key={p} className="flex items-center gap-1">
+                                  {showEllipsisBefore && (
+                                    <span className="text-muted-gray px-1">...</span>
+                                  )}
+                                  <button
+                                    onClick={() => setHistoryPage(p)}
+                                    className={`w-7 h-7 rounded-[7px] text-xs font-bold transition-all cursor-pointer ${historyPage === p
+                                        ? 'bg-sage text-white shadow-xs'
+                                        : 'bg-white hover:bg-sage-soft text-charcoal border border-border'
+                                      }`}
+                                  >
+                                    {p}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                        </div>
+
+                        <button
+                          disabled={historyPage >= totalHistoryPages}
+                          onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
+                          className={`px-3 py-1.5 rounded-[8px] border border-border text-xs font-semibold flex items-center gap-1 transition-all ${historyPage >= totalHistoryPages
+                              ? 'bg-soft-cream/50 text-muted-gray/50 cursor-not-allowed'
+                              : 'bg-white hover:bg-sage-soft text-charcoal cursor-pointer shadow-2xs'
+                            }`}
                         >
-                          Details
-                        </Button>
-                        <Button
-                          className="flex-1 !h-[38px] !text-xs font-semibold"
-                          onClick={() => setReceiptInvoice(invoice)}
-                        >
-                          <Printer size={14} className="mr-1" />
-                          Receipt
-                        </Button>
+                          <span>Next</span>
+                          <ChevronRight size={13} />
+                        </button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -2447,10 +2853,10 @@ export default function PendingInvoices() {
                   <span className="font-medium text-charcoal">
                     {detailInvoice.paidAt
                       ? new Date(detailInvoice.paidAt).toLocaleDateString('en-GB', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })
                       : detailInvoice.date}{' '}
                     · {detailInvoice.paidTime || '12:00'}
                   </span>
@@ -2594,11 +3000,10 @@ export default function PendingInvoices() {
               <button
                 type="button"
                 onClick={() => setRetailPickerTab('drinks')}
-                className={`pb-2.5 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
-                  retailPickerTab === 'drinks'
+                className={`pb-2.5 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap shrink-0 ${retailPickerTab === 'drinks'
                     ? 'border-charcoal text-charcoal'
                     : 'border-transparent text-muted-gray hover:text-charcoal'
-                }`}
+                  }`}
               >
                 <Coffee size={14} />
                 <span>Drinks ({drinks.filter((d) => d.active).length})</span>
@@ -2606,11 +3011,10 @@ export default function PendingInvoices() {
               <button
                 type="button"
                 onClick={() => setRetailPickerTab('cosmetics')}
-                className={`pb-2.5 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
-                  retailPickerTab === 'cosmetics'
+                className={`pb-2.5 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap shrink-0 ${retailPickerTab === 'cosmetics'
                     ? 'border-charcoal text-charcoal'
                     : 'border-transparent text-muted-gray hover:text-charcoal'
-                }`}
+                  }`}
               >
                 <Sparkles size={14} />
                 <span>Cosmetics ({cosmetics.filter((c) => c.active).length})</span>
@@ -2642,8 +3046,8 @@ export default function PendingInvoices() {
                               isOutOfStock
                                 ? 'text-error font-semibold'
                                 : product.stock <= 3
-                                ? 'text-warning font-semibold'
-                                : 'text-muted-gray'
+                                  ? 'text-warning font-semibold'
+                                  : 'text-muted-gray'
                             }
                           >
                             {isOutOfStock ? 'Out of stock' : `${product.stock} in stock`}
@@ -2710,11 +3114,10 @@ export default function PendingInvoices() {
                             setAddRetailQuantities((prev) => ({ ...prev, [product.id]: 1 }));
                             setTimeout(() => setRetailAddedNotice(''), 3000);
                           }}
-                          className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
-                            isOutOfStock || qty > product.stock
+                          className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${isOutOfStock || qty > product.stock
                               ? 'bg-border/50 text-muted-gray cursor-not-allowed'
                               : 'bg-sage-soft hover:bg-sage hover:text-white text-charcoal cursor-pointer border border-sage/30'
-                          }`}
+                            }`}
                         >
                           <Plus size={13} strokeWidth={2.5} />
                           <span>Add</span>
@@ -2805,11 +3208,10 @@ export default function PendingInvoices() {
                   <button
                     type="button"
                     onClick={() => setNewSaleTab('drinks')}
-                    className={`pb-2 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${
-                      newSaleTab === 'drinks'
+                    className={`pb-2 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${newSaleTab === 'drinks'
                         ? 'border-charcoal text-charcoal'
                         : 'border-transparent text-muted-gray hover:text-charcoal'
-                    }`}
+                      }`}
                   >
                     <Coffee size={14} />
                     <span>Drinks ({drinks.filter((d) => d.active).length})</span>
@@ -2817,11 +3219,10 @@ export default function PendingInvoices() {
                   <button
                     type="button"
                     onClick={() => setNewSaleTab('cosmetics')}
-                    className={`pb-2 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${
-                      newSaleTab === 'cosmetics'
+                    className={`pb-2 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${newSaleTab === 'cosmetics'
                         ? 'border-charcoal text-charcoal'
                         : 'border-transparent text-muted-gray hover:text-charcoal'
-                    }`}
+                      }`}
                   >
                     <Sparkles size={14} />
                     <span>Cosmetics ({cosmetics.filter((c) => c.active).length})</span>
@@ -2856,8 +3257,8 @@ export default function PendingInvoices() {
                                   isOutOfStock
                                     ? 'text-error font-semibold'
                                     : remainingStock <= 3
-                                    ? 'text-warning font-semibold'
-                                    : 'text-muted-gray'
+                                      ? 'text-warning font-semibold'
+                                      : 'text-muted-gray'
                                 }
                               >
                                 {isOutOfStock
@@ -2922,11 +3323,10 @@ export default function PendingInvoices() {
                               type="button"
                               disabled={isOutOfStock || qty > remainingStock}
                               onClick={() => addToNewSaleCart(product, qty)}
-                              className={`px-3 py-1.5 rounded-[8px] text-xs font-bold transition-all flex items-center gap-1 ${
-                                isOutOfStock || qty > remainingStock
+                              className={`px-3 py-1.5 rounded-[8px] text-xs font-bold transition-all flex items-center gap-1 ${isOutOfStock || qty > remainingStock
                                   ? 'bg-border/50 text-muted-gray cursor-not-allowed'
                                   : 'bg-sage-soft hover:bg-sage hover:text-white text-charcoal cursor-pointer border border-sage/30'
-                              }`}
+                                }`}
                             >
                               <Plus size={13} strokeWidth={2.5} />
                               <span>Add</span>
@@ -3034,18 +3434,16 @@ export default function PendingInvoices() {
                         key={pm.key}
                         type="button"
                         onClick={() => setNewSalePaymentMethod(pm.key)}
-                        className={`h-[42px] px-3 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 ${
-                          isSelected
+                        className={`h-[42px] px-3 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 ${isSelected
                             ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
                             : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
-                        }`}
+                          }`}
                       >
                         <span
-                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                            isSelected
+                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected
                               ? 'border-sage bg-sage'
                               : 'border-muted-gray/50 bg-white'
-                          }`}
+                            }`}
                         >
                           {isSelected && (
                             <span className="w-1.5 h-1.5 rounded-full bg-white" />
@@ -3152,22 +3550,20 @@ export default function PendingInvoices() {
                     <button
                       type="button"
                       onClick={() => { setNewServiceClientType('walkin'); setNewServiceError(''); }}
-                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${
-                        newServiceClientType === 'walkin'
+                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceClientType === 'walkin'
                           ? 'bg-white text-charcoal shadow-xs'
                           : 'text-muted-gray hover:text-charcoal'
-                      }`}
+                        }`}
                     >
                       Walk-in
                     </button>
                     <button
                       type="button"
                       onClick={() => { setNewServiceClientType('registered'); setNewServiceError(''); }}
-                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${
-                        newServiceClientType === 'registered'
+                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceClientType === 'registered'
                           ? 'bg-white text-charcoal shadow-xs'
                           : 'text-muted-gray hover:text-charcoal'
-                      }`}
+                        }`}
                     >
                       Registered Client
                     </button>
@@ -3462,18 +3858,16 @@ export default function PendingInvoices() {
                       <button
                         type="button"
                         onClick={() => setNewServiceRetailTab('drinks')}
-                        className={`text-xs px-2.5 py-1 rounded-[7px] font-semibold cursor-pointer ${
-                          newServiceRetailTab === 'drinks' ? 'bg-charcoal text-white' : 'bg-white text-muted-gray border border-border'
-                        }`}
+                        className={`text-xs px-2.5 py-1 rounded-[7px] font-semibold cursor-pointer ${newServiceRetailTab === 'drinks' ? 'bg-charcoal text-white' : 'bg-white text-muted-gray border border-border'
+                          }`}
                       >
                         🥤 Drinks ({drinks.length})
                       </button>
                       <button
                         type="button"
                         onClick={() => setNewServiceRetailTab('cosmetics')}
-                        className={`text-xs px-2.5 py-1 rounded-[7px] font-semibold cursor-pointer ${
-                          newServiceRetailTab === 'cosmetics' ? 'bg-charcoal text-white' : 'bg-white text-muted-gray border border-border'
-                        }`}
+                        className={`text-xs px-2.5 py-1 rounded-[7px] font-semibold cursor-pointer ${newServiceRetailTab === 'cosmetics' ? 'bg-charcoal text-white' : 'bg-white text-muted-gray border border-border'
+                          }`}
                       >
                         💄 Cosmetics ({cosmetics.length})
                       </button>
@@ -3530,22 +3924,20 @@ export default function PendingInvoices() {
                     <button
                       type="button"
                       onClick={() => setNewServiceActionChoice('pending')}
-                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${
-                        newServiceActionChoice === 'pending'
+                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pending'
                           ? 'bg-[#4F6748] text-white shadow-xs'
                           : 'text-muted-gray hover:text-charcoal'
-                      }`}
+                        }`}
                     >
                       Pending Invoice
                     </button>
                     <button
                       type="button"
                       onClick={() => setNewServiceActionChoice('pay_now')}
-                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${
-                        newServiceActionChoice === 'pay_now'
+                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pay_now'
                           ? 'bg-[#4F6748] text-white shadow-xs'
                           : 'text-muted-gray hover:text-charcoal'
-                      }`}
+                        }`}
                     >
                       Collect Now
                     </button>
@@ -3565,16 +3957,14 @@ export default function PendingInvoices() {
                             key={pm.key}
                             type="button"
                             onClick={() => setNewServicePaymentMethod(pm.key)}
-                            className={`h-[40px] px-2.5 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                              isSelected
+                            className={`h-[40px] px-2.5 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${isSelected
                                 ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
                                 : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
-                            }`}
+                              }`}
                           >
                             <span
-                              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                                isSelected ? 'border-sage bg-sage' : 'border-muted-gray/50 bg-white'
-                              }`}
+                              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-sage bg-sage' : 'border-muted-gray/50 bg-white'
+                                }`}
                             >
                               {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                             </span>
