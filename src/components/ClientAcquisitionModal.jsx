@@ -63,7 +63,14 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Track if client was already created (for retry-safe flow)
+  // If client was saved but appointment failed, this holds the saved client ID
+  // so retry only re-attempts the appointment, not the client creation.
+  const [savedClientId, setSavedClientId] = useState(null);
+
   if (!isOpen) return null;
+
+  const clientAlreadySaved = Boolean(savedClientId);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -109,45 +116,51 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       (s) => s.name === interestedService
     );
 
-    // Check if client with this phone number already exists
-    const cleanInputPhone = trimmedPhone.replace(/[\s\-\+\(\)]/g, '');
-    const existing = clients?.find((c) => {
-      const cleanExisting = (c.phone || '').replace(/[\s\-\+\(\)]/g, '');
-      return cleanExisting && cleanExisting === cleanInputPhone;
-    });
-    if (existing) {
-      setError(`Client with phone number ${trimmedPhone} already exists (${existing.name}). Please select them from existing clients.`);
-      return;
-    }
-
     setIsSubmitting(true);
 
-    let newClientId;
-    try {
-      // 1. Add client to ClientsContext with acquisition tracking (disabled for Manager)
-      newClientId = await addClient({
-        name: trimmedName,
-        phone: trimmedPhone,
-        introducedBy: isManager ? null : (user?.name || 'Staff'),
-        introducedById: isManager ? null : (user?.id || null),
-        firstAppointmentService: interestedService,
-        clientSource: isManager ? 'Direct' : 'Staff Referral',
-        source: isManager ? 'DIRECT' : undefined,
+    // ── Step 1: Create Client (only if not already saved) ──
+    let clientId = savedClientId;
+
+    if (!clientId) {
+      // Check if client with this phone number already exists
+      const cleanInputPhone = trimmedPhone.replace(/[\s\-\+\(\)]/g, '');
+      const existing = clients?.find((c) => {
+        const cleanExisting = (c.phone || '').replace(/[\s\-\+\(\)]/g, '');
+        return cleanExisting && cleanExisting === cleanInputPhone;
       });
-    } catch (err) {
-      setIsSubmitting(false);
-      setError(err.message || 'Failed to add client. Phone number already exists.');
-      return;
+      if (existing) {
+        setIsSubmitting(false);
+        setError(`Client with phone number ${trimmedPhone} already exists (${existing.name}). Please select them from existing clients.`);
+        return;
+      }
+
+      try {
+        clientId = await addClient({
+          name: trimmedName,
+          phone: trimmedPhone,
+          introducedBy: isManager ? null : (user?.name || 'Staff'),
+          introducedById: isManager ? null : (user?.id || null),
+          firstAppointmentService: interestedService,
+          clientSource: isManager ? 'Direct' : 'Staff Referral',
+          source: isManager ? 'DIRECT' : undefined,
+        });
+        // Save client ID so retry skips this step
+        setSavedClientId(clientId);
+      } catch (err) {
+        setIsSubmitting(false);
+        setError(err.message || 'Failed to add client. Phone number already exists.');
+        return;
+      }
     }
 
-    // 2. Create appointment in AppointmentsContext with acquisition tracking
+    // ── Step 2: Create Appointment ──
     const priceNum = selectedServiceObj?.price
       ? parseInt(String(selectedServiceObj.price).replace(/[^0-9]/g, ''), 10) || 15000
       : 15000;
 
     try {
       await addAppointment({
-        clientId: newClientId,
+        clientId,
         clientName: trimmedName,
         service: interestedService,
         services: [
@@ -184,7 +197,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
         err?.response?.data?.errors?.[0]?.message ||
         err?.response?.data?.message ||
         err?.message ||
-        'Client was added, but appointment booking failed. Please try booking from Appointments page.';
+        'Appointment booking failed. Please change the time or technician and try again.';
       setError(apiMsg);
     } finally {
       setIsSubmitting(false);
@@ -228,6 +241,14 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
             </div>
           )}
 
+          {/* Client Already Saved Banner — shown when client was saved but appointment failed */}
+          {clientAlreadySaved && (
+            <div className="p-2.5 rounded-[9px] bg-success-soft text-[#4F6748] border border-success/25 flex items-center gap-2 text-xs">
+              <CheckCircle size={14} className="shrink-0 text-success" />
+              <span>Client <strong>{clientName.trim()}</strong> saved ✓ — Please select a different time or technician and try again.</span>
+            </div>
+          )}
+
           {/* Auto-filled Introduced By Employee Banner (Hidden for Manager) */}
           {!isManager && (
             <div className="bg-sage-soft/70 rounded-[10px] border border-sage/25 p-2.5 flex items-center justify-between">
@@ -258,7 +279,8 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
               placeholder="e.g. Marie Claire"
-              className="w-full px-3 py-2 rounded-[9px] border border-border bg-white text-xs text-charcoal focus:outline-none focus:border-sage transition-colors placeholder:text-muted-gray/50 font-medium"
+              disabled={clientAlreadySaved}
+              className={`w-full px-3 py-2 rounded-[9px] border border-border bg-white text-xs text-charcoal focus:outline-none focus:border-sage transition-colors placeholder:text-muted-gray/50 font-medium ${clientAlreadySaved ? 'bg-soft-cream/60 opacity-70 cursor-not-allowed' : ''}`}
               required
             />
           </div>
@@ -269,6 +291,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
             onChange={(val) => setClientPhone(val)}
             label="Phone / WhatsApp"
             required
+            disabled={clientAlreadySaved}
           />
 
           {/* Interested Service */}
@@ -313,7 +336,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
               </label>
               <select
                 value={preferredTime}
-                onChange={(e) => setPreferredTime(e.target.value)}
+                onChange={(e) => { setPreferredTime(e.target.value); setError(''); }}
                 className="w-full px-2.5 py-1.5 rounded-[9px] border border-border bg-white text-xs text-charcoal focus:outline-none focus:border-sage transition-colors font-medium cursor-pointer"
                 required
               >
@@ -333,7 +356,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
             </label>
             <select
               value={assignedTechnicianId}
-              onChange={(e) => setAssignedTechnicianId(e.target.value)}
+              onChange={(e) => { setAssignedTechnicianId(e.target.value); setError(''); }}
               className="w-full px-3 py-2 rounded-[9px] border border-border bg-white text-xs text-charcoal focus:outline-none focus:border-sage transition-colors cursor-pointer font-medium"
             >
               {allTechnicians.map((tech) => (
@@ -360,7 +383,11 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-[9px] bg-sage hover:bg-sage-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle size={14} />
-              {isSubmitting ? 'Booking Appointment...' : 'Book Appointment'}
+              {isSubmitting
+                ? 'Booking Appointment...'
+                : clientAlreadySaved
+                ? 'Retry Book Appointment'
+                : 'Book Appointment'}
             </button>
           </div>
         </form>
