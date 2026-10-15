@@ -61,16 +61,9 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       : String(allTechnicians[0]?.id || '')
   );
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
-
-  const handleTimeFormat = (timeVal) => {
-    if (!timeVal) return '14:00';
-    const [h, m] = timeVal.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
-    return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -127,6 +120,8 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       return;
     }
 
+    setIsSubmitting(true);
+
     let newClientId;
     try {
       // 1. Add client to ClientsContext with acquisition tracking (disabled for Manager)
@@ -140,6 +135,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
         source: isManager ? 'DIRECT' : undefined,
       });
     } catch (err) {
+      setIsSubmitting(false);
       setError(err.message || 'Failed to add client. Phone number already exists.');
       return;
     }
@@ -149,38 +145,50 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       ? parseInt(String(selectedServiceObj.price).replace(/[^0-9]/g, ''), 10) || 15000
       : 15000;
 
-    await addAppointment({
-      clientId: newClientId,
-      clientName: trimmedName,
-      service: interestedService,
-      services: [
-        {
-          appointmentServiceId: `asvc-acq-${Date.now()}`,
-          serviceId: selectedServiceObj?.id || null,
-          name: interestedService,
-          price: priceNum,
-          category: selectedServiceObj?.category || 'facial',
-        },
-      ],
-      category: selectedServiceObj?.category || 'facial',
-      date: preferredDate,
-      time: handleTimeFormat(preferredTime),
-      technicianId: assignedTech.id,
-      technicianName: assignedTech.name,
-      status: 'scheduled',
-      introducedBy: isManager ? null : (user?.name || 'Staff'),
-      introducedById: isManager ? null : (user?.id || null),
-    });
+    try {
+      await addAppointment({
+        clientId: newClientId,
+        clientName: trimmedName,
+        service: interestedService,
+        services: [
+          {
+            appointmentServiceId: `asvc-acq-${Date.now()}`,
+            serviceId: selectedServiceObj?.id || null,
+            name: interestedService,
+            price: priceNum,
+            category: selectedServiceObj?.category || 'facial',
+          },
+        ],
+        category: selectedServiceObj?.category || 'facial',
+        date: preferredDate,
+        time: preferredTime,
+        technicianId: assignedTech.id,
+        technicianName: assignedTech.name,
+        status: 'scheduled',
+        introducedBy: isManager ? null : (user?.name || 'Staff'),
+        introducedById: isManager ? null : (user?.id || null),
+      });
 
-    onSuccess?.({
-      clientName: trimmedName,
-      service: interestedService,
-      technician: assignedTech.name,
-      date: preferredDate,
-      time: handleTimeFormat(preferredTime),
-    });
+      onSuccess?.({
+        clientName: trimmedName,
+        service: interestedService,
+        technician: assignedTech.name,
+        date: preferredDate,
+        time: preferredTime,
+      });
 
-    onClose();
+      onClose();
+    } catch (err) {
+      console.error('Failed to create appointment in acquisition modal:', err);
+      const apiMsg =
+        err?.response?.data?.errors?.[0]?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Client was added, but appointment booking failed. Please try booking from Appointments page.';
+      setError(apiMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -341,16 +349,18 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 rounded-[9px] border border-border bg-white text-xs font-semibold text-muted-gray hover:text-charcoal hover:bg-warm-ivory transition-colors cursor-pointer"
+              disabled={isSubmitting}
+              className="flex-1 py-2 rounded-[9px] border border-border bg-white text-xs font-semibold text-muted-gray hover:text-charcoal hover:bg-warm-ivory transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-[9px] bg-sage hover:bg-sage-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-[0.98]"
+              disabled={isSubmitting}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-[9px] bg-sage hover:bg-sage-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle size={14} />
-              Book Appointment
+              {isSubmitting ? 'Booking Appointment...' : 'Book Appointment'}
             </button>
           </div>
         </form>

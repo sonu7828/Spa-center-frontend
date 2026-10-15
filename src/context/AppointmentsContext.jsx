@@ -29,6 +29,33 @@ export function formatAppointmentId(id) {
   return str;
 }
 
+/**
+ * Normalizes any time format (e.g., "10:45 AM", "2:30 PM", "10:45 (10:45 AM)", "10:45")
+ * into strict 24-hour "HH:MM" format (e.g., "10:45", "14:30") required by backend validation.
+ */
+export function formatTo24HourTime(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') return '14:00';
+  const clean = timeStr.trim();
+  // 12-hour AM/PM: e.g. "10:45 AM", "2:30 PM", "02:30 PM", "10:45:00 AM"
+  const match12 = clean.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i);
+  if (match12) {
+    let hours = parseInt(match12[1], 10);
+    const mins = match12[2];
+    const period = match12[3].toUpperCase();
+    if (period === 'PM' && hours < 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    return `${String(hours).padStart(2, '0')}:${mins}`;
+  }
+  // 24-hour e.g. "10:45", "10:45 (10:45 AM)", "10:45:00"
+  const match24 = clean.match(/^(\d{1,2}):(\d{2})/);
+  if (match24) {
+    const hours = String(match24[1]).padStart(2, '0');
+    const mins = match24[2];
+    return `${hours}:${mins}`;
+  }
+  return clean;
+}
+
 export function formatBackendAppointment(apt) {
   if (!apt) return null;
   const dateStr = apt.appointmentDate ? apt.appointmentDate.split('T')[0] : '';
@@ -172,7 +199,7 @@ export function AppointmentsProvider({ children }) {
           const payload = {
             clientId: data.clientId,
             appointmentDate: data.date,
-            appointmentTime: data.time,
+            appointmentTime: formatTo24HourTime(data.time),
             mainTechnicianId: data.technicianId,
             notes: data.notes || null,
             services: normalizedServices.map((s) => ({
@@ -209,7 +236,7 @@ export function AppointmentsProvider({ children }) {
         technicianId: data.technicianId || null,
         technicianName: data.technicianName || '',
         date: data.date || '',
-        time: data.time || '',
+        time: formatTo24HourTime(data.time),
         totalDuration,
         duration: totalDuration,
         status: data.status || 'scheduled',
@@ -243,6 +270,9 @@ export function AppointmentsProvider({ children }) {
       prev.map((a) => {
         if (String(a.id) !== String(id) && a.id !== id) return a;
         const merged = { ...a, ...updates };
+        if (updates.time) {
+          merged.time = formatTo24HourTime(updates.time);
+        }
         if (updates.services) {
           merged.service = updates.services.map((s) => s.name).join(', ');
         }
@@ -277,7 +307,7 @@ export function AppointmentsProvider({ children }) {
         if (updates.date || updates.time || updates.technicianId) {
           await appointmentsApi.update(id, {
             ...(updates.date && { appointmentDate: updates.date }),
-            ...(updates.time && { appointmentTime: updates.time }),
+            ...(updates.time && { appointmentTime: formatTo24HourTime(updates.time) }),
             ...(updates.technicianId && { mainTechnicianId: updates.technicianId }),
             ...(updates.notes && { notes: updates.notes }),
             ...(updates.lateMinutes && { lateMinutes: Number(updates.lateMinutes) }),
