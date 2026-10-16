@@ -41,7 +41,7 @@ const threeDaysAgoStr = getDaysAgoStr(3);
 // Clean initial state for real backend integration
 const SEED_INVOICES = [];
 
-export function formatBackendInvoice(inv) {
+export function formatBackendInvoice(inv, allUsers = []) {
   if (!inv) return null;
   const dateStr = inv.date ? inv.date.split('T')[0] : '';
   const firstPayment = inv.payments?.[0];
@@ -52,19 +52,35 @@ export function formatBackendInvoice(inv) {
     ? new Date(firstPayment.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null;
 
-  const mappedItems = (inv.items || []).map((it, idx) => ({
-    id: it.id || `inv-item-${idx}`,
-    appointmentId: inv.appointmentId,
-    appointmentServiceId: it.appointmentServiceId || `asvc-${it.id}`,
-    serviceId: it.serviceId || null,
-    service: it.name || 'Spa Service',
-    name: it.name || 'Spa Service',
-    technician: it.technician?.staffProfile?.name || 'Staff',
-    technicianId: it.technicianId || null,
-    price: Number(it.price || 0),
-    quantity: it.quantity || 1,
-    type: it.itemType === 'RETAIL' ? 'cosmetic' : 'service',
-  }));
+  const mainTechName =
+    inv.appointment?.mainTechnician?.staffProfile?.name ||
+    inv.appointment?.mainTechnician?.name ||
+    (inv.appointment?.mainTechnicianId &&
+      allUsers.find((u) => String(u.id) === String(inv.appointment.mainTechnicianId))?.name) ||
+    null;
+
+  const mappedItems = (inv.items || []).map((it, idx) => {
+    const techName =
+      it.technician?.staffProfile?.name ||
+      it.technician?.name ||
+      (it.technicianId && allUsers.find((u) => String(u.id) === String(it.technicianId))?.name) ||
+      mainTechName ||
+      'Staff';
+
+    return {
+      id: it.id || `inv-item-${idx}`,
+      appointmentId: inv.appointmentId,
+      appointmentServiceId: it.appointmentServiceId || `asvc-${it.id}`,
+      serviceId: it.serviceId || null,
+      service: it.name || 'Spa Service',
+      name: it.name || 'Spa Service',
+      technician: techName,
+      technicianId: it.technicianId || inv.appointment?.mainTechnicianId || null,
+      price: Number(it.price || 0),
+      quantity: it.quantity || 1,
+      type: it.itemType === 'RETAIL' ? 'cosmetic' : 'service',
+    };
+  });
 
   const totalNum = Number(inv.total || 0);
   const discountNum = Number(inv.discount || 0);
@@ -85,17 +101,20 @@ export function formatBackendInvoice(inv) {
     clientPhone: inv.client?.phone || '',
     status: inv.status || 'PENDING_PAYMENT',
     date: dateStr,
+    mainTechnicianName: mainTechName || null,
+    mainTechnicianId: inv.appointment?.mainTechnicianId || null,
     items:
       mappedItems.length > 0
         ? mappedItems
         : [
             {
               id: 1,
-              service: 'Spa Service',
-              name: 'Spa Service',
+              service: inv.appointment?.serviceSummary || 'Spa Service',
+              name: inv.appointment?.serviceSummary || 'Spa Service',
               price: totalNum,
               quantity: 1,
-              technician: 'Staff',
+              technician: mainTechName || 'Staff',
+              technicianId: inv.appointment?.mainTechnicianId || null,
             },
           ],
     total: totalNum,
@@ -118,8 +137,9 @@ export function formatBackendInvoice(inv) {
 }
 
 export function InvoiceProvider({ children }) {
-  const { isAuthenticated, user } = useAuth();
-  const hasAccess = user?.role === 'manager' || user?.role === 'reception' || user?.role === 'MANAGER' || user?.role === 'RECEPTION';
+  const { isAuthenticated, user, allUsers } = useAuth();
+  const userRole = (user?.role || '').toLowerCase();
+  const hasAccess = userRole === 'manager' || userRole === 'reception' || userRole === 'technician';
 
   const getCachedInvoices = () => {
     try {
@@ -136,7 +156,7 @@ export function InvoiceProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch real invoices from backend on mount and preserve local invoices (Manager & Reception only)
+  // Fetch real invoices from backend on mount and preserve local invoices (Manager, Reception & Technician)
   const refreshInvoices = useCallback(async () => {
     if (!isAuthenticated || !hasAccess) {
       setLoading(false);
@@ -149,7 +169,7 @@ export function InvoiceProvider({ children }) {
       const res = await invoicesApi.getAll({ limit: 500 });
       const apiList = res?.data?.invoices || res?.data || [];
       if (Array.isArray(apiList)) {
-        const formattedList = apiList.map(formatBackendInvoice).filter(Boolean);
+        const formattedList = apiList.map((inv) => formatBackendInvoice(inv, allUsers)).filter(Boolean);
 
         // Read local invoices
         let localInvoices = [];
@@ -220,7 +240,7 @@ export function InvoiceProvider({ children }) {
           });
           const invoiceObj = res?.data?.invoice || res?.data || res;
           if (invoiceObj && invoiceObj.id) {
-            const formatted = formatBackendInvoice(invoiceObj);
+            const formatted = formatBackendInvoice(invoiceObj, allUsers);
             setInvoices((prev) => [formatted, ...prev.filter((i) => String(i.id) !== String(formatted.id))]);
             await refreshInvoices();
             return formatted.id;
@@ -717,7 +737,7 @@ export function InvoiceProvider({ children }) {
 
           const invData = res?.data?.invoice || res?.data || res;
           if (invData && invData.id) {
-            backendInvoice = formatBackendInvoice(invData);
+            backendInvoice = formatBackendInvoice(invData, allUsers);
           }
         } catch (err) {
           console.warn('Backend retail sale invoice creation error, using fallback:', err.message);
@@ -981,7 +1001,7 @@ export function InvoiceProvider({ children }) {
           });
           const invoiceObj = res?.data?.invoice || res?.data || res;
           if (invoiceObj && invoiceObj.id) {
-            const formatted = formatBackendInvoice(invoiceObj);
+            const formatted = formatBackendInvoice(invoiceObj, allUsers);
             setInvoices((prev) => [
               formatted,
               ...prev.filter((i) => String(i.id) !== String(formatted.id)),
@@ -1098,7 +1118,7 @@ export function InvoiceProvider({ children }) {
           });
           const invoiceObj = res?.data?.invoice || res?.data || res;
           if (invoiceObj && invoiceObj.id) {
-            const formatted = formatBackendInvoice(invoiceObj);
+            const formatted = formatBackendInvoice(invoiceObj, allUsers);
             setInvoices((prev) => [
               { ...formatted, notes: notes || formatted.notes || null },
               ...prev.filter((i) => String(i.id) !== String(formatted.id)),

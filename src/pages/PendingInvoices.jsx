@@ -96,7 +96,7 @@ function paymentLabelText(method) {
 
 // Categorized invoice items renderer helper
 function renderCategorizedItems(items = [], options = {}) {
-  const { isEditable = false, invoiceId = null, onRemove = null } = options;
+  const { isEditable = false, invoiceId = null, onRemove = null, defaultTechnician = null } = options;
 
   const services = items.filter((it) => it.type !== 'drink' && it.type !== 'cosmetic');
   const drinks = items.filter((it) => it.type === 'drink');
@@ -112,20 +112,30 @@ function renderCategorizedItems(items = [], options = {}) {
             <span className="text-[9px] font-semibold text-muted-gray">{services.length}</span>
           </div>
           <div className="divide-y divide-border/30">
-            {services.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between px-4 py-2.5">
-                <div>
-                  <p className="font-semibold text-charcoal">{item.service}</p>
-                  <p className="text-[11px] text-muted-gray">
-                    Tech: {item.technician || 'Staff'}
-                    {item.product ? ` · Product: ${item.product}` : ''}
+            {services.map((item, idx) => {
+              const techName =
+                item.technician && item.technician !== 'Staff' && item.technician !== 'Technician'
+                  ? item.technician
+                  : defaultTechnician || 'Staff';
+
+              return (
+                <div key={idx} className="flex items-center justify-between px-4 py-2.5">
+                  <div>
+                    <p className="font-semibold text-charcoal">{item.service}</p>
+                    <p className="text-[11px] text-muted-gray flex items-center gap-1.5 mt-0.5">
+                      <span>Tech:</span>
+                      <span className="font-semibold text-charcoal bg-warm-ivory px-1.5 py-0.5 rounded-[5px] border border-border/60">
+                        {techName}
+                      </span>
+                      {item.product ? ` · Product: ${item.product}` : ''}
+                    </p>
+                  </div>
+                  <p className="font-bold text-charcoal">
+                    {(item.price || 0).toLocaleString('en-US')} FCFA
                   </p>
                 </div>
-                <p className="font-bold text-charcoal">
-                  {(item.price || 0).toLocaleString('en-US')} FCFA
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -1908,6 +1918,26 @@ export default function PendingInvoices() {
                 const finalTotal = Math.max(0, invoice.total - discountAmount);
                 const invNum = formatInvoiceNumber(invoice);
 
+                const linkedApt = invoice.appointmentId
+                  ? appointments.find((a) => String(a.id) === String(invoice.appointmentId))
+                  : null;
+                const techItems = invoice.items
+                  .map((it) =>
+                    it.technician && it.technician !== 'Staff' && it.technician !== 'Technician'
+                      ? it.technician
+                      : linkedApt?.technicianName || invoice.mainTechnicianName
+                  )
+                  .filter(Boolean)
+                  .filter((v, i, a) => a.indexOf(v) === i);
+                const techDisplay =
+                  techItems.length > 0
+                    ? techItems.join(', ')
+                    : linkedApt?.technicianName || invoice.mainTechnicianName || 'Staff';
+                const serviceDisplay =
+                  invoice.items.map((it) => it.service || it.name).join(', ') ||
+                  linkedApt?.serviceSummary ||
+                  'Spa Service';
+
                 return (
                   <div
                     key={invoice.id}
@@ -1931,13 +1961,14 @@ export default function PendingInvoices() {
                               {formatClientDisplay(invoice.clientName, invoice.clientId)}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-gray truncate mt-0.5">
-                            {invoice.items.map((it) => it.service).join(', ')} ·{' '}
-                            {invoice.items
-                              .map((it) => it.technician)
-                              .filter((v, i, a) => a.indexOf(v) === i)
-                              .join(', ')}
-                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-gray mt-1">
+                            <span className="font-medium text-charcoal">{serviceDisplay}</span>
+                            <span className="text-muted-gray/50">·</span>
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-charcoal bg-warm-ivory px-2 py-0.5 rounded-[6px] border border-border/80">
+                              <User size={11} className="text-sage shrink-0" />
+                              <span>Tech: {techDisplay}</span>
+                            </span>
+                          </div>
                         </div>
                       </div>
 
@@ -1989,6 +2020,7 @@ export default function PendingInvoices() {
                               isEditable: true,
                               invoiceId: invoice.id,
                               onRemove: removeRetailItemFromInvoice,
+                              defaultTechnician: techDisplay,
                             })}
                             <div className="flex justify-between px-4 py-3 bg-sage-soft/40 font-bold text-sm text-charcoal border-t border-border/50">
                               <span>Subtotal</span>
@@ -2199,11 +2231,25 @@ export default function PendingInvoices() {
               {paidTodayInvoices.map((invoice) => {
                 const isExpanded = expandedId === invoice.id;
                 const invNum = formatInvoiceNumber(invoice);
-                const servicesList = invoice.items.map((it) => it.service).join(', ');
-                const techList = invoice.items
-                  .map((it) => it.technician)
-                  .filter((v, i, a) => a.indexOf(v) === i)
-                  .join(', ');
+                const linkedApt = invoice.appointmentId
+                  ? appointments.find((a) => String(a.id) === String(invoice.appointmentId))
+                  : null;
+                const servicesList =
+                  invoice.items.map((it) => it.service || it.name).join(', ') ||
+                  linkedApt?.serviceSummary ||
+                  'Spa Service';
+                const techItems = invoice.items
+                  .map((it) =>
+                    it.technician && it.technician !== 'Staff' && it.technician !== 'Technician'
+                      ? it.technician
+                      : linkedApt?.technicianName || invoice.mainTechnicianName
+                  )
+                  .filter(Boolean)
+                  .filter((v, i, a) => a.indexOf(v) === i);
+                const techList =
+                  techItems.length > 0
+                    ? techItems.join(', ')
+                    : linkedApt?.technicianName || invoice.mainTechnicianName || 'Staff';
 
                 const paidTimeDisplay =
                   invoice.paidTime ||
@@ -2248,10 +2294,14 @@ export default function PendingInvoices() {
                               {paidTimeDisplay}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-gray mt-1 truncate">
-                            <span className="font-medium text-charcoal">{servicesList}</span> ·{' '}
-                            <span>Tech: {techList}</span>
-                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-gray mt-1">
+                            <span className="font-medium text-charcoal">{servicesList}</span>
+                            <span className="text-muted-gray/50">·</span>
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-charcoal bg-warm-ivory px-2 py-0.5 rounded-[6px] border border-border/80">
+                              <User size={11} className="text-sage shrink-0" />
+                              <span>Tech: {techList}</span>
+                            </span>
+                          </div>
                         </div>
                       </div>
 
@@ -2324,7 +2374,7 @@ export default function PendingInvoices() {
                               Invoice Breakdown
                             </p>
                             <div className="bg-white rounded-[12px] border border-border/80 overflow-hidden text-xs">
-                              {renderCategorizedItems(invoice.items)}
+                              {renderCategorizedItems(invoice.items, { defaultTechnician: techList })}
 
                               {invoice.discount > 0 && (
                                 <div className="flex justify-between px-4 py-2 bg-soft-cream/40 text-success font-medium border-t border-border/40">
@@ -2923,7 +2973,25 @@ export default function PendingInvoices() {
                   Invoice Breakdown
                 </p>
                 <div className="bg-white rounded-[12px] border border-border overflow-hidden">
-                  {renderCategorizedItems(detailInvoice.items)}
+                  {(() => {
+                    const linkedApt = detailInvoice.appointmentId
+                      ? appointments.find((a) => String(a.id) === String(detailInvoice.appointmentId))
+                      : null;
+                    const techNames = detailInvoice.items
+                      ?.map((it) =>
+                        it.technician && it.technician !== 'Staff' && it.technician !== 'Technician'
+                          ? it.technician
+                          : linkedApt?.technicianName || detailInvoice.mainTechnicianName
+                      )
+                      .filter(Boolean)
+                      .filter((v, i, a) => a.indexOf(v) === i);
+                    const defTech =
+                      techNames?.length > 0
+                        ? techNames.join(', ')
+                        : linkedApt?.technicianName || detailInvoice.mainTechnicianName || 'Staff';
+
+                    return renderCategorizedItems(detailInvoice.items, { defaultTechnician: defTech });
+                  })()}
 
                   {detailInvoice.discount > 0 && (
                     <div className="flex justify-between px-4 py-2 border-t border-border text-success font-medium">
