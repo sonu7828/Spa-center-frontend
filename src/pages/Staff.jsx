@@ -74,7 +74,7 @@ export default function Staff() {
   const [resetSuccess, setResetSuccess] = useState(false);
 
   // Form state
-  const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'technician', password: '123456', specialties: [] });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'technician', password: '', specialties: [] });
   const [formError, setFormError] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -110,7 +110,7 @@ export default function Staff() {
   };
 
   const resetForm = () => {
-    setForm({ name: '', email: '', phone: '', role: 'technician', password: '123456', specialties: [] });
+    setForm({ name: '', email: '', phone: '', role: 'technician', password: '', specialties: [] });
     setFormError('');
     setShowPw(false);
     setSaved(false);
@@ -174,6 +174,16 @@ export default function Staff() {
       return;
     }
 
+    if (!editingUser && !form.password?.trim()) {
+      setFormError('Password is required for new staff account.');
+      return;
+    }
+
+    if (!editingUser && form.password.trim().length < 6) {
+      setFormError('Password must be at least 6 characters.');
+      return;
+    }
+
     if (form.role === 'technician' && (!form.specialties || form.specialties.length === 0)) {
       setFormError('Please select at least one specialty.');
       return;
@@ -201,7 +211,7 @@ export default function Staff() {
           email: emailVal,
           phone: phoneVal || null,
           role: form.role,
-          password: form.password || '123456',
+          password: form.password.trim(),
           specialties: form.role === 'technician' ? form.specialties : [],
         });
       }
@@ -764,14 +774,20 @@ export default function Staff() {
                 {/* Password field */}
                 <div>
                   <label className="block text-[12px] font-medium text-muted-gray mb-1">
-                    {editingUser ? 'New Password (optional)' : 'Password'}
+                    {editingUser ? (
+                      'New Password (optional)'
+                    ) : (
+                      <span>
+                        Password <span className="text-[#B34040]">*</span>
+                      </span>
+                    )}
                   </label>
                   <div className="relative">
                     <input
                       type={showPw ? 'text' : 'password'}
                       value={form.password}
                       onChange={update('password')}
-                      placeholder={editingUser ? 'Leave blank to keep current' : '123456'}
+                      placeholder={editingUser ? 'Leave blank to keep current' : 'Enter password (min 6 characters)'}
                       className="w-full h-[42px] px-4 pr-11 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors"
                     />
                     <button
@@ -793,7 +809,7 @@ export default function Staff() {
                 {/* Save Button */}
                 <Button
                   onClick={handleSave}
-                  disabled={!form.name.trim() || !form.email.trim()}
+                  disabled={!form.name.trim() || !form.email.trim() || (!editingUser && !form.password.trim())}
                   className="w-full h-[44px] mt-2"
                 >
                   {editingUser ? 'Save Changes' : 'Create Staff Account'}

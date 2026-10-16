@@ -257,7 +257,7 @@ export function AuthProvider({ children }) {
       username: rawEmail.split('@')[0],
       role: userData.role,
       specialties: userData.role === 'technician' ? (userData.specialties || []) : [],
-      password: userData.password || '123456',
+      password: (userData.password || '').trim(),
     };
 
     const res = await usersApi.create(payload);
