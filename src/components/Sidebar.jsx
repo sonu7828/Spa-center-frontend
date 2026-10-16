@@ -43,16 +43,16 @@ const navSections = [
     items: [
       { to: '/',             label: 'Dashboard',    icon: LayoutDashboard, roles: ['manager', 'reception', 'technician'] },
       { to: '/appointments', label: 'Appointments', icon: CalendarDays,    roles: ['manager', 'reception', 'technician'] },
-      { to: '/clients',      label: 'Clients',      icon: Users,           roles: ['manager', 'reception'] },
+      { to: '/clients',      label: 'Clients',      icon: Users,           roles: ['manager', 'reception', 'technician'] },
     ],
   },
   {
     title: 'OPERATIONS',
     items: [
-      { to: '/invoices',         label: 'Invoices',        icon: FileText,       roles: ['manager', 'reception'] },
+      { to: '/invoices',         label: 'Invoices',        icon: FileText,       roles: ['manager', 'reception', 'technician'] },
       { to: '/expenses',         label: 'Expenses',        icon: Receipt,        roles: ['manager', 'reception'] },
       { to: '/shared-work',      label: 'Shared Work',     icon: Users,          roles: ['manager', 'reception', 'technician'] },
-      { to: '/services',         label: 'Services',        icon: Sparkles,       roles: ['manager', 'reception'] },
+      { to: '/services',         label: 'Services',        icon: Sparkles,       roles: ['manager', 'reception', 'technician'] },
       { to: '/stock',            label: 'Service Stock',   icon: Package,        roles: ['manager', 'reception'] },
       { to: '/products',         label: 'Retail Products', icon: ShoppingBag,    roles: ['manager', 'reception'] },
       { to: '/technicians/daily', label: 'Tech Summary',    icon: ClipboardList,  roles: ['manager', 'reception', 'technician'] },

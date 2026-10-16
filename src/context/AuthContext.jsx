@@ -46,7 +46,8 @@ const RECEPTION_ROUTES = [
 
 const TECHNICIAN_ROUTES = [
   '/', '/dashboard', '/appointments', '/appointments/:id', '/appointments/:id/close',
-  '/clients/:id', '/technicians/daily', '/shared-work', '/attendance',
+  '/clients', '/clients/new', '/clients/:id', '/services', '/invoices',
+  '/technicians/daily', '/shared-work', '/attendance',
 ];
 
 const CLEANER_ROUTES = [

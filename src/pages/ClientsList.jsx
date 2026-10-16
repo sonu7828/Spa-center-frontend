@@ -16,9 +16,12 @@ import { UserPlus, Search, Eye, RotateCcw, UserX, TriangleAlert, X } from 'lucid
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useClients } from '../context/ClientsContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function ClientsList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canManageStatus = user?.role === 'manager' || user?.role === 'reception';
   const { clients, setClientStatus } = useClients();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -179,22 +182,24 @@ export default function ClientsList() {
                           <Eye size={13} />
                           View Client
                         </button>
-                        {isInactive ? (
-                          <button
-                            onClick={() => setClientToActivate(client)}
-                            className="h-[30px] px-2.5 rounded-[7px] text-xs font-semibold text-sage bg-sage-soft border border-sage/30 hover:bg-sage-soft/80 transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs"
-                          >
-                            <RotateCcw size={12} />
-                            Restore Active
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setClientToDeactivate(client)}
-                            className="h-[30px] px-2.5 rounded-[7px] text-xs font-semibold text-muted-gray bg-warm-ivory border border-border/80 hover:text-[#B34040] hover:bg-[#FAECEC] hover:border-[#ECCACA] transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs"
-                          >
-                            <UserX size={12} />
-                            Mark Inactive
-                          </button>
+                        {canManageStatus && (
+                          isInactive ? (
+                            <button
+                              onClick={() => setClientToActivate(client)}
+                              className="h-[30px] px-2.5 rounded-[7px] text-xs font-semibold text-sage bg-sage-soft border border-sage/30 hover:bg-sage-soft/80 transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                            >
+                              <RotateCcw size={12} />
+                              Restore Active
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setClientToDeactivate(client)}
+                              className="h-[30px] px-2.5 rounded-[7px] text-xs font-semibold text-muted-gray bg-warm-ivory border border-border/80 hover:text-[#B34040] hover:bg-[#FAECEC] hover:border-[#ECCACA] transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                            >
+                              <UserX size={12} />
+                              Mark Inactive
+                            </button>
+                          )
                         )}
                       </div>
                     </td>
@@ -256,7 +261,7 @@ export default function ClientsList() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className={`grid ${canManageStatus ? 'grid-cols-2' : 'grid-cols-1'} gap-2 pt-1`}>
                   <button
                     onClick={() => navigate(`/clients/${client.id}`)}
                     className="h-[36px] px-2 rounded-[8px] text-xs font-semibold text-charcoal bg-soft-cream border border-border hover:bg-white transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs"
@@ -264,22 +269,24 @@ export default function ClientsList() {
                     <Eye size={13} />
                     View Client
                   </button>
-                  {isInactive ? (
-                    <button
-                      onClick={() => setClientToActivate(client)}
-                      className="h-[36px] px-2 rounded-[8px] text-xs font-semibold text-sage bg-sage-soft border border-sage/30 hover:bg-sage-soft/80 transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs"
-                    >
-                      <RotateCcw size={12} />
-                      Restore Active
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setClientToDeactivate(client)}
-                      className="h-[36px] px-2 rounded-[8px] text-xs font-semibold text-muted-gray bg-warm-ivory border border-border/80 hover:text-[#B34040] hover:bg-[#FAECEC] hover:border-[#ECCACA] transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs"
-                    >
-                      <UserX size={12} />
-                      Mark Inactive
-                    </button>
+                  {canManageStatus && (
+                    isInactive ? (
+                      <button
+                        onClick={() => setClientToActivate(client)}
+                        className="h-[36px] px-2 rounded-[8px] text-xs font-semibold text-sage bg-sage-soft border border-sage/30 hover:bg-sage-soft/80 transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        <RotateCcw size={12} />
+                        Restore Active
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setClientToDeactivate(client)}
+                        className="h-[36px] px-2 rounded-[8px] text-xs font-semibold text-muted-gray bg-warm-ivory border border-border/80 hover:text-[#B34040] hover:bg-[#FAECEC] hover:border-[#ECCACA] transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        <UserX size={12} />
+                        Mark Inactive
+                      </button>
+                    )
                   )}
                 </div>
               </div>

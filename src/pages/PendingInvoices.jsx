@@ -15,7 +15,7 @@
  *   - [ Send / Resend WhatsApp Receipt ] → Structure ready for WhatsApp API
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -371,9 +371,11 @@ function SearchableSelect({
 }
 
 export default function PendingInvoices() {
-  const navigate = useNavigate();
   const { user, allUsers } = useAuth();
+  const isTechnician = user?.role === 'technician';
+  const canCollectPayment = user?.role === 'manager' || user?.role === 'reception';
   const canSellRetail = user?.role === 'manager' || user?.role === 'reception';
+  const canCreateInvoice = user?.role === 'manager' || user?.role === 'reception';
 
   const {
     invoices,
@@ -595,9 +597,32 @@ export default function PendingInvoices() {
     }
   }, [refreshInvoices]);
 
-  const pendingInvoices = typeof getPendingInvoices === 'function' ? getPendingInvoices() : [];
-  const paidTodayInvoices = typeof getPaidTodayInvoices === 'function' ? getPaidTodayInvoices() : [];
-  const historyInvoices = typeof getHistoryInvoices === 'function' ? getHistoryInvoices() : [];
+  const myTechnicianId = user?.id;
+  const myTechnicianName = (user?.name || '').trim().toLowerCase();
+
+  const filterByTechnician = useCallback((list) => {
+    if (!isTechnician) return list;
+    return (list || []).filter((inv) => {
+      if (inv.technicianId && String(inv.technicianId) === String(myTechnicianId)) return true;
+      if (inv.mainTechnicianId && String(inv.mainTechnicianId) === String(myTechnicianId)) return true;
+      if (Array.isArray(inv.items)) {
+        return inv.items.some(
+          (it) =>
+            (it.technicianId && String(it.technicianId) === String(myTechnicianId)) ||
+            (it.technician && String(it.technician).trim().toLowerCase() === myTechnicianName)
+        );
+      }
+      return false;
+    });
+  }, [isTechnician, myTechnicianId, myTechnicianName]);
+
+  const rawPendingInvoices = typeof getPendingInvoices === 'function' ? getPendingInvoices() : [];
+  const rawPaidTodayInvoices = typeof getPaidTodayInvoices === 'function' ? getPaidTodayInvoices() : [];
+  const rawHistoryInvoices = typeof getHistoryInvoices === 'function' ? getHistoryInvoices() : [];
+
+  const pendingInvoices = useMemo(() => filterByTechnician(rawPendingInvoices), [rawPendingInvoices, filterByTechnician]);
+  const paidTodayInvoices = useMemo(() => filterByTechnician(rawPaidTodayInvoices), [rawPaidTodayInvoices, filterByTechnician]);
+  const historyInvoices = useMemo(() => filterByTechnician(rawHistoryInvoices), [rawHistoryInvoices, filterByTechnician]);
 
   // --- History Tab Search, Filter & Pagination State ---
   const [historySearch, setHistorySearch] = useState('');
@@ -1679,7 +1704,8 @@ export default function PendingInvoices() {
   return (
     <div>
       <PageHeader
-        title="Invoices"
+        title={isTechnician ? "My Invoices" : "Invoices"}
+        subtitle={isTechnician ? "View your service invoices and payment status." : "Reception & Manager Invoices Management."}
         action={
           <div className="flex items-center gap-2">
             <Button
@@ -1700,14 +1726,16 @@ export default function PendingInvoices() {
                 <span>+ Retail Sale</span>
               </Button>
             )}
-            <Button
-              variant="primary"
-              onClick={openNewServiceModal}
-              title="Create Walk-In / Service Invoice"
-            >
-              <Sparkles size={15} strokeWidth={2.2} />
-              <span>+ New Service</span>
-            </Button>
+            {canCreateInvoice && (
+              <Button
+                variant="primary"
+                onClick={openNewServiceModal}
+                title="Create Walk-In / Service Invoice"
+              >
+                <Sparkles size={15} strokeWidth={2.2} />
+                <span>+ New Service</span>
+              </Button>
+            )}
           </div>
         }
       />
@@ -1845,18 +1873,24 @@ export default function PendingInvoices() {
               <p className="text-xs text-muted-gray mt-1">
                 Invoices appear here after a technician completes a service, or create a walk-in invoice directly.
               </p>
-              <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
-                <Button variant="primary" onClick={openNewServiceModal}>
-                  <Sparkles size={15} strokeWidth={2.2} />
-                  <span>+ New Service Invoice</span>
-                </Button>
-                {canSellRetail && (
-                  <Button variant="secondary" onClick={openNewRetailSaleModal}>
-                    <ShoppingBag size={15} strokeWidth={2} />
-                    <span>+ Retail Sale</span>
+              {canCreateInvoice ? (
+                <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
+                  <Button variant="primary" onClick={openNewServiceModal}>
+                    <Sparkles size={15} strokeWidth={2.2} />
+                    <span>+ New Service Invoice</span>
                   </Button>
-                )}
-              </div>
+                  {canSellRetail && (
+                    <Button variant="secondary" onClick={openNewRetailSaleModal}>
+                      <ShoppingBag size={15} strokeWidth={2} />
+                      <span>+ Retail Sale</span>
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-gray mt-2 italic">
+                  Invoices for appointments you close will appear here for reception payment.
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -1980,151 +2014,163 @@ export default function PendingInvoices() {
                           );
                         })()}
 
-                        {/* Loyalty Redemption */}
-                        <div className="mb-4 bg-soft-cream/40 border border-border/80 rounded-[14px] p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <Award size={16} className="text-sage" />
-                              <span className="text-xs font-semibold text-charcoal uppercase tracking-wider">
-                                Loyalty Points
-                              </span>
-                            </div>
-                            <span className="text-xs font-semibold text-sage bg-sage-soft px-2.5 py-1 rounded-[6px] border border-sage/20">
-                              {clientLoyalty.balance} pts available
-                            </span>
-                          </div>
+                        {canCollectPayment ? (
+                          <>
+                            {/* Loyalty Redemption */}
+                            <div className="mb-4 bg-soft-cream/40 border border-border/80 rounded-[14px] p-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <Award size={16} className="text-sage" />
+                                  <span className="text-xs font-semibold text-charcoal uppercase tracking-wider">
+                                    Loyalty Points
+                                  </span>
+                                </div>
+                                <span className="text-xs font-semibold text-sage bg-sage-soft px-2.5 py-1 rounded-[6px] border border-sage/20">
+                                  {clientLoyalty.balance} pts available
+                                </span>
+                              </div>
 
-                          {clientLoyalty.balance >= settings.minPointsToRedeem ? (
-                            <div className="mt-2 pt-2 border-t border-border/60">
-                              <label className="flex items-center gap-2 text-xs font-medium text-charcoal cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={rs.wantRedeem || false}
-                                  onChange={() =>
-                                    toggleRedeem(invoice.id, invoice.clientId)
-                                  }
-                                  className="w-4 h-4 text-sage accent-sage cursor-pointer rounded"
-                                />
-                                <span>Redeem points for discount</span>
-                              </label>
-
-                              {rs.wantRedeem && (
-                                <div className="mt-2 pl-6 space-y-2">
-                                  <div className="flex items-center gap-2">
+                              {clientLoyalty.balance >= settings.minPointsToRedeem ? (
+                                <div className="mt-2 pt-2 border-t border-border/60">
+                                  <label className="flex items-center gap-2 text-xs font-medium text-charcoal cursor-pointer">
                                     <input
-                                      type="number"
-                                      min={settings.minPointsToRedeem}
-                                      max={clientLoyalty.balance}
-                                      step={settings.pointsForDiscount}
-                                      value={rs.points || ''}
-                                      onChange={(e) =>
-                                        setRedeemPoints(invoice.id, e.target.value)
+                                      type="checkbox"
+                                      checked={rs.wantRedeem || false}
+                                      onChange={() =>
+                                        toggleRedeem(invoice.id, invoice.clientId)
                                       }
-                                      className="w-28 h-[36px] px-3 bg-white border border-border rounded-[8px] text-xs text-charcoal font-semibold outline-none focus:border-sage"
+                                      className="w-4 h-4 text-sage accent-sage cursor-pointer rounded"
                                     />
-                                    <span className="text-xs text-muted-gray">
-                                      pts = {discountAmount.toLocaleString()} FCFA discount
-                                    </span>
-                                  </div>
-                                  {discountAmount > 0 && (
-                                    <>
-                                      <p className="text-xs font-medium text-success">
-                                        Discount: -{discountAmount.toLocaleString()} FCFA
-                                      </p>
-                                      <p className="text-sm font-bold text-charcoal">
-                                        Final Total: {finalTotal.toLocaleString('en-US')} FCFA
-                                      </p>
-                                    </>
+                                    <span>Redeem points for discount</span>
+                                  </label>
+
+                                  {rs.wantRedeem && (
+                                    <div className="mt-2 pl-6 space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="number"
+                                          min={settings.minPointsToRedeem}
+                                          max={clientLoyalty.balance}
+                                          step={settings.pointsForDiscount}
+                                          value={rs.points || ''}
+                                          onChange={(e) =>
+                                            setRedeemPoints(invoice.id, e.target.value)
+                                          }
+                                          className="w-28 h-[36px] px-3 bg-white border border-border rounded-[8px] text-xs text-charcoal font-semibold outline-none focus:border-sage"
+                                        />
+                                        <span className="text-xs text-muted-gray">
+                                          pts = {discountAmount.toLocaleString()} FCFA discount
+                                        </span>
+                                      </div>
+                                      {discountAmount > 0 && (
+                                        <>
+                                          <p className="text-xs font-medium text-success">
+                                            Discount: -{discountAmount.toLocaleString()} FCFA
+                                          </p>
+                                          <p className="text-sm font-bold text-charcoal">
+                                            Final Total: {finalTotal.toLocaleString('en-US')} FCFA
+                                          </p>
+                                        </>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
+                              ) : (
+                                <p className="text-[11px] text-muted-gray mt-1">
+                                  Min {settings.minPointsToRedeem} pts required ({clientLoyalty.balance} available).
+                                </p>
                               )}
-                            </div>
-                          ) : (
-                            <p className="text-[11px] text-muted-gray mt-1">
-                              Min {settings.minPointsToRedeem} pts required ({clientLoyalty.balance} available).
-                            </p>
-                          )}
 
-                          <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-xs">
-                            <span className="text-muted-gray">Points to earn:</span>
-                            <span className="font-semibold text-success flex items-center gap-1">
-                              <Sparkles size={12} /> +
-                              {calculateEarnedPoints(
-                                finalTotal,
-                                invoice.items[0]?.service
-                              )}{' '}
-                              pts
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Payment Method Selector */}
-                        <div className="mb-5">
-                          <p className="text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-2">
-                            Payment Method:
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                            {PAYMENT_METHODS.map((pm) => {
-                              const isSelected = selectedPayment === pm.key;
-                              return (
-                                <button
-                                  key={pm.key}
-                                  type="button"
-                                  onClick={() => setPaymentMethod(invoice.id, pm.key)}
-                                  className={`h-[44px] px-3.5 rounded-[11px] text-xs font-bold border transition-all duration-150 cursor-pointer flex items-center justify-start gap-2.5 ${isSelected
-                                      ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
-                                      : 'bg-white border-border text-charcoal/80 hover:border-sage/40 hover:bg-soft-cream/30'
-                                    }`}
-                                >
-                                  <span
-                                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${isSelected
-                                        ? 'border-sage bg-sage'
-                                        : 'border-muted-gray/50 bg-white'
-                                      }`}
-                                  >
-                                    {isSelected && (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                                    )}
-                                  </span>
-                                  <span>{pm.label}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Collect Payment CTA */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
-                          <div className="text-xs text-muted-gray">
-                            Collecting will mark status as{' '}
-                            <span className="font-bold text-success">PAID</span> and move
-                            to Paid Today.
-                          </div>
-                          <Button
-                            className="w-full sm:w-auto min-w-[220px]"
-                            disabled={Boolean(collectingId)}
-                            onClick={() => handleCollectPayment(invoice)}
-                          >
-                            {collectingId === invoice.id ? (
-                              <>
-                                <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
-                                <span>Collecting Payment...</span>
-                              </>
-                            ) : (
-                              <>
-                                <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
-                                <span>
-                                  Collect Payment (
-                                  {(discountAmount > 0
-                                    ? finalTotal
-                                    : invoice.total
-                                  ).toLocaleString('en-US')}{' '}
-                                  FCFA)
+                              <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-xs">
+                                <span className="text-muted-gray">Points to earn:</span>
+                                <span className="font-semibold text-success flex items-center gap-1">
+                                  <Sparkles size={12} /> +
+                                  {calculateEarnedPoints(
+                                    finalTotal,
+                                    invoice.items[0]?.service
+                                  )}{' '}
+                                  pts
                                 </span>
-                              </>
-                            )}
-                          </Button>
-                        </div>
+                              </div>
+                            </div>
+
+                            {/* Payment Method Selector */}
+                            <div className="mb-5">
+                              <p className="text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-2">
+                                Payment Method:
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                {PAYMENT_METHODS.map((pm) => {
+                                  const isSelected = selectedPayment === pm.key;
+                                  return (
+                                    <button
+                                      key={pm.key}
+                                      type="button"
+                                      onClick={() => setPaymentMethod(invoice.id, pm.key)}
+                                      className={`h-[44px] px-3.5 rounded-[11px] text-xs font-bold border transition-all duration-150 cursor-pointer flex items-center justify-start gap-2.5 ${isSelected
+                                          ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                                          : 'bg-white border-border text-charcoal/80 hover:border-sage/40 hover:bg-soft-cream/30'
+                                        }`}
+                                    >
+                                      <span
+                                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${isSelected
+                                            ? 'border-sage bg-sage'
+                                            : 'border-muted-gray/50 bg-white'
+                                          }`}
+                                      >
+                                        {isSelected && (
+                                          <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                        )}
+                                      </span>
+                                      <span>{pm.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Collect Payment CTA */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
+                              <div className="text-xs text-muted-gray">
+                                Collecting will mark status as{' '}
+                                <span className="font-bold text-success">PAID</span> and move
+                                to Paid Today.
+                              </div>
+                              <Button
+                                className="w-full sm:w-auto min-w-[220px]"
+                                disabled={Boolean(collectingId)}
+                                onClick={() => handleCollectPayment(invoice)}
+                              >
+                                {collectingId === invoice.id ? (
+                                  <>
+                                    <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
+                                    <span>Collecting Payment...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
+                                    <span>
+                                      Collect Payment (
+                                      {(discountAmount > 0
+                                        ? finalTotal
+                                        : invoice.total
+                                      ).toLocaleString('en-US')}{' '}
+                                      FCFA)
+                                    </span>
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border bg-warm-ivory/60 p-3.5 rounded-[12px] border border-border/80">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-charcoal">
+                              <Clock size={16} className="text-warning shrink-0" />
+                              <span>Service Completed · Awaiting payment collection by Reception</span>
+                            </div>
+                            <span className="text-[11px] text-muted-gray italic">Reception handles payments & receipts</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
