@@ -11,6 +11,70 @@ import { getDoualaTodayStr } from '../utils/timezone';
 
 const AttendanceContext = createContext(null);
 
+const BREAKS_STORAGE_KEY = 'omega_spa_attendance_breaks';
+
+function loadStoredBreaks() {
+  try {
+    const raw = localStorage.getItem(BREAKS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    console.error('[AttendanceContext] Failed to load breaks from localStorage:', err);
+    return {};
+  }
+}
+
+function persistStoredBreaks(data) {
+  try {
+    localStorage.setItem(BREAKS_STORAGE_KEY, JSON.stringify(data));
+  } catch (err) {
+    console.error('[AttendanceContext] Failed to persist breaks to localStorage:', err);
+  }
+}
+
+/**
+ * Calculates Net Work Hours: Gross Shift Duration - Accumulated Break Minutes
+ */
+export function calculateNetHours(record, totalBreakMinutes = 0) {
+  if (!record) return null;
+
+  let grossMinutes = null;
+
+  if (record.clockInRaw && record.clockOutRaw) {
+    const inMs = new Date(record.clockInRaw).getTime();
+    const outMs = new Date(record.clockOutRaw).getTime();
+    if (!isNaN(inMs) && !isNaN(outMs) && outMs >= inMs) {
+      grossMinutes = Math.round((outMs - inMs) / 60000);
+    }
+  } else if (record.clockInRaw && record.status === 'working') {
+    const inMs = new Date(record.clockInRaw).getTime();
+    const nowMs = Date.now();
+    if (!isNaN(inMs) && nowMs >= inMs) {
+      grossMinutes = Math.round((nowMs - inMs) / 60000);
+    }
+  } else if (record.workingHours) {
+    const str = String(record.workingHours);
+    const hMatch = str.match(/(\d+)\s*h/);
+    const mMatch = str.match(/(\d+)\s*m/);
+    if (hMatch || mMatch) {
+      const h = parseInt(hMatch ? hMatch[1] : '0', 10);
+      const m = parseInt(mMatch ? mMatch[1] : '0', 10);
+      grossMinutes = h * 60 + m;
+    } else {
+      const num = Number(str);
+      if (!isNaN(num)) {
+        grossMinutes = Math.round(num * 60);
+      }
+    }
+  }
+
+  if (grossMinutes === null) return null;
+
+  const netMinutes = Math.max(0, grossMinutes - (totalBreakMinutes || 0));
+  const h = Math.floor(netMinutes / 60);
+  const m = netMinutes % 60;
+  return `${h}h ${m}m`;
+}
+
 function dataUrlToFile(dataUrl, filename = 'attendance.jpg') {
   try {
     const arr = dataUrl.split(',');
@@ -33,6 +97,124 @@ export function AttendanceProvider({ children }) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [breakStore, setBreakStore] = useState(() => loadStoredBreaks());
+
+  // Listen for storage changes across tabs/windows
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === BREAKS_STORAGE_KEY && e.newValue) {
+        try {
+          setBreakStore(JSON.parse(e.newValue));
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // One-click start break
+  const startBreak = useCallback((employeeId, targetDate) => {
+    if (!employeeId) return { success: false, error: 'Employee ID required' };
+    const dateStr = targetDate || getDoualaTodayStr();
+    const key = `${employeeId}_${dateStr}`;
+
+    let result = { success: true };
+
+    setBreakStore((prev) => {
+      const existing = prev[key] || {
+        breaks: [],
+        totalBreakMinutes: 0,
+        isOnBreak: false,
+        currentBreakStart: null,
+      };
+
+      if (existing.isOnBreak) {
+        result = { success: false, error: 'Employee is already on break' };
+        return prev;
+      }
+
+      const nowIso = new Date().toISOString();
+      const updated = {
+        ...prev,
+        [key]: {
+          ...existing,
+          isOnBreak: true,
+          currentBreakStart: nowIso,
+        },
+      };
+      persistStoredBreaks(updated);
+      return updated;
+    });
+
+    return result;
+  }, []);
+
+  // One-click end break
+  const endBreak = useCallback((employeeId, targetDate) => {
+    if (!employeeId) return { success: false, error: 'Employee ID required' };
+    const dateStr = targetDate || getDoualaTodayStr();
+    const key = `${employeeId}_${dateStr}`;
+
+    let result = { success: false, error: 'Employee is not on break' };
+
+    setBreakStore((prev) => {
+      const existing = prev[key];
+      if (!existing || !existing.isOnBreak || !existing.currentBreakStart) {
+        return prev;
+      }
+
+      const endIso = new Date().toISOString();
+      const startIso = existing.currentBreakStart;
+      const elapsedMs = Math.max(0, new Date(endIso).getTime() - new Date(startIso).getTime());
+      const durationMinutes = Math.round(elapsedMs / (1000 * 60));
+
+      const newBreak = {
+        id: `brk-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        startTime: startIso,
+        endTime: endIso,
+        durationMinutes,
+      };
+
+      const newBreaks = [...(existing.breaks || []), newBreak];
+      const totalBreakMinutes = newBreaks.reduce((acc, b) => acc + (b.durationMinutes || 0), 0);
+
+      const updated = {
+        ...prev,
+        [key]: {
+          breaks: newBreaks,
+          totalBreakMinutes,
+          isOnBreak: false,
+          currentBreakStart: null,
+        },
+      };
+      persistStoredBreaks(updated);
+      result = { success: true, breakItem: newBreak, totalBreakMinutes };
+      return updated;
+    });
+
+    return result;
+  }, []);
+
+  // Get break state helper
+  const getBreakState = useCallback(
+    (employeeId, targetDate) => {
+      if (!employeeId) {
+        return { breaks: [], breakCount: 0, totalBreakMinutes: 0, isOnBreak: false, currentBreakStart: null };
+      }
+      const dateStr = targetDate || getDoualaTodayStr();
+      const key = `${employeeId}_${dateStr}`;
+      const info = breakStore[key] || {};
+      const breaks = info.breaks || [];
+      return {
+        breaks,
+        breakCount: breaks.length,
+        totalBreakMinutes: info.totalBreakMinutes || 0,
+        isOnBreak: Boolean(info.isOnBreak),
+        currentBreakStart: info.currentBreakStart || null,
+      };
+    },
+    [breakStore]
+  );
 
   // Fetch all attendance records from backend
   const refreshAttendance = useCallback(async () => {
@@ -126,6 +308,13 @@ export function AttendanceProvider({ children }) {
       if (!photo) return { success: false, error: 'Verification photo is required for Clock Out.' };
 
       const today = getDoualaTodayStr();
+
+      // Requirement: Automatically close an active break when the employee clocks out
+      const breakKey = `${currentUser.id}_${today}`;
+      if (breakStore[breakKey]?.isOnBreak) {
+        endBreak(currentUser.id, today);
+      }
+
       const browserIso = new Date().toISOString();
       console.log('[Attendance Clock Out] Browser current ISO time:', browserIso);
       console.log('[Attendance Clock Out] UTC timestamp / date sent to API:', today);
@@ -167,7 +356,7 @@ export function AttendanceProvider({ children }) {
         return { success: false, error: errMsg };
       }
     },
-    [refreshAttendance]
+    [refreshAttendance, breakStore, endBreak]
   );
 
   // Manager Manual Attendance Entry or Override
@@ -254,44 +443,72 @@ export function AttendanceProvider({ children }) {
     [refreshAttendance]
   );
 
+  // Enriched records with break data and net working hours
+  const enrichedRecords = useMemo(() => {
+    return records.map((r) => {
+      const key = `${r.employeeId}_${r.date}`;
+      const bInfo = breakStore[key] || {};
+      const breaks = bInfo.breaks || [];
+      const totalBreakMinutes = bInfo.totalBreakMinutes || 0;
+      const isOnBreak = Boolean(bInfo.isOnBreak);
+      const currentBreakStart = bInfo.currentBreakStart || null;
+
+      return {
+        ...r,
+        breaks,
+        breakCount: breaks.length,
+        totalBreakMinutes,
+        isOnBreak,
+        currentBreakStart,
+        grossWorkingHours: r.workingHours,
+        netWorkingHours: calculateNetHours(r, totalBreakMinutes),
+      };
+    });
+  }, [records, breakStore]);
+
   // Get today's record for a specific employee
   const getTodayRecord = useCallback(
     (employeeId) => {
       if (!employeeId) return null;
       const today = getDoualaTodayStr();
-      return records.find((r) => r.employeeId === employeeId && r.date === today) || null;
+      return enrichedRecords.find((r) => r.employeeId === employeeId && r.date === today) || null;
     },
-    [records]
+    [enrichedRecords]
   );
 
   // Get all records for a specific employee
   const getEmployeeRecords = useCallback(
     (employeeId) => {
       if (!employeeId) return [];
-      return records
+      return enrichedRecords
         .filter((r) => r.employeeId === employeeId)
         .sort((a, b) => b.date.localeCompare(a.date));
     },
-    [records]
+    [enrichedRecords]
   );
 
   // Get today's attendance for all employees (Manager view)
   const todayAllRecords = useMemo(() => {
     const today = getDoualaTodayStr();
-    return records.filter((r) => r.date === today);
-  }, [records]);
+    return enrichedRecords.filter((r) => r.date === today);
+  }, [enrichedRecords]);
 
   // Get all records sorted by date (Manager history)
   const allRecordsSorted = useMemo(() => {
-    return [...records].sort((a, b) => b.date.localeCompare(a.date));
-  }, [records]);
+    return [...enrichedRecords].sort((a, b) => b.date.localeCompare(a.date));
+  }, [enrichedRecords]);
 
   return (
     <AttendanceContext.Provider
       value={{
-        records,
+        records: enrichedRecords,
+        rawRecords: records,
         loading,
         error,
+        breakStore,
+        startBreak,
+        endBreak,
+        getBreakState,
         refreshAttendance,
         clockIn,
         clockOut,

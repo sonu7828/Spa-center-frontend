@@ -30,6 +30,8 @@ import {
   X,
   Eye,
   Image,
+  Coffee,
+  Play,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../context/AuthContext';
@@ -38,11 +40,12 @@ import { getDoualaTodayStr, formatDoualaDateDisplay } from '../utils/timezone';
 
 export default function Attendance() {
   const { user } = useAuth();
-  const { clockIn, clockOut, getTodayRecord, getEmployeeRecords } = useAttendance();
+  const { clockIn, clockOut, getTodayRecord, getEmployeeRecords, startBreak, endBreak } = useAttendance();
   const [activeTab, setActiveTab] = useState('today');
   const [feedback, setFeedback] = useState(null);
   const [selectedManualDetails, setSelectedManualDetails] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [breakTick, setBreakTick] = useState(0);
 
   // Camera state
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -199,9 +202,63 @@ export default function Attendance() {
     }
   };
 
-  // Clock Out — requires departure verification photo
+  // Ticking interval for active break timer
+  useEffect(() => {
+    if (!todayRecord?.isOnBreak) return;
+    const timer = setInterval(() => {
+      setBreakTick((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [todayRecord?.isOnBreak]);
+
+  const getLiveBreakElapsed = (startIso) => {
+    if (!startIso) return '0m 00s';
+    const diffMs = Math.max(0, Date.now() - new Date(startIso).getTime());
+    const totalSec = Math.floor(diffMs / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m}m ${String(s).padStart(2, '0')}s`;
+  };
+
+  const handleStartBreak = () => {
+    if (!user?.id) return;
+    const res = startBreak(user.id);
+    if (res.success) {
+      setFeedback({ type: 'success', message: 'Break started. Enjoy your break!' });
+    } else {
+      setFeedback({ type: 'error', message: res.error || 'Failed to start break' });
+    }
+    setTimeout(() => setFeedback(null), 3500);
+  };
+
+  const handleEndBreak = () => {
+    if (!user?.id) return;
+    const res = endBreak(user.id);
+    if (res.success) {
+      const dur = res.breakItem?.durationMinutes || 0;
+      setFeedback({
+        type: 'success',
+        message: `Break ended (${dur} min recorded). Welcome back!`,
+      });
+    } else {
+      setFeedback({ type: 'error', message: res.error || 'Failed to end break' });
+    }
+    setTimeout(() => setFeedback(null), 3500);
+  };
+
+  // Clock Out — requires departure verification photo (and automatically closes any active break)
   const handleClockOut = async () => {
     if (isSubmitting) return;
+
+    // Requirement: Automatically close an active break when the employee clocks out
+    if (todayRecord?.isOnBreak) {
+      endBreak(user?.id);
+      setFeedback({
+        type: 'info',
+        message: 'Active break was automatically closed for Clock Out.',
+      });
+    }
+
     if (!photoConfirmed || !capturedPhoto) {
       setFeedback({ type: 'error', message: 'Departure photo required. Opening camera...' });
       handleOpenCamera();
@@ -312,8 +369,8 @@ export default function Attendance() {
                   </div>
                 </div>
 
-                {/* Clock In / Out & Working Hours Stats */}
-                <div className="grid grid-cols-3 gap-2">
+                {/* Clock In / Out, Breaks & Net Working Hours Stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="bg-warm-ivory rounded-[10px] p-2.5 border border-border/60 text-center">
                     <p className="text-[9px] font-semibold text-muted-gray uppercase tracking-wider mb-0.5">Clock In</p>
                     <p className="text-xs font-bold text-charcoal flex items-center justify-center gap-1">
@@ -329,13 +386,94 @@ export default function Attendance() {
                     </p>
                   </div>
                   <div className="bg-warm-ivory rounded-[10px] p-2.5 border border-border/60 text-center">
-                    <p className="text-[9px] font-semibold text-muted-gray uppercase tracking-wider mb-0.5">Hours</p>
+                    <p className="text-[9px] font-semibold text-muted-gray uppercase tracking-wider mb-0.5">Breaks</p>
+                    <p className="text-xs font-bold text-amber-700 flex items-center justify-center gap-1">
+                      <Coffee size={12} className="text-amber-600" />
+                      {todayRecord ? `${todayRecord.breakCount || 0} (${todayRecord.totalBreakMinutes || 0}m)` : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-warm-ivory rounded-[10px] p-2.5 border border-border/60 text-center" title={todayRecord?.workingHours ? `Gross Shift: ${todayRecord.workingHours}` : undefined}>
+                    <p className="text-[9px] font-semibold text-muted-gray uppercase tracking-wider mb-0.5">Net Hours</p>
                     <p className="text-xs font-bold text-[#4F6748] flex items-center justify-center gap-1">
                       <Timer size={12} />
-                      {todayRecord?.workingHours || '—'}
+                      {todayRecord?.netWorkingHours || (status === 'working' ? 'In Progress' : '—')}
                     </p>
                   </div>
                 </div>
+
+                {/* One-Click Break Tracking (Active Shift) */}
+                {status === 'working' && (
+                  <div className={`rounded-[12px] p-3 border transition-all ${
+                    todayRecord?.isOnBreak
+                      ? 'bg-amber-50/90 border-amber-300 shadow-xs'
+                      : 'bg-warm-ivory border-border/60'
+                  }`}>
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 ${
+                          todayRecord?.isOnBreak
+                            ? 'bg-amber-100 text-amber-700 border border-amber-300/80 animate-pulse'
+                            : 'bg-amber-100/60 text-amber-700 border border-amber-200/50'
+                        }`}>
+                          <Coffee size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-charcoal flex items-center gap-1.5">
+                            <span>{todayRecord?.isOnBreak ? 'Currently On Break' : 'Attendance Break'}</span>
+                            {todayRecord?.isOnBreak && (
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping inline-block" />
+                            )}
+                          </p>
+                          <p className="text-[11px] text-muted-gray truncate mt-0.5">
+                            {todayRecord?.isOnBreak ? (
+                              <span className="font-semibold text-amber-800">
+                                Active break: {getLiveBreakElapsed(todayRecord.currentBreakStart)}
+                              </span>
+                            ) : (
+                              'Single-click Start & End (no photo needed)'
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      {todayRecord?.isOnBreak ? (
+                        <button
+                          type="button"
+                          onClick={handleEndBreak}
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer active:scale-[0.98] shrink-0"
+                        >
+                          <Play size={14} strokeWidth={2.4} />
+                          <span>End Break</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleStartBreak}
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer active:scale-[0.98] shrink-0"
+                        >
+                          <Coffee size={14} strokeWidth={2.4} />
+                          <span>Start Break</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Today's break chips breakdown */}
+                    {todayRecord?.breaks && todayRecord.breaks.length > 0 && (
+                      <div className="mt-2.5 pt-2 border-t border-border/50 flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-semibold text-muted-gray">Breaks today:</span>
+                        {todayRecord.breaks.map((b, idx) => (
+                          <span
+                            key={b.id || idx}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-white border border-border/70 text-[10px] font-medium text-charcoal shadow-2xs"
+                          >
+                            <span className="text-muted-gray">#{idx + 1}</span>
+                            <span className="font-bold text-amber-800">{b.durationMinutes}m</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Manual Attendance Entry Banner by Manager */}
                 {todayRecord?.isManualEntry && (
@@ -651,7 +789,9 @@ export default function Attendance() {
                       <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Date</th>
                       <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Clock In</th>
                       <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Clock Out</th>
-                      <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Hours</th>
+                      <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Breaks</th>
+                      <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Gross Hours</th>
+                      <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Net Hours</th>
                       <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Status</th>
                       <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Photo</th>
                     </tr>
@@ -676,7 +816,11 @@ export default function Attendance() {
                           </td>
                           <td className="py-3 px-3 text-xs text-charcoal">{rec.clockIn || '—'}</td>
                           <td className="py-3 px-3 text-xs text-charcoal">{rec.clockOut || '—'}</td>
-                          <td className="py-3 px-3 text-xs font-semibold text-charcoal">{rec.workingHours || '—'}</td>
+                          <td className="py-3 px-3 text-xs text-amber-800 font-semibold">
+                            {rec.breakCount ? `${rec.breakCount} (${rec.totalBreakMinutes}m)` : '0 (0m)'}
+                          </td>
+                          <td className="py-3 px-3 text-xs text-muted-gray">{rec.workingHours || '—'}</td>
+                          <td className="py-3 px-3 text-xs font-bold text-[#4F6748]">{rec.netWorkingHours || '—'}</td>
                           <td className="py-3 px-3">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-[10px] font-semibold ${rsc.bg} ${rsc.color} border ${rsc.border}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${rsc.dot}`} />
@@ -750,7 +894,7 @@ export default function Attendance() {
                           {rsc.label}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-[10px]">
+                      <div className="grid grid-cols-4 gap-1.5 text-[10px]">
                         <div>
                           <p className="text-muted-gray font-medium">In</p>
                           <p className="font-semibold text-charcoal">{rec.clockIn || '—'}</p>
@@ -760,8 +904,12 @@ export default function Attendance() {
                           <p className="font-semibold text-charcoal">{rec.clockOut || '—'}</p>
                         </div>
                         <div>
-                          <p className="text-muted-gray font-medium">Hours</p>
-                          <p className="font-bold text-[#4F6748]">{rec.workingHours || '—'}</p>
+                          <p className="text-muted-gray font-medium">Breaks</p>
+                          <p className="font-semibold text-amber-700">{rec.totalBreakMinutes || 0}m</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-gray font-medium">Net Hours</p>
+                          <p className="font-bold text-[#4F6748]">{rec.netWorkingHours || '—'}</p>
                         </div>
                       </div>
                       {rec.isManualEntry && (

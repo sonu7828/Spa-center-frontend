@@ -39,6 +39,7 @@ import {
   Camera,
   Info,
   RotateCcw,
+  Coffee,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../context/AuthContext';
@@ -551,7 +552,13 @@ export default function AttendanceManager() {
                         Clock Out
                       </th>
                       <th className="text-left text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
-                        Working Hours
+                        Breaks
+                      </th>
+                      <th className="text-left text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
+                        Net Hours
+                      </th>
+                      <th className="text-left text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
+                        Gross Hours
                       </th>
                       <th className="text-left text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
                         Photos
@@ -652,15 +659,43 @@ export default function AttendanceManager() {
                             )}
                           </td>
 
-                          {/* Working Hours */}
+                          {/* Breaks */}
                           <td className="py-3 px-4 whitespace-nowrap">
-                            {rec?.workingHours ? (
+                            {rec?.isOnBreak ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+                                <Coffee size={11} />
+                                On Break
+                              </span>
+                            ) : rec?.breakCount ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800">
+                                <Coffee size={12} className="text-amber-600" />
+                                {rec.breakCount} ({rec.totalBreakMinutes}m)
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-gray/60">0 (0m)</span>
+                            )}
+                          </td>
+
+                          {/* Net Work Hours */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            {rec?.netWorkingHours ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] text-xs font-bold text-[#4F6748] bg-[#DCE7D7]">
-                                {rec.workingHours}
+                                {rec.netWorkingHours}
                               </span>
                             ) : status === 'working' ? (
                               <span className="text-[11px] text-[#4F6748] font-semibold animate-pulse">
                                 In Progress
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-gray/60">—</span>
+                            )}
+                          </td>
+
+                          {/* Gross Shift Hours */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            {rec?.workingHours ? (
+                              <span className="text-xs text-muted-gray font-medium">
+                                {rec.workingHours}
                               </span>
                             ) : (
                               <span className="text-xs text-muted-gray/60">—</span>
@@ -878,7 +913,9 @@ export default function AttendanceManager() {
                         <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Role</th>
                         <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Clock In</th>
                         <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Clock Out</th>
-                        <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Hours</th>
+                        <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Breaks</th>
+                        <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Gross Hours</th>
+                        <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Net Hours</th>
                         <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Status</th>
                         <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Photo</th>
                       </tr>
@@ -912,7 +949,11 @@ export default function AttendanceManager() {
                             <td className="py-3 px-3 text-xs text-muted-gray capitalize">{rec.employeeRole || '—'}</td>
                             <td className="py-3 px-3 text-xs text-charcoal">{rec.clockIn || '—'}</td>
                             <td className="py-3 px-3 text-xs text-charcoal">{rec.clockOut || '—'}</td>
-                            <td className="py-3 px-3 text-xs font-semibold text-charcoal">{rec.workingHours || '—'}</td>
+                            <td className="py-3 px-3 text-xs text-amber-800 font-semibold">
+                              {rec.breakCount ? `${rec.breakCount} (${rec.totalBreakMinutes}m)` : '0 (0m)'}
+                            </td>
+                            <td className="py-3 px-3 text-xs text-muted-gray">{rec.workingHours || '—'}</td>
+                            <td className="py-3 px-3 text-xs font-bold text-[#4F6748]">{rec.netWorkingHours || '—'}</td>
                             <td className="py-3 px-3">
                               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-[10px] font-semibold ${rsc.bg} ${rsc.color} border ${rsc.border}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${rsc.dot}`} />
@@ -997,7 +1038,7 @@ export default function AttendanceManager() {
                           </span>
                         </div>
                         <p className="text-[10px] text-muted-gray font-medium">{formatDateDisplay(rec.date)}</p>
-                        <div className="grid grid-cols-3 gap-2 text-[10px]">
+                        <div className="grid grid-cols-4 gap-1.5 text-[10px]">
                           <div>
                             <p className="text-muted-gray font-medium">In</p>
                             <p className="font-semibold text-charcoal">{rec.clockIn || '—'}</p>
@@ -1007,8 +1048,12 @@ export default function AttendanceManager() {
                             <p className="font-semibold text-charcoal">{rec.clockOut || '—'}</p>
                           </div>
                           <div>
-                            <p className="text-muted-gray font-medium">Hours</p>
-                            <p className="font-bold text-[#4F6748]">{rec.workingHours || '—'}</p>
+                            <p className="text-muted-gray font-medium">Breaks</p>
+                            <p className="font-semibold text-amber-700">{rec.totalBreakMinutes || 0}m</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-gray font-medium">Net Hours</p>
+                            <p className="font-bold text-[#4F6748]">{rec.netWorkingHours || '—'}</p>
                           </div>
                         </div>
                         <ManualBadge rec={rec} />
@@ -1482,7 +1527,7 @@ export default function AttendanceManager() {
                     {selectedManualDetails.status === 'completed' ? 'Completed' : 'Working'}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t border-border/50">
+                <div className="grid grid-cols-4 gap-2 text-xs pt-2 border-t border-border/50">
                   <div>
                     <p className="text-[10px] text-muted-gray">Date</p>
                     <p className="font-semibold text-charcoal">{formatDateDisplay(selectedManualDetails.date)}</p>
@@ -1495,12 +1540,16 @@ export default function AttendanceManager() {
                     <p className="text-[10px] text-muted-gray">Clock Out</p>
                     <p className="font-semibold text-charcoal">{selectedManualDetails.clockOut || '—'}</p>
                   </div>
+                  <div>
+                    <p className="text-[10px] text-muted-gray">Breaks</p>
+                    <p className="font-semibold text-amber-800">{selectedManualDetails.totalBreakMinutes || 0}m</p>
+                  </div>
                 </div>
-                {selectedManualDetails.workingHours && (
+                {(selectedManualDetails.netWorkingHours || selectedManualDetails.workingHours) && (
                   <div className="pt-1.5 text-xs flex items-center justify-between">
-                    <span className="text-[10px] text-muted-gray">Total Hours:</span>
+                    <span className="text-[10px] text-muted-gray">Net Work Hours:</span>
                     <span className="font-bold text-[#4F6748] bg-[#DCE7D7] px-2 py-0.5 rounded-[6px] text-[11px]">
-                      {selectedManualDetails.workingHours}
+                      {selectedManualDetails.netWorkingHours || selectedManualDetails.workingHours}
                     </span>
                   </div>
                 )}
