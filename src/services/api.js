@@ -384,6 +384,11 @@ export const commissionsApi = {
     const query = new URLSearchParams(params).toString();
     return apiRequest('/commissions/salary-summary' + (query ? '?' + query : ''));
   },
+  finalizePayroll: (data) =>
+    apiRequest('/commissions/payroll/finalize', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 export const loyaltyApi = {

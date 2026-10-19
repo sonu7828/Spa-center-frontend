@@ -308,6 +308,26 @@ export function CommissionProvider({ children }) {
     [commissions]
   );
 
+  // Authoritative Salary Contract & Target Performance Summary (Phase 4)
+  const getStaffSalarySummary = useCallback(async (techId, period) => {
+    try {
+      const res = await commissionsApi.getSalarySummary({
+        technicianId: techId,
+        ...(period ? { period } : {}),
+      });
+      return res?.data || null;
+    } catch (err) {
+      console.warn('Failed to fetch staff salary summary:', err);
+      return null;
+    }
+  }, []);
+
+  // Finalize and lock monthly payroll record (Manager only)
+  const finalizeStaffPayroll = useCallback(async (employeeId, period) => {
+    const res = await commissionsApi.finalizePayroll({ employeeId, period });
+    return res?.data || null;
+  }, []);
+
   return (
     <CommissionContext.Provider
       value={{
@@ -327,6 +347,8 @@ export function CommissionProvider({ children }) {
         getEmployeeCommissionSummary,
         getAllEmployeeSummaries,
         getCommissionHistory,
+        getStaffSalarySummary,
+        finalizeStaffPayroll,
       }}
     >
       {children}
