@@ -19,7 +19,7 @@ export const DEMO_USERS = [
   { id: 'rec-1', name: 'Reception', email: 'reception@gmail.com', username: 'reception', role: 'reception',  specialties: [], active: true },
   { id: 'tech-1', name: 'Amina',     email: 'amina@gmail.com',     username: 'amina',     role: 'technician', specialties: ['Nails'], active: true },
   { id: 'tech-2', name: 'Bella',     email: 'bella@gmail.com',     username: 'bella',     role: 'technician', specialties: ['Facial', 'Body Massage'], active: true },
-  { id: 'tech-mkt', name: 'Chloe',   email: 'chloe@gmail.com',     username: 'chloe',     role: 'marketer',   specialties: [], active: true },
+  { id: 'tech-mkt', name: 'test',    email: 'test@gmail.com',      username: 'marketer',  role: 'marketer',   specialties: [], active: true },
   { id: 'cln-1', name: 'Sarah',     email: 'cleaner@gmail.com',   username: 'cleaner',   role: 'cleaner',    specialties: [], active: true },
 ];
 
@@ -294,7 +294,7 @@ export function AuthProvider({ children }) {
       else if (lower === 'reception') email = 'reception@gmail.com';
       else if (lower === 'amina') email = 'amina@gmail.com';
       else if (lower === 'bella') email = 'bella@gmail.com';
-      else if (lower === 'chloe' || lower === 'marketer') email = 'chloe@gmail.com';
+      else if (lower === 'chloe' || lower === 'marketer' || lower === 'test') email = 'test@gmail.com';
       else if (lower === 'cleaner') email = 'cleaner@gmail.com';
     }
 
