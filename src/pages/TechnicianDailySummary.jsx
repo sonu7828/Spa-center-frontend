@@ -23,11 +23,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Award, ShieldAlert, Sparkles, TrendingUp, DollarSign } from 'lucide-react';
+import { User, Award, ShieldAlert, Sparkles, TrendingUp, DollarSign, UserPlus } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useOperations } from '../context/OperationsContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useClients } from '../context/ClientsContext';
 import { useCommission } from '../context/CommissionContext';
 import { reportsApi } from '../services/api';
@@ -134,15 +134,34 @@ export default function TechnicianDailySummary() {
     year: 'numeric',
   });
 
+  // Derive referred clients list for this technician
+  const myReferredClients = clients.filter(
+    (c) =>
+      (c.introducedById && (String(c.introducedById) === String(currentTech.id) || (isTechnicianRole && String(c.introducedById) === String(user?.id)))) ||
+      (c.introducedBy && (c.introducedBy.toLowerCase().trim() === effectiveName.toLowerCase().trim() || (isTechnicianRole && c.introducedBy.toLowerCase().trim() === (user?.name || '').toLowerCase().trim())))
+  );
+
+  const isMarketer = isMarketerUser(user);
+
   return (
     <div>
       <PageHeader
-        title={isTechnicianRole ? 'My Daily Summary' : 'Technician Daily Summary'}
-        subtitle="Individual daily performance and auto-calculation summary."
+        title={
+          isMarketer
+            ? 'Marketer Daily Summary'
+            : isTechnicianRole
+            ? 'My Daily Summary'
+            : 'Technician Daily Summary'
+        }
+        subtitle={
+          isMarketer
+            ? 'Client referral tracking and acquisition performance summary.'
+            : 'Individual daily performance and auto-calculation summary.'
+        }
       />
 
       {/* Technician Selector Tabs — only visible to Manager */}
-      {!isTechnicianRole && (
+      {!isTechnicianRole && !isMarketer && (
         <div className="flex gap-2 mb-6 overflow-x-auto pb-1.5 scrollbar-none">
           {dynamicTechnicians.map((tech) => (
             <button
@@ -167,10 +186,12 @@ export default function TechnicianDailySummary() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 sm:pb-5 border-b border-border mb-5 gap-2">
           <div>
             <h2 className="text-lg sm:text-xl font-semibold text-charcoal">
-              {currentTech.name}
+              {isMarketer ? user?.name || currentTech.name : currentTech.name}
             </h2>
             <p className="text-xs sm:text-sm text-muted-gray">
-              {(currentTech.specialties || []).join(', ') || 'Technician'}
+              {isMarketer
+                ? 'Marketing Specialist · Client Acquisition'
+                : (currentTech.specialties || []).join(', ') || 'Technician'}
             </p>
           </div>
           <div className="text-left sm:text-right">
@@ -182,60 +203,96 @@ export default function TechnicianDailySummary() {
         </div>
 
         {/* Operational Metrics */}
-        <div className="space-y-3 mb-6">
-          <div className="flex items-center justify-between py-1">
-            <span className="text-sm font-medium text-charcoal flex items-center gap-2">
-              <Sparkles size={16} className="text-sage" />
-              Services Performed Today
-            </span>
-            <span className="text-base font-bold text-charcoal">
-              {servicesToday}
-            </span>
-          </div>
+        {isMarketer ? (
+          <div className="space-y-3 mb-6">
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm font-medium text-charcoal flex items-center gap-2">
+                <UserPlus size={16} className="text-[#6D28D9]" />
+                Clients Introduced
+              </span>
+              <span className="text-base font-bold text-charcoal">
+                {myReferredClients.length || commSummary.clientsReferred}
+              </span>
+            </div>
 
-          <div className="flex items-center justify-between py-1">
-            <span className="text-sm text-charcoal font-medium flex items-center gap-2">
-              <DollarSign size={16} className="text-sage" />
-              Service Productivity (Performed)
-            </span>
-            <span className="text-sm font-bold text-charcoal">
-              {serviceProductivity.toLocaleString('en-US')} FCFA
-            </span>
-          </div>
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm text-charcoal font-medium flex items-center gap-2">
+                <Sparkles size={16} className="text-[#6D28D9]" />
+                Completed Referral Services
+              </span>
+              <span className="text-sm font-bold text-charcoal">
+                {commSummary.completedServices}
+              </span>
+            </div>
 
-          <div className="flex items-center justify-between py-1">
-            <span className="text-sm text-muted-gray flex items-center gap-2">
-              <TrendingUp size={16} className="text-sage" />
-              Average Ticket per Service
-            </span>
-            <span className="text-sm font-semibold text-charcoal font-mono">
-              {averageTicket.toLocaleString('en-US')} FCFA
-            </span>
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm text-muted-gray flex items-center gap-2">
+                <Award size={16} className="text-[#6D28D9]" />
+                Referral Commission Rate
+              </span>
+              <span className="text-sm font-semibold text-charcoal font-mono">
+                10% per completed service
+              </span>
+            </div>
           </div>
+        ) : (
+          <div className="space-y-3 mb-6">
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm font-medium text-charcoal flex items-center gap-2">
+                <Sparkles size={16} className="text-sage" />
+                Services Performed Today
+              </span>
+              <span className="text-base font-bold text-charcoal">
+                {servicesToday}
+              </span>
+            </div>
 
-          <div className="flex items-center justify-between py-1">
-            <span className="text-sm text-muted-gray">Clients Introduced</span>
-            <span className="text-sm font-bold text-charcoal">
-              {commSummary.clientsReferred}
-            </span>
-          </div>
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm text-charcoal font-medium flex items-center gap-2">
+                <DollarSign size={16} className="text-sage" />
+                Service Productivity (Performed)
+              </span>
+              <span className="text-sm font-bold text-charcoal">
+                {serviceProductivity.toLocaleString('en-US')} FCFA
+              </span>
+            </div>
 
-          <div className="flex items-center justify-between py-1">
-            <span className="text-sm text-muted-gray">Completed Referral Services</span>
-            <span className="text-sm font-bold text-charcoal">
-              {commSummary.completedServices}
-            </span>
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm text-muted-gray flex items-center gap-2">
+                <TrendingUp size={16} className="text-sage" />
+                Average Ticket per Service
+              </span>
+              <span className="text-sm font-semibold text-charcoal font-mono">
+                {averageTicket.toLocaleString('en-US')} FCFA
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm text-muted-gray">Clients Introduced</span>
+              <span className="text-sm font-bold text-charcoal">
+                {myReferredClients.length || commSummary.clientsReferred}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm text-muted-gray">Completed Referral Services</span>
+              <span className="text-sm font-bold text-charcoal">
+                {commSummary.completedServices}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Divider & Calculations */}
         <div className="border-t border-border pt-5 mb-6 space-y-3">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-gray">Base Salary</span>
-            <span className="text-muted-gray font-mono text-xs bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
-              [Calculated]
-            </span>
-          </div>
+          {!isMarketer && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-gray">Base Salary</span>
+              <span className="text-muted-gray font-mono text-xs bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
+                [Calculated]
+              </span>
+            </div>
+          )}
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-charcoal font-medium">Referral Commission</span>
@@ -244,7 +301,13 @@ export default function TechnicianDailySummary() {
                 [Confidential - Manager Only]
               </span>
             ) : (
-              <span className="font-extrabold text-[#4F6748] bg-sage-soft border border-sage/20 px-2.5 py-1 rounded-[6px] text-xs">
+              <span
+                className={`font-extrabold px-2.5 py-1 rounded-[6px] text-xs ${
+                  isMarketer
+                    ? 'bg-[#EDE9FE] text-[#6D28D9] border border-[#DDD6FE]'
+                    : 'bg-sage-soft text-[#4F6748] border border-sage/20'
+                }`}
+              >
                 {commissionEarned.toLocaleString('en-US')} FCFA
               </span>
             )}
@@ -270,6 +333,57 @@ export default function TechnicianDailySummary() {
             [Calculated]
           </span>
         </div>
+      </div>
+
+      {/* Referred Clients List */}
+      <div className="mt-6 bg-white border border-border rounded-[16px] p-4 sm:p-6 shadow-card">
+        <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
+          <div className="flex items-center gap-2">
+            <UserPlus size={18} className="text-sage" />
+            <h3 className="text-base font-bold text-charcoal">
+              Referred Clients ({myReferredClients.length})
+            </h3>
+          </div>
+          <span className="text-xs text-muted-gray">
+            Attributed to {effectiveName}
+          </span>
+        </div>
+
+        {myReferredClients.length === 0 ? (
+          <div className="text-center py-6 text-muted-gray text-xs sm:text-sm bg-soft-cream/30 rounded-[10px] border border-border/50">
+            No clients introduced by this staff member yet.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs sm:text-sm">
+              <thead>
+                <tr className="border-b border-border/60 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">
+                  <th className="py-2.5 px-3">Client Name</th>
+                  <th className="py-2.5 px-3">Phone</th>
+                  <th className="py-2.5 px-3">Quartier</th>
+                  <th className="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myReferredClients.map((c) => (
+                  <tr key={c.id} className="border-b border-border/30 last:border-b-0 hover:bg-soft-cream/20">
+                    <td className="py-2.5 px-3 font-semibold text-charcoal">{c.name}</td>
+                    <td className="py-2.5 px-3 text-muted-gray">{c.phone}</td>
+                    <td className="py-2.5 px-3 text-muted-gray">{c.quartier || '—'}</td>
+                    <td className="py-2.5 px-3 text-right">
+                      <button
+                        onClick={() => navigate(`/clients/${c.id}`)}
+                        className="text-xs font-semibold text-sage hover:underline cursor-pointer"
+                      >
+                        View Profile
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

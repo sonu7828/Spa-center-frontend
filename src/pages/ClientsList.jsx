@@ -16,15 +16,16 @@ import { UserPlus, Search, Eye, RotateCcw, UserX, TriangleAlert, X } from 'lucid
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useClients } from '../context/ClientsContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isMarketerUser } from '../context/AuthContext';
 
 export default function ClientsList() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isMarketer = isMarketerUser(user) || (user?.role || '').toLowerCase() === 'marketer';
   const canManageStatus = user?.role === 'manager' || user?.role === 'reception';
   const { clients, setClientStatus } = useClients();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(isMarketer ? 'mine' : 'all');
   const [clientToDeactivate, setClientToDeactivate] = useState(null);
   const [clientToActivate, setClientToActivate] = useState(null);
 
@@ -37,12 +38,27 @@ export default function ClientsList() {
     () => clients.filter((c) => c.status === 'INACTIVE' || c.isActive === false).length,
     [clients]
   );
+  const myClients = useMemo(
+    () =>
+      clients.filter(
+        (c) =>
+          (c.introducedById && String(c.introducedById) === String(user?.id)) ||
+          (c.introducedBy && user?.name && c.introducedBy.toLowerCase().trim() === user.name.toLowerCase().trim())
+      ),
+    [clients, user]
+  );
 
   const filtered = useMemo(() => {
     return clients.filter((c) => {
       const isClientInactive = c.status === 'INACTIVE' || c.isActive === false;
       if (statusFilter === 'active' && isClientInactive) return false;
       if (statusFilter === 'inactive' && !isClientInactive) return false;
+      if (statusFilter === 'mine') {
+        const isMine =
+          (c.introducedById && String(c.introducedById) === String(user?.id)) ||
+          (c.introducedBy && user?.name && c.introducedBy.toLowerCase().trim() === user.name.toLowerCase().trim());
+        if (!isMine) return false;
+      }
 
       const q = search.toLowerCase().trim();
       if (!q) return true;
@@ -51,7 +67,7 @@ export default function ClientsList() {
         (c.phone && c.phone.includes(q))
       );
     });
-  }, [clients, search, statusFilter]);
+  }, [clients, search, statusFilter, user]);
 
   return (
     <div>
@@ -86,9 +102,11 @@ export default function ClientsList() {
         {/* Status Filter Tabs (Desktop: right side; Mobile: horizontal wrap/scroll) */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 shrink-0">
           {[
+            ...(isMarketer ? [{ id: 'mine', label: 'Introduced by Me', count: myClients.length }] : []),
             { id: 'all', label: 'All Clients', count: totalCount },
             { id: 'active', label: 'Active Clients', count: activeCount },
             { id: 'inactive', label: 'Inactive Clients', count: inactiveCount },
+            ...(!isMarketer ? [{ id: 'mine', label: 'Introduced by Me', count: myClients.length }] : []),
           ].map((f) => {
             const isActive = statusFilter === f.id;
             return (
@@ -151,7 +169,12 @@ export default function ClientsList() {
                     className="border-b border-border/40 last:border-b-0 hover:bg-soft-cream/20 transition-colors"
                   >
                     <td className="px-5 py-3.5 text-sm font-semibold text-charcoal">
-                      {client.name}
+                      <div>{client.name}</div>
+                      {client.introducedBy && (
+                        <div className="text-[10px] font-normal text-sage-hover font-sans">
+                          Ref: {client.introducedBy}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-sm text-muted-gray">
                       {client.phone}
@@ -225,6 +248,11 @@ export default function ClientsList() {
                     <h4 className="text-sm font-bold text-charcoal leading-tight truncate">
                       {client.name}
                     </h4>
+                    {client.introducedBy && (
+                      <span className="text-[10px] font-medium text-sage-hover block truncate">
+                        Ref by: {client.introducedBy}
+                      </span>
+                    )}
                     <p className="text-xs text-muted-gray mt-0.5 truncate">
                       {client.phone}
                     </p>

@@ -19,6 +19,7 @@ export const DEMO_USERS = [
   { id: 'rec-1', name: 'Reception', email: 'reception@gmail.com', username: 'reception', role: 'reception',  specialties: [], active: true },
   { id: 'tech-1', name: 'Amina',     email: 'amina@gmail.com',     username: 'amina',     role: 'technician', specialties: ['Nails'], active: true },
   { id: 'tech-2', name: 'Bella',     email: 'bella@gmail.com',     username: 'bella',     role: 'technician', specialties: ['Facial', 'Body Massage'], active: true },
+  { id: 'tech-mkt', name: 'Chloe',   email: 'chloe@gmail.com',     username: 'chloe',     role: 'marketer',   specialties: [], active: true },
   { id: 'cln-1', name: 'Sarah',     email: 'cleaner@gmail.com',   username: 'cleaner',   role: 'cleaner',    specialties: [], active: true },
 ];
 
@@ -50,6 +51,15 @@ const TECHNICIAN_ROUTES = [
   '/technicians/daily', '/shared-work', '/attendance',
 ];
 
+export const MARKETER_ROUTES = [
+  '/',
+  '/dashboard',
+  '/clients',
+  '/clients/new',
+  '/clients/:id',
+  '/technicians/daily',
+];
+
 const CLEANER_ROUTES = [
   '/cleaning',
 ];
@@ -61,6 +71,8 @@ export const ROLE_ROUTES = {
   RECEPTION: RECEPTION_ROUTES,
   technician: TECHNICIAN_ROUTES,
   TECHNICIAN: TECHNICIAN_ROUTES,
+  marketer: MARKETER_ROUTES,
+  MARKETER: MARKETER_ROUTES,
   cleaner: CLEANER_ROUTES,
   CLEANER: CLEANER_ROUTES,
 };
@@ -72,9 +84,37 @@ export const ROLE_HOME = {
   RECEPTION: '/',
   technician: '/',
   TECHNICIAN: '/',
+  marketer: '/',
+  MARKETER: '/',
   cleaner: '/cleaning',
   CLEANER: '/cleaning',
 };
+
+export function isMarketerUser(user) {
+  if (!user) return false;
+  const role = String(user.role || '').toLowerCase();
+  if (role === 'marketer') return true;
+  const specs = Array.isArray(user.specialties)
+    ? user.specialties
+    : Array.isArray(user.staffProfile?.specialties)
+    ? user.staffProfile.specialties
+    : [];
+  return specs.some((s) => String(s).toLowerCase() === 'marketer');
+}
+
+export function getRoleHome(userOrRole) {
+  if (!userOrRole) return '/';
+  if (typeof userOrRole === 'object') {
+    if (isMarketerUser(userOrRole)) {
+      return '/';
+    }
+    const normalizedRole = String(userOrRole.role || '').toLowerCase();
+    return ROLE_HOME[normalizedRole] || '/';
+  }
+  const normalizedRole = String(userOrRole).toLowerCase();
+  if (normalizedRole === 'marketer') return '/';
+  return ROLE_HOME[normalizedRole] || '/';
+}
 
 function matchRoute(path, pattern) {
   const pathParts = path.split('/').filter(Boolean);
@@ -85,9 +125,19 @@ function matchRoute(path, pattern) {
   );
 }
 
-export function isRouteAllowed(role, path) {
-  if (!role) return false;
-  const normalizedRole = String(role).toLowerCase();
+export function isRouteAllowed(userOrRole, path) {
+  if (!userOrRole) return false;
+
+  if (typeof userOrRole === 'object') {
+    if (isMarketerUser(userOrRole)) {
+      return MARKETER_ROUTES.some((pattern) => matchRoute(path, pattern));
+    }
+    const normalizedRole = String(userOrRole.role || '').toLowerCase();
+    const allowedRoutes = ROLE_ROUTES[normalizedRole] || [];
+    return allowedRoutes.some((pattern) => matchRoute(path, pattern));
+  }
+
+  const normalizedRole = String(userOrRole).toLowerCase();
   const allowedRoutes = ROLE_ROUTES[normalizedRole] || [];
   return allowedRoutes.some((pattern) => matchRoute(path, pattern));
 }
@@ -96,14 +146,39 @@ function normalizeUser(rawUser) {
   if (!rawUser) return null;
   const rawRole = String(rawUser.role || 'technician');
   const roleLower = rawRole.toLowerCase();
+
+  // Extract and normalize specialties consistently
+  let rawSpecs = rawUser.specialties;
+  if (!rawSpecs && rawUser.staffProfile?.specialties) {
+    rawSpecs = rawUser.staffProfile.specialties;
+  }
+  let normalizedSpecialties = [];
+  if (Array.isArray(rawSpecs)) {
+    normalizedSpecialties = rawSpecs;
+  } else if (typeof rawSpecs === 'string') {
+    try {
+      normalizedSpecialties = JSON.parse(rawSpecs);
+    } catch {
+      normalizedSpecialties = [];
+    }
+  }
+  normalizedSpecialties = normalizedSpecialties.map((s) => (s === 'Massage' ? 'Body Massage' : s));
+
+  const hasMarketerSpec = normalizedSpecialties.some((s) => String(s).toLowerCase() === 'marketer');
+  let finalRole = roleLower;
+  if (roleLower === 'marketer' || hasMarketerSpec) {
+    finalRole = 'marketer';
+  }
+
   return {
     ...rawUser,
     id: rawUser.id || rawUser.userId,
     name: rawUser.name || rawUser.staffProfile?.name || rawUser.email?.split('@')[0] || 'User',
     email: rawUser.email || '',
     phone: rawUser.phone || rawUser.staffProfile?.phone || '',
-    role: roleLower,
-    originalRole: rawRole.toUpperCase(),
+    role: finalRole,
+    originalRole: finalRole === 'marketer' ? 'MARKETER' : rawRole.toUpperCase(),
+    specialties: normalizedSpecialties,
     staffProfile: rawUser.staffProfile || null,
   };
 }
@@ -130,23 +205,30 @@ export function AuthProvider({ children }) {
       const res = await usersApi.getAll();
       const list = res?.data || res;
       if (Array.isArray(list)) {
-        const normalized = list.map((u) => ({
-          ...u,
-          id: u.id || u.userId,
-          name: u.name || u.staffProfile?.name || u.email?.split('@')[0],
-          email: u.email || '',
-          phone: u.phone || u.staffProfile?.phone || '',
-          username: u.phone || u.staffProfile?.phone || u.username || u.email?.split('@')[0] || '',
-          role: (u.role?.name || u.role || 'technician').toLowerCase(),
-          specialties: (
+        const normalized = list.map((u) => {
+          const specs = (
             Array.isArray(u.specialties)
               ? u.specialties
               : Array.isArray(u.staffProfile?.specialties)
               ? u.staffProfile.specialties
               : []
-          ).map((s) => (s === 'Massage' ? 'Body Massage' : s)),
-          active: u.isActive !== undefined ? u.isActive : u.active !== false,
-        }));
+          ).map((s) => (s === 'Massage' ? 'Body Massage' : s));
+          let r = (u.role?.name || u.role || 'technician').toLowerCase();
+          if (r === 'marketer' || specs.some((s) => String(s).toLowerCase() === 'marketer')) {
+            r = 'marketer';
+          }
+          return {
+            ...u,
+            id: u.id || u.userId,
+            name: u.name || u.staffProfile?.name || u.email?.split('@')[0],
+            email: u.email || '',
+            phone: u.phone || u.staffProfile?.phone || '',
+            username: u.phone || u.staffProfile?.phone || u.username || u.email?.split('@')[0] || '',
+            role: r,
+            specialties: specs,
+            active: u.isActive !== undefined ? u.isActive : u.active !== false,
+          };
+        });
         setAllUsers(normalized);
         return normalized;
       }
@@ -212,6 +294,7 @@ export function AuthProvider({ children }) {
       else if (lower === 'reception') email = 'reception@gmail.com';
       else if (lower === 'amina') email = 'amina@gmail.com';
       else if (lower === 'bella') email = 'bella@gmail.com';
+      else if (lower === 'chloe' || lower === 'marketer') email = 'chloe@gmail.com';
       else if (lower === 'cleaner') email = 'cleaner@gmail.com';
     }
 
@@ -250,13 +333,21 @@ export function AuthProvider({ children }) {
   const addUser = useCallback(async (userData) => {
     const rawEmail = (userData.email || '').trim().toLowerCase();
     const rawPhone = userData.phone ? userData.phone.trim() : null;
+    const isMarketerRole = userData.role === 'marketer';
+    const effectiveRole = isMarketerRole ? 'marketer' : userData.role;
+    const effectiveSpecialties = isMarketerRole
+      ? ['Marketer']
+      : effectiveRole === 'technician'
+      ? (userData.specialties || [])
+      : [];
+
     const payload = {
       name: userData.name?.trim(),
       email: rawEmail,
       phone: rawPhone,
       username: rawEmail.split('@')[0],
-      role: userData.role,
-      specialties: userData.role === 'technician' ? (userData.specialties || []) : [],
+      role: effectiveRole,
+      specialties: effectiveSpecialties,
       password: (userData.password || '').trim(),
     };
 
@@ -268,13 +359,21 @@ export function AuthProvider({ children }) {
   const editUser = useCallback(async (userId, updates) => {
     const rawEmail = updates.email !== undefined ? updates.email.trim().toLowerCase() : undefined;
     const rawPhone = updates.phone !== undefined ? (updates.phone ? updates.phone.trim() : null) : undefined;
+    const isMarketerRole = updates.role === 'marketer';
+    const effectiveRole = isMarketerRole ? 'marketer' : updates.role;
+    const effectiveSpecialties = isMarketerRole
+      ? ['Marketer']
+      : effectiveRole === 'technician'
+      ? (updates.specialties || [])
+      : [];
+
     const payload = {
       name: updates.name?.trim(),
       email: rawEmail,
       phone: rawPhone,
       username: rawEmail ? rawEmail.split('@')[0] : undefined,
-      role: updates.role,
-      specialties: updates.role === 'technician' ? (updates.specialties || []) : [],
+      role: effectiveRole,
+      specialties: effectiveSpecialties,
       ...(updates.password ? { password: updates.password.trim() } : {}),
       ...(updates.active !== undefined ? { active: updates.active } : {}),
     };
@@ -285,9 +384,11 @@ export function AuthProvider({ children }) {
     // If current logged in user was edited, update current session state as well
     setUser((curr) => {
       if (curr && (curr.id === userId || String(curr.id) === String(userId))) {
+        const updatedRole = isMarketerRole ? 'marketer' : (updates.role || curr.role);
         return {
           ...curr,
           ...updates,
+          role: updatedRole,
           email: rawEmail !== undefined ? rawEmail : curr.email,
           phone: rawPhone !== undefined ? rawPhone : curr.phone,
           specialties: updates.specialties !== undefined ? updates.specialties : curr.specialties,

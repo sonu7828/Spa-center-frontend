@@ -32,6 +32,7 @@ import {
   Tags,
   Trash2,
   Key,
+  Share2,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -43,6 +44,7 @@ const ROLES = [
   { value: 'manager', label: 'Manager', icon: ShieldCheck },
   { value: 'reception', label: 'Reception', icon: Shield },
   { value: 'technician', label: 'Technician', icon: ShieldAlert },
+  { value: 'marketer', label: 'Marketer', icon: Share2 },
   { value: 'cleaner', label: 'Cleaner', icon: Paintbrush },
 ];
 
@@ -50,6 +52,7 @@ const roleBadgeStyles = {
   manager: 'bg-sage-soft text-sage border-sage/20',
   reception: 'bg-[#E8EFF8] text-[#4A6B8A] border-[#4A6B8A]/20',
   technician: 'bg-dusty-rose-soft text-dusty-rose border-dusty-rose/20',
+  marketer: 'bg-[#EDE9FE] text-[#6D28D9] border-[#DDD6FE]',
   cleaner: 'bg-warning-soft text-warning border-warning/20',
 };
 
@@ -130,6 +133,7 @@ export default function Staff() {
     // Filter against active specialties to prevent orphaned/ghost selections
     const activeNames = activeSpecialties.map((s) => s.name);
     const rawSpecs = Array.isArray(u.specialties) ? u.specialties : [];
+    const isMarketer = u.role === 'marketer' || (u.role === 'technician' && rawSpecs.includes('Marketer'));
     const mappedSpecs = rawSpecs.map((s) => {
       if (s === 'Massage' && activeNames.some((n) => n.toLowerCase() === 'body massage')) {
         return activeNames.find((n) => n.toLowerCase() === 'body massage');
@@ -145,9 +149,9 @@ export default function Staff() {
       name: u.name || '',
       email: u.email || '',
       phone: u.phone || '',
-      role: u.role,
+      role: isMarketer ? 'marketer' : u.role,
       password: '',
-      specialties: Array.from(new Set(validSpecs)),
+      specialties: isMarketer ? ['Marketer'] : Array.from(new Set(validSpecs)),
     });
     setFormError('');
     setShowPw(false);
@@ -193,13 +197,21 @@ export default function Staff() {
     try {
       const emailVal = form.email ? form.email.trim().toLowerCase() : '';
       const phoneVal = form.phone ? form.phone.trim() : '';
+      const isMarketer = form.role === 'marketer';
+      const effectiveRole = form.role;
+      const effectiveSpecialties = isMarketer
+        ? ['Marketer']
+        : form.role === 'technician'
+        ? form.specialties
+        : [];
+
       if (editingUser) {
         const updates = {
           name: form.name.trim(),
           email: emailVal,
           phone: phoneVal || null,
-          role: form.role,
-          specialties: form.role === 'technician' ? form.specialties : [],
+          role: effectiveRole,
+          specialties: effectiveSpecialties,
         };
         if (form.password && form.password.trim()) {
           updates.password = form.password.trim();
@@ -210,9 +222,9 @@ export default function Staff() {
           name: form.name.trim(),
           email: emailVal,
           phone: phoneVal || null,
-          role: form.role,
+          role: effectiveRole,
           password: form.password.trim(),
-          specialties: form.role === 'technician' ? form.specialties : [],
+          specialties: effectiveSpecialties,
         });
       }
 
@@ -478,9 +490,15 @@ export default function Staff() {
                   <td className="px-5 py-3.5 text-sm text-muted-gray">{u.email}</td>
                   <td className="px-5 py-3.5 text-sm text-charcoal font-medium">{u.phone || '—'}</td>
                   <td className="px-5 py-3.5">
-                    <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize ${roleBadgeStyles[u.role] || 'bg-soft-cream text-charcoal border-border'}`}>
-                      {u.role}
-                    </span>
+                    {(() => {
+                      const isMarketer = u.role === 'marketer' || (u.role === 'technician' && (u.specialties || []).includes('Marketer'));
+                      const displayRole = isMarketer ? 'marketer' : u.role;
+                      return (
+                        <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize ${roleBadgeStyles[displayRole] || 'bg-soft-cream text-charcoal border-border'}`}>
+                          {displayRole}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-5 py-3.5">
                     {u.specialties?.length > 0 ? (
@@ -543,9 +561,15 @@ export default function Staff() {
                   <h4 className="text-sm font-bold text-charcoal">{u.name}</h4>
                   <p className="text-xs text-muted-gray mt-0.5">{u.email} {u.phone ? `· ${u.phone}` : ''}</p>
                 </div>
-                <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize shrink-0 ${roleBadgeStyles[u.role] || 'bg-soft-cream text-charcoal border-border'}`}>
-                  {u.role}
-                </span>
+                {(() => {
+                  const isMarketer = u.role === 'marketer' || (u.role === 'technician' && (u.specialties || []).includes('Marketer'));
+                  const displayRole = isMarketer ? 'marketer' : u.role;
+                  return (
+                    <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize shrink-0 ${roleBadgeStyles[displayRole] || 'bg-soft-cream text-charcoal border-border'}`}>
+                      {displayRole}
+                    </span>
+                  );
+                })()}
               </div>
 
               {u.specialties?.length > 0 && (
@@ -734,15 +758,30 @@ export default function Staff() {
                   </select>
                 </div>
 
+                {/* Marketer Role Info Card */}
+                {form.role === 'marketer' && (
+                  <div className="bg-[#EDE9FE]/60 border border-[#DDD6FE] rounded-[11px] p-3 flex items-start gap-2.5 text-xs text-[#6D28D9]">
+                    <Share2 size={16} className="shrink-0 text-[#6D28D9] mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="font-semibold">Marketer Profile Active</p>
+                      <p className="text-[11px] opacity-90 leading-relaxed">
+                        Dedicated social media client acquisition role. Marketers have access to register new clients and view their referral performance without access to appointments or billing.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Specialties — Only for Technician (multi-select checkboxes) */}
                 {form.role === 'technician' && (
                   <div>
                     <label className="block text-[12px] font-medium text-muted-gray mb-2">Specialties *</label>
                     <div className="bg-soft-cream/30 border border-border/60 rounded-[12px] p-3 space-y-1.5 max-h-[160px] overflow-y-auto">
-                      {activeSpecialties.length === 0 ? (
+                      {activeSpecialties.filter((s) => s.name.toLowerCase() !== 'marketer').length === 0 ? (
                         <p className="text-xs text-muted-gray text-center py-2">No specialties defined. Add via Specialties button.</p>
                       ) : (
-                        activeSpecialties.map((spec) => (
+                        activeSpecialties
+                          .filter((s) => s.name.toLowerCase() !== 'marketer')
+                          .map((spec) => (
                           <label
                             key={spec.id}
                             className="flex items-center gap-2.5 py-1.5 px-2 rounded-[8px] hover:bg-white cursor-pointer transition-colors"

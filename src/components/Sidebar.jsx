@@ -35,7 +35,7 @@ import {
   Receipt,
   Clock,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isMarketerUser } from '../context/AuthContext';
 
 const navSections = [
   {
@@ -81,15 +81,27 @@ export default function Sidebar({ isOpen, onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const role = user?.role || 'manager';
+  const role = (user?.role || 'manager').toLowerCase();
+  const isMarketer = isMarketerUser(user) || role === 'marketer';
 
-  // Filter sections and their items based on user role
-  const visibleSections = navSections
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => item.roles.includes(role)),
-    }))
-    .filter((section) => section.items.length > 0);
+  // Filter sections and their items based on user role and marketer profile
+  const visibleSections = isMarketer
+    ? [
+        {
+          title: 'MARKETING PORTAL',
+          items: [
+            { to: '/',                  label: 'Dashboard',         icon: LayoutDashboard, roles: ['marketer', 'technician'] },
+            { to: '/clients',           label: 'Clients Directory', icon: Users,           roles: ['marketer', 'technician'] },
+            { to: '/technicians/daily', label: 'My Performance',    icon: ClipboardList,   roles: ['marketer', 'technician'] },
+          ],
+        },
+      ]
+    : navSections
+        .map((section) => ({
+          ...section,
+          items: section.items.filter((item) => item.roles.includes(role)),
+        }))
+        .filter((section) => section.items.length > 0);
 
   const handleLogout = () => {
     onClose?.();
@@ -97,7 +109,7 @@ export default function Sidebar({ isOpen, onClose }) {
     navigate('/login', { replace: true });
   };
 
-  const showSectionTitles = role === 'manager' || role === 'reception';
+  const showSectionTitles = role === 'manager' || role === 'reception' || isMarketer;
 
   return (
     <>
@@ -133,9 +145,19 @@ export default function Sidebar({ isOpen, onClose }) {
               </div>
               {user && (
                 <div className="shrink-0 text-right">
-                  <span className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-semibold bg-[#DCE7D7] text-[#4F6748] border border-[#4F6748]/20 capitalize leading-tight">
+                  <span
+                    className={`inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-semibold border capitalize leading-tight ${
+                      isMarketer
+                        ? 'bg-[#EDE9FE] text-[#6D28D9] border-[#DDD6FE]'
+                        : 'bg-[#DCE7D7] text-[#4F6748] border-[#4F6748]/20'
+                    }`}
+                  >
                     {user.name}
-                    {user.specialties?.length > 0 ? ` · ${user.specialties.join(', ')}` : ''}
+                    {isMarketer
+                      ? ' · Marketer'
+                      : user.specialties?.length > 0
+                      ? ` · ${user.specialties.join(', ')}`
+                      : ''}
                   </span>
                 </div>
               )}
@@ -162,7 +184,9 @@ export default function Sidebar({ isOpen, onClose }) {
                           className={({ isActive }) =>
                             `flex items-center gap-2.5 px-2.5 h-[38px] sm:h-[40px] rounded-[10px] text-xs sm:text-sm font-medium transition-all duration-150 ${
                               isActive
-                                ? 'bg-[#DCE7D7] text-[#4F6748] font-semibold border-l-[3px] border-[#4F6748] pl-2'
+                                ? isMarketer
+                                  ? 'bg-[#EDE9FE] text-[#6D28D9] font-semibold border-l-[3px] border-[#6D28D9] pl-2'
+                                  : 'bg-[#DCE7D7] text-[#4F6748] font-semibold border-l-[3px] border-[#4F6748] pl-2'
                                 : 'text-muted-gray hover:bg-sage-soft/40 hover:text-charcoal'
                             }`
                           }
@@ -172,7 +196,7 @@ export default function Sidebar({ isOpen, onClose }) {
                               <Icon
                                 size={17}
                                 strokeWidth={isActive ? 2.2 : 1.8}
-                                className={isActive ? 'text-[#4F6748]' : ''}
+                                className={isActive ? (isMarketer ? 'text-[#6D28D9]' : 'text-[#4F6748]') : ''}
                               />
                               <span>{label}</span>
                             </>

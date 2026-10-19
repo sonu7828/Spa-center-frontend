@@ -26,7 +26,7 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AuthProvider, useAuth, isRouteAllowed, ROLE_HOME } from './context/AuthContext';
+import { AuthProvider, useAuth, isRouteAllowed, ROLE_HOME, getRoleHome } from './context/AuthContext';
 import { ClientsProvider } from './context/ClientsContext';
 import { AppointmentsProvider } from './context/AppointmentsContext';
 import { OperationsProvider } from './context/OperationsContext';
@@ -88,8 +88,8 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!isRouteAllowed(user.role, location.pathname)) {
-    return <Navigate to={ROLE_HOME[user.role] || '/'} replace />;
+  if (!isRouteAllowed(user, location.pathname)) {
+    return <Navigate to={getRoleHome(user)} replace />;
   }
 
   return children;
@@ -101,7 +101,7 @@ function ProtectedRoute({ children }) {
 function LoginGuard({ children }) {
   const { user, isAuthenticated } = useAuth();
   if (isAuthenticated) {
-    return <Navigate to={ROLE_HOME[user.role] || '/'} replace />;
+    return <Navigate to={getRoleHome(user)} replace />;
   }
   return children;
 }

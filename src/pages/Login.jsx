@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, Eye, EyeOff, Loader2 } from 'lucide-react';
-import { useAuth, ROLE_HOME } from '../context/AuthContext';
+import { useAuth, getRoleHome } from '../context/AuthContext';
 import spaBg from '../assets/Spa-BG.png';
 
 export default function Login() {
@@ -28,7 +28,7 @@ export default function Login() {
     try {
       const loggedUser = await login(email.trim(), password);
       if (loggedUser) {
-        navigate(ROLE_HOME[loggedUser.role] || '/', { replace: true });
+        navigate(getRoleHome(loggedUser), { replace: true });
       } else {
         setError('Invalid credentials. Please try again.');
       }
@@ -177,6 +177,7 @@ export default function Login() {
                   { role: 'Manager', email: 'akabandolo@gmail.com', password: 'password', badgeBg: 'bg-[#F2F7F0]', badgeBorder: 'border-[#CFDEC9]', badgeText: 'text-[#2F4E29]' },
                   { role: 'Receptionist', email: 'receptionist@gmail.com', password: '123456', badgeBg: 'bg-[#EFF6FF]', badgeBorder: 'border-[#BFDBFE]', badgeText: 'text-[#1E40AF]' },
                   { role: 'Technician', email: 'tech01@gmail.com', password: '123456', badgeBg: 'bg-[#FAF5FF]', badgeBorder: 'border-[#E9D5FF]', badgeText: 'text-[#6B21A8]' },
+                  { role: 'Marketer', email: 'chloe@gmail.com', password: 'password', badgeBg: 'bg-[#EDE9FE]', badgeBorder: 'border-[#DDD6FE]', badgeText: 'text-[#6D28D9]' },
                   { role: 'Cleaner', email: 'cleaner@gmail.com', password: '123456', badgeBg: 'bg-[#FFFBEB]', badgeBorder: 'border-[#FDE68A]', badgeText: 'text-[#92400E]' },
                 ].map((demo) => {
                   const isCurrentlyFilled = email === demo.email;

@@ -45,7 +45,7 @@ import ClientAcquisitionModal from '../components/ClientAcquisitionModal';
 import { useOperations } from '../context/OperationsContext';
 import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useCommission } from '../context/CommissionContext';
 import { useReports } from '../context/ReportsContext';
 import { getDoualaTodayStr } from '../utils/timezone';
@@ -76,7 +76,8 @@ export default function Dashboard() {
   const [managerShowAllIntroduced, setManagerShowAllIntroduced] = useState(false);
 
   const role = (user?.role || 'manager').toLowerCase();
-  const isTechnician = role === 'technician';
+  const isMarketer = role === 'marketer' || isMarketerUser(user);
+  const isTechnician = role === 'technician' && !isMarketer;
   const isReception = role === 'reception';
   const isManager = role === 'manager';
   const isCleaner = role === 'cleaner';
@@ -301,6 +302,246 @@ export default function Dashboard() {
   );
 
   // =========================================================================
+  // =========================================================================
+  // MARKETER PORTAL DASHBOARD VIEW (DEDICATED MARKETING & REFERRAL ACQUISITION)
+  // =========================================================================
+  if (isMarketer) {
+    const clientsReferredCount = myIntroducedClients.length;
+    const appointmentsCreatedCount = myIntroducedAppointments.length;
+    const completedServicesCount = myPerformance?.servicesCompleted ?? myCommissionSummary?.completedServices ?? 0;
+    const commissionEarnedAmount = myPerformance?.commissionEarned ?? myCommissionSummary?.commissionEarned ?? 0;
+
+    return (
+      <div className="space-y-4 sm:space-y-5 pb-8">
+        <PageHeader
+          title="Marketer Dashboard"
+          subtitle={`Welcome, ${user?.name} · Client Acquisition & Referral Tracking`}
+          action={
+            <Button
+              variant="primary"
+              onClick={() => setShowAcquisitionModal(true)}
+              className="bg-[#6D28D9] hover:bg-[#5B21B6] text-white border-none shadow-sm text-xs font-bold"
+            >
+              <UserPlus size={15} strokeWidth={2.2} />
+              Add New Client
+            </Button>
+          }
+        />
+
+        {acquisitionSuccess && (
+          <div className="bg-success-soft border border-success/30 rounded-[12px] p-3.5 flex items-center gap-2.5 text-xs font-semibold text-[#4F6748] shadow-xs">
+            <CheckCircle size={16} className="text-success shrink-0" />
+            <span>{acquisitionSuccess}</span>
+          </div>
+        )}
+
+        {/* ── Metric Cards ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white rounded-[16px] border border-border p-4 shadow-card hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-gray">
+                Clients Acquired
+              </span>
+              <div className="w-8 h-8 rounded-[10px] bg-[#EDE9FE] text-[#6D28D9] flex items-center justify-center">
+                <Users size={17} />
+              </div>
+            </div>
+            <p className="text-2xl font-extrabold text-charcoal">{clientsReferredCount}</p>
+            <p className="text-[11px] text-muted-gray mt-1">Total registered clients</p>
+          </div>
+
+          <div className="bg-white rounded-[16px] border border-border p-4 shadow-card hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-gray">
+                Appointments Booked
+              </span>
+              <div className="w-8 h-8 rounded-[10px] bg-sage-soft text-sage-hover flex items-center justify-center">
+                <CalendarDays size={17} />
+              </div>
+            </div>
+            <p className="text-2xl font-extrabold text-charcoal">{appointmentsCreatedCount}</p>
+            <p className="text-[11px] text-muted-gray mt-1">Booked for your clients</p>
+          </div>
+
+          <div className="bg-white rounded-[16px] border border-border p-4 shadow-card hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-gray">
+                Completed Treatments
+              </span>
+              <div className="w-8 h-8 rounded-[10px] bg-[#DCE7D7] text-[#4F6748] flex items-center justify-center">
+                <Sparkles size={17} />
+              </div>
+            </div>
+            <p className="text-2xl font-extrabold text-charcoal">{completedServicesCount}</p>
+            <p className="text-[11px] text-muted-gray mt-1">Performed by salon staff</p>
+          </div>
+
+          <div className="bg-white rounded-[16px] border border-border p-4 shadow-card hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-gray">
+                Referral Commission
+              </span>
+              <div className="w-8 h-8 rounded-[10px] bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Award size={17} />
+              </div>
+            </div>
+            <p className="text-2xl font-extrabold text-charcoal truncate">
+              {commissionEarnedAmount.toLocaleString('en-US')}
+              <span className="text-xs font-normal text-muted-gray ml-1">FCFA</span>
+            </p>
+            <p className="text-[11px] text-muted-gray mt-1">Rule: {commissionRate}% per completed service</p>
+          </div>
+        </div>
+
+        {/* ── Client Acquisition Hero Card ── */}
+        <section className="bg-gradient-to-r from-[#F5F3FF] to-[#FAF5FF] border border-[#DDD6FE] rounded-[16px] p-4 sm:p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[6px] text-[10px] font-bold bg-[#EDE9FE] text-[#6D28D9] mb-2 uppercase tracking-wide">
+              Client Acquisition Portal
+            </div>
+            <h3 className="text-base sm:text-lg font-bold text-charcoal">
+              Introduce New Clients to OMEGA SPA
+            </h3>
+            <p className="text-xs text-muted-gray mt-1 leading-relaxed">
+              Register clients you have brought in, recommend their interested spa treatment, and choose their appointment slot. When their service is completed, your referral commission is automatically recorded.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAcquisitionModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-[11px] bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0 self-start sm:self-auto active:scale-[0.98]"
+          >
+            <UserPlus size={16} />
+            Add New Client
+          </button>
+        </section>
+
+        {/* ── My Introduced Clients Table with Appointment History Links ── */}
+        <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border mb-4">
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-charcoal flex items-center gap-2">
+                <UserCheck size={18} className="text-[#6D28D9]" />
+                My Acquired Clients & Visit History
+              </h2>
+              <p className="text-xs text-muted-gray mt-0.5">
+                All clients registered through your referral. Click any client to view their full appointment and visit history.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/clients')}
+              className="h-8 text-xs font-semibold self-start sm:self-auto"
+            >
+              View All in Clients Directory
+            </Button>
+          </div>
+
+          {myIntroducedClients.length === 0 ? (
+            <div className="text-center py-10 bg-soft-cream/40 rounded-[12px] border border-dashed border-border">
+              <UserPlus size={32} className="text-border mx-auto mb-2 text-[#8B5CF6]" />
+              <p className="text-sm font-bold text-charcoal">No clients introduced yet</p>
+              <p className="text-xs text-muted-gray mt-1 max-w-sm mx-auto">
+                Start introducing clients to OMEGA SPA to track their appointments and earn referral commissions.
+              </p>
+              <button
+                onClick={() => setShowAcquisitionModal(true)}
+                className="mt-4 px-4 py-2 rounded-[10px] bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-xs font-bold cursor-pointer inline-flex items-center gap-1.5 transition-all shadow-xs"
+              >
+                <Plus size={14} />
+                Register First Client
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-[10px] border border-border/60">
+              <table className="w-full text-xs">
+                <thead className="bg-[#FAF5FF] border-b border-[#EDE9FE]">
+                  <tr>
+                    <th className="text-left py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">Client</th>
+                    <th className="text-left py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">First Interest</th>
+                    <th className="text-left py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">Latest Appointment</th>
+                    <th className="text-left py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">Assigned Tech</th>
+                    <th className="text-left py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">Visit Status</th>
+                    <th className="text-right py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40 bg-white">
+                  {myIntroducedClients.map((client) => {
+                    const clientAppts = appointments.filter(
+                      (a) =>
+                        a.clientId === client.id ||
+                        a.clientName?.toLowerCase() === client.name?.toLowerCase()
+                    );
+                    const latestApt = clientAppts[0];
+                    const serviceName =
+                      latestApt?.service ||
+                      client.firstAppointmentService ||
+                      (client.lastService && client.lastService !== 'Spa Service' ? client.lastService : null) ||
+                      '—';
+                    const isCompleted = latestApt?.status === 'completed';
+
+                    return (
+                      <tr key={client.id} className="hover:bg-[#FAF5FF]/50 transition-colors">
+                        <td className="py-2.5 px-3">
+                          <span
+                            onClick={() => navigate(`/clients/${client.id}`)}
+                            className="font-bold text-charcoal hover:underline hover:text-[#6D28D9] cursor-pointer"
+                          >
+                            {client.name}
+                          </span>
+                          <span className="block text-[10px] text-muted-gray font-normal font-mono">
+                            {client.phone}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-medium text-charcoal">{serviceName}</td>
+                        <td className="py-2.5 px-3 text-muted-gray font-mono">
+                          {latestApt ? `${latestApt.date} · ${latestApt.time}` : '—'}
+                        </td>
+                        <td className="py-2.5 px-3 text-charcoal font-medium">
+                          {latestApt?.technicianName || '—'}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[10px] font-bold ${
+                              isCompleted
+                                ? 'bg-[#DCE7D7] text-[#4F6748] border border-[#4F6748]/20'
+                                : 'bg-[#EDE9FE] text-[#6D28D9] border border-[#DDD6FE]'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isCompleted ? 'bg-[#4F6748]' : 'bg-[#6D28D9]'
+                              }`}
+                            />
+                            {isCompleted ? 'Completed' : latestApt ? 'Booked' : 'Registered'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <button
+                            onClick={() => navigate(`/clients/${client.id}`)}
+                            className="text-[11px] font-bold text-[#6D28D9] hover:underline hover:text-[#5B21B6] cursor-pointer inline-flex items-center gap-1"
+                          >
+                            Appointment History
+                            <ChevronRight size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <ClientAcquisitionModal
+          isOpen={showAcquisitionModal}
+          onClose={() => setShowAcquisitionModal(false)}
+          onSuccess={handleAcquisitionSuccess}
+        />
+      </div>
+    );
+  }
+
   // =========================================================================
   // TECHNICIAN / EMPLOYEE DASHBOARD VIEW
   // =========================================================================
