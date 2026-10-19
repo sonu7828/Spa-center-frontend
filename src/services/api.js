@@ -650,3 +650,20 @@ export const socialApi = {
       method: 'DELETE',
     }),
 };
+
+export const penaltiesApi = {
+  getRules: () => apiRequest('/penalties/rules'),
+  createPenalty: (data) =>
+    apiRequest('/penalties', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getPenalties: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest('/penalties' + (query ? '?' + query : ''));
+  },
+  deletePenalty: (id) =>
+    apiRequest('/penalties/' + id, {
+      method: 'DELETE',
+    }),
+};

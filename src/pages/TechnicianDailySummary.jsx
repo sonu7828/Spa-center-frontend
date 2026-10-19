@@ -23,14 +23,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Award, ShieldAlert, Sparkles, TrendingUp, DollarSign, UserPlus } from 'lucide-react';
+import { User, Award, ShieldAlert, Sparkles, TrendingUp, DollarSign, UserPlus, AlertTriangle, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
+import RecordPenaltyModal from '../components/RecordPenaltyModal';
 import { useOperations } from '../context/OperationsContext';
 import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useClients } from '../context/ClientsContext';
 import { useCommission } from '../context/CommissionContext';
-import { reportsApi } from '../services/api';
+import { reportsApi, penaltiesApi } from '../services/api';
 
 export default function TechnicianDailySummary() {
   const navigate = useNavigate();
@@ -62,9 +63,17 @@ export default function TechnicianDailySummary() {
     dynamicTechnicians.find((t) => t.name === effectiveName) ||
     dynamicTechnicians[0] || { id: 1, name: 'Technician', specialties: [] };
 
+  const isManager = role === 'manager';
+
   // Live Backend Performance State
   const [techReport, setTechReport] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Disciplinary Infractions & Penalties State (Feature 4)
+  const [showPenaltyModal, setShowPenaltyModal] = useState(false);
+  const [penalties, setPenalties] = useState([]);
+  const [totalPenalties, setTotalPenalties] = useState(0);
+  const [penaltiesLoading, setPenaltiesLoading] = useState(false);
 
   const fetchTechReport = useCallback(async () => {
     if (isCleaner) return;
@@ -91,9 +100,41 @@ export default function TechnicianDailySummary() {
     }
   }, [isCleaner, isTechnicianRole, effectiveName, currentTech.id]);
 
+  const fetchPenalties = useCallback(async () => {
+    if (isCleaner) return;
+    setPenaltiesLoading(true);
+    try {
+      const targetId = isTechnicianRole ? user?.id : currentTech?.id;
+      if (!targetId) return;
+      const res = await penaltiesApi.getPenalties({ staffId: String(targetId) });
+      if (res?.data) {
+        setPenalties(res.data.penalties || []);
+        setTotalPenalties(res.data.totalPenalties || 0);
+      }
+    } catch (err) {
+      console.warn('Could not fetch staff penalties:', err.message);
+    } finally {
+      setPenaltiesLoading(false);
+    }
+  }, [isCleaner, isTechnicianRole, user?.id, currentTech?.id]);
+
   useEffect(() => {
     fetchTechReport();
   }, [fetchTechReport]);
+
+  useEffect(() => {
+    fetchPenalties();
+  }, [fetchPenalties]);
+
+  const handleDeletePenalty = async (penaltyId) => {
+    if (!window.confirm('Are you sure you want to void / delete this penalty record?')) return;
+    try {
+      await penaltiesApi.deletePenalty(penaltyId);
+      fetchPenalties();
+    } catch (err) {
+      alert(err?.message || 'Failed to delete penalty');
+    }
+  };
 
   // =========================================================================
   // RBAC GUARD: CLEANER BLOCKED
@@ -194,11 +235,24 @@ export default function TechnicianDailySummary() {
                 : (currentTech.specialties || []).join(', ') || 'Technician'}
             </p>
           </div>
-          <div className="text-left sm:text-right">
-            <span className="text-[10px] sm:text-xs font-medium text-muted-gray uppercase tracking-wide">
-              Date
-            </span>
-            <p className="text-xs sm:text-sm font-semibold text-charcoal">{today}</p>
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            {isManager && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setShowPenaltyModal(true)}
+                className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 shadow-none font-semibold text-xs flex items-center gap-1.5 cursor-pointer py-1.5 px-3 rounded-[10px]"
+              >
+                <AlertTriangle size={14} className="text-rose-600" />
+                Record Penalty
+              </Button>
+            )}
+            <div className="text-left sm:text-right">
+              <span className="text-[10px] sm:text-xs font-medium text-muted-gray uppercase tracking-wide">
+                Date
+              </span>
+              <p className="text-xs sm:text-sm font-semibold text-charcoal">{today}</p>
+            </div>
           </div>
         </div>
 
@@ -385,6 +439,131 @@ export default function TechnicianDailySummary() {
           </div>
         )}
       </div>
+
+      {/* Disciplinary Infractions & Penalties Section (Feature 4) */}
+      <div className="mt-6 bg-white border border-border rounded-[16px] p-4 sm:p-6 shadow-card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-border mb-4 gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-200/60">
+              <ShieldAlert size={16} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-charcoal">
+                Disciplinary Infractions & Penalties
+              </h3>
+              <p className="text-xs text-muted-gray">
+                Transparent conduct record for {effectiveName}
+              </p>
+            </div>
+          </div>
+
+          {isManager && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowPenaltyModal(true)}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm self-start sm:self-auto cursor-pointer"
+            >
+              <AlertTriangle size={14} />
+              Record Infraction
+            </Button>
+          )}
+        </div>
+
+        {/* Summary KPI Badge */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+          <div className="bg-rose-50/50 border border-rose-100 rounded-[12px] p-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle size={18} className="text-rose-600" />
+              <div>
+                <span className="text-[11px] font-semibold text-rose-800 uppercase tracking-wider block">
+                  Total Recorded Penalties
+                </span>
+                <span className="text-xs text-rose-600 font-medium">
+                  {penalties.length} infraction{penalties.length === 1 ? '' : 's'} logged
+                </span>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-base sm:text-lg font-bold text-rose-700 font-mono">
+                {totalPenalties.toLocaleString('en-US')} FCFA
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-soft-cream/40 border border-border rounded-[12px] p-3.5 flex items-center text-xs text-muted-gray leading-relaxed">
+            <span>
+              <strong>Policy Notice:</strong> Recorded penalties provide an audit trail for management review during manual payroll settlement. Raw service commissions are calculated independently.
+            </span>
+          </div>
+        </div>
+
+        {/* History Table */}
+        {penaltiesLoading ? (
+          <div className="text-center py-6 text-muted-gray text-xs sm:text-sm">
+            Loading disciplinary records...
+          </div>
+        ) : penalties.length === 0 ? (
+          <div className="text-center py-6 text-muted-gray text-xs sm:text-sm bg-soft-cream/30 rounded-[10px] border border-border/50">
+            Zero disciplinary infractions recorded for this staff member. Excellent conduct record!
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs sm:text-sm">
+              <thead>
+                <tr className="border-b border-border/60 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">
+                  <th className="py-2.5 px-3">Date</th>
+                  <th className="py-2.5 px-3">Conduct Rule</th>
+                  <th className="py-2.5 px-3">Notes / Context</th>
+                  <th className="py-2.5 px-3 text-right">Penalty Amount</th>
+                  {isManager && <th className="py-2.5 px-3 text-center">Action</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {penalties.map((p) => (
+                  <tr key={p.id} className="border-b border-border/30 last:border-b-0 hover:bg-rose-50/30 transition-colors">
+                    <td className="py-2.5 px-3 font-mono text-charcoal font-medium">{p.date}</td>
+                    <td className="py-2.5 px-3 font-semibold text-charcoal flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"></span>
+                      {p.ruleName}
+                    </td>
+                    <td className="py-2.5 px-3 text-muted-gray max-w-xs truncate" title={p.notes || ''}>
+                      {p.notes || '—'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-bold text-rose-700 font-mono">
+                      {Number(p.penaltyAmount).toLocaleString('en-US')} FCFA
+                    </td>
+                    {isManager && (
+                      <td className="py-2.5 px-3 text-center">
+                        <button
+                          onClick={() => handleDeletePenalty(p.id)}
+                          title="Void / Delete Penalty Record"
+                          className="p-1.5 rounded-[8px] text-muted-gray hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Record Penalty Modal */}
+      {showPenaltyModal && (
+        <RecordPenaltyModal
+          isOpen={showPenaltyModal}
+          onClose={() => setShowPenaltyModal(false)}
+          onSuccess={() => {
+            fetchPenalties();
+          }}
+          defaultStaffId={currentTech?.id}
+          staffList={allUsers.filter((u) => u.active !== false)}
+        />
+      )}
     </div>
   );
 }

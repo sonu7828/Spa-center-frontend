@@ -37,6 +37,7 @@ import {
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
+import RecordPenaltyModal from '../components/RecordPenaltyModal';
 import { useAuth } from '../context/AuthContext';
 import { useServices } from '../context/ServicesContext';
 
@@ -75,6 +76,9 @@ export default function Staff() {
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [showNewPw, setShowNewPw] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+
+  // Disciplinary Penalty Modal state
+  const [penaltyModalStaff, setPenaltyModalStaff] = useState(null);
 
   // Form state
   const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'technician', password: '', specialties: [] });
@@ -537,6 +541,13 @@ export default function Staff() {
                           <RotateCcw size={11} /> Reset PW
                         </button>
                         <button
+                          onClick={() => setPenaltyModalStaff(u)}
+                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-rose-700 bg-rose-50 border border-rose-200/70 hover:bg-rose-100 transition-all cursor-pointer flex items-center gap-1"
+                          title="Record Disciplinary Penalty"
+                        >
+                          <ShieldAlert size={12} className="text-rose-600" /> Penalty
+                        </button>
+                        <button
                           onClick={() => deactivateUser(u.id)}
                           className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center gap-1"
                           title="Deactivate"
@@ -601,6 +612,13 @@ export default function Staff() {
                     className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center justify-center gap-1"
                   >
                     <RotateCcw size={11} /> Reset PW
+                  </button>
+                  <button
+                    onClick={() => setPenaltyModalStaff(u)}
+                    className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200/70 hover:bg-rose-100 transition-all cursor-pointer flex items-center justify-center gap-1"
+                    title="Record Penalty"
+                  >
+                    <ShieldAlert size={12} className="text-rose-600" /> Penalty
                   </button>
                   <button
                     onClick={() => deactivateUser(u.id)}
@@ -946,6 +964,19 @@ export default function Staff() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Record Penalty Modal */}
+      {penaltyModalStaff && (
+        <RecordPenaltyModal
+          isOpen={Boolean(penaltyModalStaff)}
+          onClose={() => setPenaltyModalStaff(null)}
+          onSuccess={() => {
+            setPenaltyModalStaff(null);
+          }}
+          defaultStaffId={penaltyModalStaff?.id}
+          staffList={allUsers.filter((u) => u.active !== false)}
+        />
       )}
     </div>
   );
