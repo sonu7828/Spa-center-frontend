@@ -103,6 +103,11 @@ export const usersApi = {
     apiRequest('/users/' + id, {
       method: 'DELETE',
     }),
+  updateSalaryContract: (id, contractData) =>
+    apiRequest('/users/' + id + '/salary-contract', {
+      method: 'PATCH',
+      body: JSON.stringify(contractData),
+    }),
 };
 
 export const specialtiesApi = {
@@ -375,6 +380,10 @@ export const commissionsApi = {
     apiRequest('/commissions/' + commissionId + '/approve', {
       method: 'POST',
     }),
+  getSalarySummary: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest('/commissions/salary-summary' + (query ? '?' + query : ''));
+  },
 };
 
 export const loyaltyApi = {

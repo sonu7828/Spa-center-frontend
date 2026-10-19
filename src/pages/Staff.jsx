@@ -33,11 +33,13 @@ import {
   Trash2,
   Key,
   Share2,
+  Calculator,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import RecordPenaltyModal from '../components/RecordPenaltyModal';
+import EditSalaryContractModal from '../components/EditSalaryContractModal';
 import { useAuth } from '../context/AuthContext';
 import { useServices } from '../context/ServicesContext';
 
@@ -79,6 +81,9 @@ export default function Staff() {
 
   // Disciplinary Penalty Modal state
   const [penaltyModalStaff, setPenaltyModalStaff] = useState(null);
+
+  // Target & Salary Contract Modal state
+  const [salaryContractStaff, setSalaryContractStaff] = useState(null);
 
   // Form state
   const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'technician', password: '', specialties: [] });
@@ -481,6 +486,7 @@ export default function Staff() {
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Email</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Phone</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Role</th>
+                <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Target & Contract</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Specialties</th>
                 {isManager && (
                   <th className="text-right px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Actions</th>
@@ -505,6 +511,27 @@ export default function Staff() {
                     })()}
                   </td>
                   <td className="px-5 py-3.5">
+                    {u.salaryContract && (Number(u.salaryContract.monthlyTarget) > 0 || Number(u.salaryContract.fixedSalary) > 0) ? (
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-charcoal">
+                          <span className="text-emerald-700 font-bold">
+                            {Number(u.salaryContract.monthlyTarget).toLocaleString()} FCFA
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/60 font-semibold">
+                            {u.salaryContract.targetScope === 'SPA_TOTAL' ? 'Spa Total' : 'Target'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-gray">
+                          Rate: {u.salaryContract.commissionRate}% · Base: {Number(u.salaryContract.basePay).toLocaleString()} · Floor: {Number(u.salaryContract.fixedSalary).toLocaleString()}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60">
+                        Pending Contract
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5">
                     {u.specialties?.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {u.specialties.map((s) => {
@@ -526,6 +553,13 @@ export default function Staff() {
                   {isManager && (
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setSalaryContractStaff(u)}
+                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer flex items-center gap-1"
+                          title="Target & Salary Contract Settings"
+                        >
+                          <Calculator size={12} className="text-emerald-700" /> Contract
+                        </button>
                         <button
                           onClick={() => openEditModal(u)}
                           className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer flex items-center gap-1"
@@ -599,30 +633,49 @@ export default function Staff() {
                 </div>
               )}
 
+              {u.salaryContract && (Number(u.salaryContract.monthlyTarget) > 0 || Number(u.salaryContract.fixedSalary) > 0) && (
+                <div className="px-3 py-2 rounded-[9px] bg-emerald-50/80 border border-emerald-200/70 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-[11px] text-emerald-950 font-bold block">
+                      Target: {Number(u.salaryContract.monthlyTarget).toLocaleString()} FCFA ({u.salaryContract.targetScope === 'SPA_TOTAL' ? 'Spa' : 'Indiv'})
+                    </span>
+                    <span className="text-[10px] text-emerald-800 font-medium">
+                      {u.salaryContract.commissionRate}% comm · Base: {Number(u.salaryContract.basePay).toLocaleString()} · Floor: {Number(u.salaryContract.fixedSalary).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {isManager && (
-                <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-border/40">
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border/40">
+                  <button
+                    onClick={() => setSalaryContractStaff(u)}
+                    className="flex-1 min-w-[85px] h-[36px] px-2 rounded-[8px] text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Calculator size={12} className="text-emerald-700" /> Contract
+                  </button>
                   <button
                     onClick={() => openEditModal(u)}
-                    className="h-[38px] px-2 rounded-[9px] text-xs font-semibold text-charcoal bg-soft-cream border border-border hover:bg-sage-soft transition-all cursor-pointer flex items-center justify-center gap-1"
+                    className="flex-1 min-w-[70px] h-[36px] px-2 rounded-[8px] text-xs font-semibold text-charcoal bg-soft-cream border border-border hover:bg-sage-soft transition-all cursor-pointer flex items-center justify-center gap-1"
                   >
                     <Pencil size={12} /> Edit
                   </button>
                   <button
                     onClick={() => openResetModal(u)}
-                    className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center justify-center gap-1"
+                    className="flex-1 min-w-[80px] h-[36px] px-2 rounded-[8px] text-xs font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center justify-center gap-1"
                   >
                     <RotateCcw size={11} /> Reset PW
                   </button>
                   <button
                     onClick={() => setPenaltyModalStaff(u)}
-                    className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200/70 hover:bg-rose-100 transition-all cursor-pointer flex items-center justify-center gap-1"
+                    className="flex-1 min-w-[75px] h-[36px] px-2 rounded-[8px] text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200/70 hover:bg-rose-100 transition-all cursor-pointer flex items-center justify-center gap-1"
                     title="Record Penalty"
                   >
                     <ShieldAlert size={12} className="text-rose-600" /> Penalty
                   </button>
                   <button
                     onClick={() => deactivateUser(u.id)}
-                    className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center justify-center gap-1"
+                    className="flex-1 min-w-[65px] h-[36px] px-2 rounded-[8px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center justify-center gap-1"
                   >
                     <UserX size={12} /> Deact
                   </button>
@@ -976,6 +1029,19 @@ export default function Staff() {
           }}
           defaultStaffId={penaltyModalStaff?.id}
           staffList={allUsers.filter((u) => u.active !== false)}
+        />
+      )}
+
+      {/* Target & Salary Contract Modal */}
+      {salaryContractStaff && (
+        <EditSalaryContractModal
+          isOpen={Boolean(salaryContractStaff)}
+          onClose={() => setSalaryContractStaff(null)}
+          onSuccess={() => {
+            setSalaryContractStaff(null);
+            if (refreshUsers) refreshUsers();
+          }}
+          staff={salaryContractStaff}
         />
       )}
     </div>

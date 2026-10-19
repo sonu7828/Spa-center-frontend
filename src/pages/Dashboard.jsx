@@ -34,6 +34,11 @@ import {
   CreditCard,
   ChevronRight,
   ShieldAlert,
+  Target,
+  Lock,
+  Unlock,
+  Zap,
+  Calculator,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -1263,6 +1268,116 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+      </section>
+
+      {/* ── Section 2B: Staff Target Progress & Quota Tracker ── */}
+      <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/70">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-charcoal flex items-center gap-2">
+                <Target size={18} className="text-sage" />
+                Staff Target & Commission Quotas
+              </h2>
+              <span className="text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-[6px]">
+                Target Engine
+              </span>
+            </div>
+            <p className="text-xs text-muted-gray mt-0.5">
+              Monthly sales quota tracking, Mode A (Floor) vs Mode B (Commission) live status
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/staff')}
+              className="px-3 py-1.5 rounded-[10px] bg-soft-cream hover:bg-warm-ivory text-xs font-semibold text-charcoal transition-colors border border-border cursor-pointer flex items-center gap-1.5"
+            >
+              <Calculator size={13} className="text-sage" />
+              Manage Contracts
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-4">
+          {allUsers
+            .filter((u) => u.role === 'technician' && u.active !== false)
+            .map((tech) => {
+              const contract = tech.salaryContract || {};
+              const target = Number(contract.monthlyTarget || 500000);
+              const perf = techniciansPerformance.find(
+                (p) =>
+                  String(p.technicianId) === String(tech.id) ||
+                  p.technicianName?.toLowerCase() === tech.name?.toLowerCase()
+              );
+              const sales = Number(perf?.revenueGenerated || 0);
+              const percent = target > 0 ? Math.round((sales / target) * 100) : 0;
+              const isTargetMet = sales >= target && target > 0;
+              const remaining = Math.max(0, target - sales);
+
+              return (
+                <div
+                  key={tech.id}
+                  className="bg-warm-ivory/40 rounded-[14px] border border-border/70 p-4 flex flex-col justify-between hover:border-sage/40 transition-all shadow-2xs"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-2.5">
+                      <div>
+                        <h4 className="font-bold text-charcoal text-sm">{tech.name}</h4>
+                        <span className="text-[11px] text-muted-gray">
+                          Target: {target.toLocaleString()} FCFA
+                        </span>
+                      </div>
+                      {isTargetMet ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <Unlock size={11} /> Mode B Unlocked
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                          <Lock size={11} /> Mode A Floor
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="space-y-1 mb-3">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-semibold text-charcoal">
+                          {sales.toLocaleString()} FCFA
+                        </span>
+                        <span className={`font-bold ${isTargetMet ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {percent}%
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            isTargetMet ? 'bg-emerald-500' : 'bg-amber-500'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(3, percent))}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-gray">
+                    <span>
+                      {isTargetMet ? (
+                        <span className="text-emerald-700 font-semibold">Goal Achieved!</span>
+                      ) : (
+                        `${remaining.toLocaleString()} F to goal`
+                      )}
+                    </span>
+                    <button
+                      onClick={() => navigate('/summary')}
+                      className="font-bold text-sage-hover hover:underline cursor-pointer"
+                    >
+                      View Summary →
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
       </section>
 
       {/* ── Section 3: Today's Appointments ── */}

@@ -23,15 +23,32 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Award, ShieldAlert, Sparkles, TrendingUp, DollarSign, UserPlus, AlertTriangle, Trash2 } from 'lucide-react';
+import {
+  User,
+  Award,
+  ShieldAlert,
+  Sparkles,
+  TrendingUp,
+  DollarSign,
+  UserPlus,
+  AlertTriangle,
+  Trash2,
+  Target,
+  Lock,
+  Unlock,
+  Zap,
+  Calculator,
+  CheckCircle2,
+} from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import RecordPenaltyModal from '../components/RecordPenaltyModal';
+import EditSalaryContractModal from '../components/EditSalaryContractModal';
 import { useOperations } from '../context/OperationsContext';
 import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useClients } from '../context/ClientsContext';
 import { useCommission } from '../context/CommissionContext';
-import { reportsApi, penaltiesApi } from '../services/api';
+import { reportsApi, penaltiesApi, commissionsApi } from '../services/api';
 
 export default function TechnicianDailySummary() {
   const navigate = useNavigate();
@@ -68,6 +85,11 @@ export default function TechnicianDailySummary() {
   // Live Backend Performance State
   const [techReport, setTechReport] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Target-Based Salary & Commission State (Phase 4)
+  const [salarySummary, setSalarySummary] = useState(null);
+  const [salaryLoading, setSalaryLoading] = useState(false);
+  const [showContractModal, setShowContractModal] = useState(false);
 
   // Disciplinary Infractions & Penalties State (Feature 4)
   const [showPenaltyModal, setShowPenaltyModal] = useState(false);
@@ -118,6 +140,23 @@ export default function TechnicianDailySummary() {
     }
   }, [isCleaner, isTechnicianRole, user?.id, currentTech?.id]);
 
+  const fetchSalarySummary = useCallback(async () => {
+    if (isCleaner) return;
+    const targetId = isTechnicianRole ? user?.id : currentTech?.id;
+    if (!targetId) return;
+    setSalaryLoading(true);
+    try {
+      const res = await commissionsApi.getSalarySummary({ technicianId: String(targetId) });
+      if (res?.data) {
+        setSalarySummary(res.data);
+      }
+    } catch (err) {
+      console.warn('Salary summary fetch error:', err.message);
+    } finally {
+      setSalaryLoading(false);
+    }
+  }, [isCleaner, isTechnicianRole, user?.id, currentTech?.id]);
+
   useEffect(() => {
     fetchTechReport();
   }, [fetchTechReport]);
@@ -125,6 +164,10 @@ export default function TechnicianDailySummary() {
   useEffect(() => {
     fetchPenalties();
   }, [fetchPenalties]);
+
+  useEffect(() => {
+    fetchSalarySummary();
+  }, [fetchSalarySummary]);
 
   const handleDeletePenalty = async (penaltyId) => {
     if (!window.confirm('Are you sure you want to void / delete this penalty record?')) return;
@@ -218,6 +261,161 @@ export default function TechnicianDailySummary() {
               {tech.name} — {(tech.specialties || []).join(', ') || 'Technician'}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Target Progress Hero Gauge */}
+      {salarySummary && (
+        <div className="mb-6 bg-gradient-to-br from-[#111827] via-[#1E293B] to-[#0F172A] rounded-[20px] p-5 sm:p-6 text-white shadow-card border border-slate-700/60 relative overflow-hidden">
+          {/* Subtle background glow */}
+          <div
+            className={`absolute top-0 right-0 w-80 h-80 rounded-full blur-3xl pointer-events-none opacity-20 transition-all ${
+              salarySummary.calculation.mode === 'MODE_B_TARGET_MET' ? 'bg-emerald-400' : 'bg-amber-400'
+            }`}
+          />
+
+          <div className="relative z-10">
+            {/* Top row: Target & Mode Badge */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-11 h-11 rounded-[14px] flex items-center justify-center font-bold shadow-md ${
+                    salarySummary.calculation.mode === 'MODE_B_TARGET_MET'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                      : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                  }`}
+                >
+                  <Target size={22} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-bold text-white tracking-wide">
+                      Monthly Target Performance
+                    </h3>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                      {salarySummary.period}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Target Quota:{' '}
+                    <span className="text-slate-200 font-semibold">
+                      {Number(salarySummary.contract.monthlyTarget).toLocaleString()} FCFA
+                    </span>{' '}
+                    ({salarySummary.contract.targetScope === 'SPA_TOTAL' ? 'Spa Total Scope' : 'Individual Sales'})
+                  </p>
+                </div>
+              </div>
+
+              {/* Mode Badge & Contract settings button */}
+              <div className="flex items-center gap-2">
+                {salarySummary.calculation.mode === 'MODE_B_TARGET_MET' ? (
+                  <div className="px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                    <Unlock size={14} className="text-emerald-400" />
+                    <span>Mode B · Commission Tier Unlocked</span>
+                  </div>
+                ) : (
+                  <div className="px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                    <Lock size={14} className="text-amber-400" />
+                    <span>Mode A · Guaranteed Fixed Salary</span>
+                  </div>
+                )}
+
+                {isManager && (
+                  <button
+                    onClick={() => setShowContractModal(true)}
+                    className="p-2 rounded-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition cursor-pointer flex items-center gap-1 text-xs font-medium"
+                    title="Edit Salary Contract"
+                  >
+                    <Calculator size={15} />
+                    <span className="hidden sm:inline">Contract</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Hero Progress Bar */}
+            <div className="space-y-2 mb-4">
+              <div className="flex items-center justify-between text-xs sm:text-sm">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                    {Number(salarySummary.performance.salesTotal).toLocaleString()}
+                  </span>
+                  <span className="text-slate-400 font-medium text-xs sm:text-sm">
+                    / {Number(salarySummary.contract.monthlyTarget).toLocaleString()} FCFA MTD
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span
+                    className={`text-base sm:text-lg font-black ${
+                      salarySummary.calculation.mode === 'MODE_B_TARGET_MET'
+                        ? 'text-emerald-400'
+                        : 'text-amber-400'
+                    }`}
+                  >
+                    {salarySummary.performance.percentageAchieved}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="w-full h-3.5 sm:h-4 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700/80">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ease-out ${
+                    salarySummary.calculation.mode === 'MODE_B_TARGET_MET'
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_12px_rgba(16,185,129,0.5)]'
+                      : 'bg-gradient-to-r from-amber-500 to-orange-400'
+                  }`}
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.max(3, Number(salarySummary.performance.percentageAchieved) || 0)
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Target Status Strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3 border-t border-slate-800 text-xs">
+              <div className="flex items-center gap-2.5 bg-slate-800/60 rounded-xl p-2.5 border border-slate-700/40">
+                <Zap
+                  size={16}
+                  className={
+                    salarySummary.calculation.mode === 'MODE_B_TARGET_MET'
+                      ? 'text-emerald-400'
+                      : 'text-amber-400'
+                  }
+                />
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Distance to Goal</div>
+                  <div className="text-slate-200 font-bold">
+                    {salarySummary.calculation.mode === 'MODE_B_TARGET_MET'
+                      ? 'Target Achieved 🎉'
+                      : `${Number(salarySummary.performance.remainingToTarget).toLocaleString()} FCFA remaining`}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 bg-slate-800/60 rounded-xl p-2.5 border border-slate-700/40">
+                <DollarSign size={16} className="text-slate-400" />
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Contract Terms</div>
+                  <div className="text-slate-200 font-bold">
+                    {salarySummary.contract.commissionRate}% comm · {Number(salarySummary.contract.fixedSalary).toLocaleString()} floor
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 bg-slate-800/60 rounded-xl p-2.5 border border-slate-700/40">
+                <Award size={16} className="text-emerald-400" />
+                <div>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Projected Payout</div>
+                  <div className="text-emerald-300 font-bold text-sm">
+                    {Number(salarySummary.calculation.effectivePayout).toLocaleString()} FCFA
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -341,51 +539,122 @@ export default function TechnicianDailySummary() {
         <div className="border-t border-border pt-5 mb-6 space-y-3">
           {!isMarketer && (
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-gray">Base Salary</span>
-              <span className="text-muted-gray font-mono text-xs bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
-                [Calculated]
+              <span className="text-muted-gray">
+                {salarySummary?.calculation.mode === 'MODE_A_BELOW_TARGET'
+                  ? 'Guaranteed Fixed Salary'
+                  : 'Base Salary'}
               </span>
+              {salarySummary ? (
+                <span className="font-semibold text-charcoal">
+                  {salarySummary.calculation.mode === 'MODE_A_BELOW_TARGET'
+                    ? `${Number(salarySummary.contract.fixedSalary).toLocaleString()} FCFA`
+                    : `${Number(salarySummary.contract.basePay).toLocaleString()} FCFA`}
+                </span>
+              ) : (
+                <span className="text-muted-gray font-mono text-xs bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
+                  [Calculated]
+                </span>
+              )}
             </div>
           )}
 
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-charcoal font-medium">Referral Commission</span>
-            {isReception ? (
-              <span className="font-mono text-xs text-muted-gray bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
-                [Confidential - Manager Only]
+          {/* Commission Calculation with Target Engine Integration */}
+          {salarySummary ? (
+            salarySummary.calculation.mode === 'MODE_A_BELOW_TARGET' ? (
+              <div className="p-3 rounded-[12px] bg-amber-50/70 border border-amber-200/70 space-y-1">
+                <div className="flex items-center justify-between text-xs sm:text-sm">
+                  <span className="text-amber-900 font-semibold flex items-center gap-1.5">
+                    <Lock size={14} className="text-amber-600" />
+                    Conditional Unearned Commission (Locked)
+                  </span>
+                  <span className="font-bold text-amber-900">
+                    {Number(salarySummary.calculation.unearnedCommissionLocked).toLocaleString()} FCFA
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-700 leading-relaxed">
+                  Locked until monthly target ({Number(salarySummary.contract.monthlyTarget).toLocaleString()} FCFA) is achieved. Guaranteed flat salary of {Number(salarySummary.contract.fixedSalary).toLocaleString()} FCFA applies.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 rounded-[12px] bg-emerald-50/70 border border-emerald-200/70 space-y-1">
+                <div className="flex items-center justify-between text-xs sm:text-sm">
+                  <span className="text-emerald-900 font-semibold flex items-center gap-1.5">
+                    <Unlock size={14} className="text-emerald-600" />
+                    Net Earned Commission (Unlocked)
+                  </span>
+                  <span className="font-bold text-emerald-800">
+                    {Number(salarySummary.calculation.netCommission).toLocaleString()} FCFA
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-700">
+                  Target reached! Paid as Base ({Number(salarySummary.contract.basePay).toLocaleString()}) + Net Commission ({Number(salarySummary.calculation.netCommission).toLocaleString()}).
+                </p>
+              </div>
+            )
+          ) : (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-charcoal font-medium">Referral Commission</span>
+              {isReception ? (
+                <span className="font-mono text-xs text-muted-gray bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
+                  [Confidential - Manager Only]
+                </span>
+              ) : (
+                <span
+                  className={`font-extrabold px-2.5 py-1 rounded-[6px] text-xs ${
+                    isMarketer
+                      ? 'bg-[#EDE9FE] text-[#6D28D9] border border-[#DDD6FE]'
+                      : 'bg-sage-soft text-[#4F6748] border border-sage/20'
+                  }`}
+                >
+                  {commissionEarned.toLocaleString('en-US')} FCFA
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Penalties Deduction Row if any */}
+          {salarySummary && Number(salarySummary.calculation.totalPenalties) > 0 && (
+            <div className="flex items-center justify-between text-sm text-rose-700">
+              <span className="font-medium flex items-center gap-1.5">
+                <ShieldAlert size={14} /> Disciplinary Deductions
+              </span>
+              <span className="font-bold font-mono">
+                -{Number(salarySummary.calculation.totalPenalties).toLocaleString()} FCFA
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Total Projected Payout Row */}
+        <div className="bg-sage-soft border border-sage/20 rounded-[14px] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Award size={20} className="text-sage" />
+            <div>
+              <span className="text-sm font-bold text-charcoal block">
+                Projected Monthly Payout
+              </span>
+              {salarySummary && (
+                <span className="text-[11px] text-muted-gray">
+                  {salarySummary.calculation.floorProtectionApplied
+                    ? `Protected by guaranteed minimum floor (${Number(salarySummary.contract.fixedSalary).toLocaleString()} FCFA)`
+                    : salarySummary.calculation.mode === 'MODE_A_BELOW_TARGET'
+                    ? `Guaranteed Flat Baseline (Target not yet met)`
+                    : `Base + Unlocked Net Commission`}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="text-left sm:text-right">
+            {salarySummary ? (
+              <span className="text-lg font-black text-charcoal">
+                {Number(salarySummary.calculation.effectivePayout).toLocaleString()} FCFA
               </span>
             ) : (
-              <span
-                className={`font-extrabold px-2.5 py-1 rounded-[6px] text-xs ${
-                  isMarketer
-                    ? 'bg-[#EDE9FE] text-[#6D28D9] border border-[#DDD6FE]'
-                    : 'bg-sage-soft text-[#4F6748] border border-sage/20'
-                }`}
-              >
-                {commissionEarned.toLocaleString('en-US')} FCFA
+              <span className="font-mono text-xs text-charcoal bg-white/80 px-2.5 py-1 rounded-[6px] border border-sage/30">
+                [Calculated]
               </span>
             )}
           </div>
-
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-gray">Bonus</span>
-            <span className="text-muted-gray font-mono text-xs bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
-              [Calculated]
-            </span>
-          </div>
-        </div>
-
-        {/* Total Row */}
-        <div className="bg-sage-soft border border-sage/20 rounded-[12px] p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Award size={18} className="text-sage" />
-            <span className="text-sm font-semibold text-charcoal">
-              Daily Total
-            </span>
-          </div>
-          <span className="font-mono text-xs text-charcoal bg-white/80 px-2.5 py-1 rounded-[6px] border border-sage/30">
-            [Calculated]
-          </span>
         </div>
       </div>
 
@@ -559,9 +828,23 @@ export default function TechnicianDailySummary() {
           onClose={() => setShowPenaltyModal(false)}
           onSuccess={() => {
             fetchPenalties();
+            fetchSalarySummary();
           }}
           defaultStaffId={currentTech?.id}
           staffList={allUsers.filter((u) => u.active !== false)}
+        />
+      )}
+
+      {/* Edit Salary Contract Modal */}
+      {showContractModal && (
+        <EditSalaryContractModal
+          isOpen={showContractModal}
+          onClose={() => setShowContractModal(false)}
+          onSuccess={() => {
+            setShowContractModal(false);
+            fetchSalarySummary();
+          }}
+          staff={currentTech}
         />
       )}
     </div>
