@@ -1,55 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Award, DollarSign, Calculator, AlertTriangle, CheckCircle2, TrendingUp, Sparkles } from 'lucide-react';
+import { X, Award, Calculator, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import Button from './Button';
 import { usersApi } from '../services/api';
-
-const CONTRACT_PRESETS = [
-  {
-    id: 'barber',
-    label: 'Barber Preset (300k Target · 20% Comm)',
-    monthlyTarget: 300000,
-    basePay: 50000,
-    commissionRate: 20,
-    fixedSalary: 80000,
-    targetScope: 'INDIVIDUAL',
-  },
-  {
-    id: 'nail_tech',
-    label: 'Nail Technician Preset (500k Target · 15% Comm)',
-    monthlyTarget: 500000,
-    basePay: 50000,
-    commissionRate: 15,
-    fixedSalary: 80000,
-    targetScope: 'INDIVIDUAL',
-  },
-  {
-    id: 'esthetician',
-    label: 'Esthetician Preset (642k Target · 15% Comm)',
-    monthlyTarget: 642000,
-    basePay: 50000,
-    commissionRate: 15,
-    fixedSalary: 80000,
-    targetScope: 'INDIVIDUAL',
-  },
-  {
-    id: 'receptionist',
-    label: 'Receptionist Preset (3.5M Spa Target · 150k Base)',
-    monthlyTarget: 3500000,
-    basePay: 150000,
-    commissionRate: 0,
-    fixedSalary: 100000,
-    targetScope: 'SPA_TOTAL',
-  },
-  {
-    id: 'custom',
-    label: 'Custom Staff Configuration...',
-    monthlyTarget: 500000,
-    basePay: 50000,
-    commissionRate: 15,
-    fixedSalary: 80000,
-    targetScope: 'INDIVIDUAL',
-  },
-];
 
 export default function EditSalaryContractModal({
   isOpen,
@@ -57,7 +9,6 @@ export default function EditSalaryContractModal({
   onSuccess,
   staff,
 }) {
-  const [selectedPreset, setSelectedPreset] = useState('custom');
   const [monthlyTarget, setMonthlyTarget] = useState(500000);
   const [basePay, setBasePay] = useState(50000);
   const [commissionRate, setCommissionRate] = useState(15);
@@ -76,55 +27,20 @@ export default function EditSalaryContractModal({
     setAdvisoryMsg('');
     setSuccessMsg('');
 
-    // Pre-populate from existing staff contract or role defaults
+    // Pre-populate from existing staff contract or sensible role starting values
     const contract = staff.salaryContract || {};
-    const existingTarget = Number(contract.monthlyTarget || 0);
-    const existingBase = Number(contract.basePay || 0);
-    const existingRate = Number(contract.commissionRate || 0);
-    const existingFixed = Number(contract.fixedSalary || 0);
+    const existingTarget = contract.monthlyTarget !== undefined ? Number(contract.monthlyTarget) : null;
+    const existingBase = contract.basePay !== undefined ? Number(contract.basePay) : null;
+    const existingRate = contract.commissionRate !== undefined ? Number(contract.commissionRate) : null;
+    const existingFixed = contract.fixedSalary !== undefined ? Number(contract.fixedSalary) : null;
     const existingScope = contract.targetScope || (staff.role === 'reception' ? 'SPA_TOTAL' : 'INDIVIDUAL');
 
-    if (existingTarget > 0 || existingFixed > 0) {
-      setMonthlyTarget(existingTarget || 500000);
-      setBasePay(existingBase || 50000);
-      setCommissionRate(existingRate || 15);
-      setFixedSalary(existingFixed || 80000);
-      setTargetScope(existingScope);
-      setSelectedPreset('custom');
-    } else {
-      // Auto-detect preset based on role or specialties
-      const spec = ((staff.specialties || []).join(' ') || '').toLowerCase();
-      if (staff.role === 'reception') {
-        applyPresetValues(CONTRACT_PRESETS[3]);
-      } else if (spec.includes('barber')) {
-        applyPresetValues(CONTRACT_PRESETS[0]);
-      } else if (spec.includes('nail')) {
-        applyPresetValues(CONTRACT_PRESETS[1]);
-      } else if (spec.includes('facial') || spec.includes('esthetic')) {
-        applyPresetValues(CONTRACT_PRESETS[2]);
-      } else {
-        applyPresetValues(CONTRACT_PRESETS[1]);
-      }
-    }
+    setMonthlyTarget(existingTarget !== null ? existingTarget : (staff.role === 'reception' ? 3500000 : 500000));
+    setFixedSalary(existingFixed !== null ? existingFixed : (staff.role === 'reception' ? 100000 : 80000));
+    setBasePay(existingBase !== null ? existingBase : (staff.role === 'reception' ? 150000 : 50000));
+    setCommissionRate(existingRate !== null ? existingRate : (staff.role === 'reception' ? 0 : 15));
+    setTargetScope(existingScope);
   }, [isOpen, staff]);
-
-  const applyPresetValues = (preset) => {
-    setSelectedPreset(preset.id);
-    setMonthlyTarget(preset.monthlyTarget);
-    setBasePay(preset.basePay);
-    setCommissionRate(preset.commissionRate);
-    setFixedSalary(preset.fixedSalary);
-    setTargetScope(preset.targetScope);
-  };
-
-  const handlePresetChange = (e) => {
-    const val = e.target.value;
-    setSelectedPreset(val);
-    const found = CONTRACT_PRESETS.find((p) => p.id === val);
-    if (found) {
-      applyPresetValues(found);
-    }
-  };
 
   if (!isOpen || !staff) return null;
 
@@ -225,25 +141,6 @@ export default function EditSalaryContractModal({
             </div>
           )}
 
-          {/* Quick Preset Selector */}
-          <div>
-            <label className="block text-xs font-semibold text-charcoal mb-1.5 flex items-center gap-1.5">
-              <Sparkles size={13} className="text-sage" />
-              Standard Role Preset
-            </label>
-            <select
-              value={selectedPreset}
-              onChange={handlePresetChange}
-              className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm text-charcoal font-medium focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
-            >
-              {CONTRACT_PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Monthly Target Quota (T) */}
             <div>
@@ -255,10 +152,7 @@ export default function EditSalaryContractModal({
                 min="0"
                 step="10000"
                 value={monthlyTarget}
-                onChange={(e) => {
-                  setMonthlyTarget(e.target.value);
-                  setSelectedPreset('custom');
-                }}
+                onChange={(e) => setMonthlyTarget(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
                 required
               />
@@ -275,10 +169,7 @@ export default function EditSalaryContractModal({
                 min="0"
                 step="5000"
                 value={fixedSalary}
-                onChange={(e) => {
-                  setFixedSalary(e.target.value);
-                  setSelectedPreset('custom');
-                }}
+                onChange={(e) => setFixedSalary(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
                 required
               />
@@ -295,10 +186,7 @@ export default function EditSalaryContractModal({
                 min="0"
                 step="5000"
                 value={basePay}
-                onChange={(e) => {
-                  setBasePay(e.target.value);
-                  setSelectedPreset('custom');
-                }}
+                onChange={(e) => setBasePay(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
                 required
               />
@@ -316,10 +204,7 @@ export default function EditSalaryContractModal({
                 max="100"
                 step="1"
                 value={commissionRate}
-                onChange={(e) => {
-                  setCommissionRate(e.target.value);
-                  setSelectedPreset('custom');
-                }}
+                onChange={(e) => setCommissionRate(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
                 required
               />
@@ -345,10 +230,7 @@ export default function EditSalaryContractModal({
                   name="targetScope"
                   value="INDIVIDUAL"
                   checked={targetScope === 'INDIVIDUAL'}
-                  onChange={() => {
-                    setTargetScope('INDIVIDUAL');
-                    setSelectedPreset('custom');
-                  }}
+                  onChange={() => setTargetScope('INDIVIDUAL')}
                   className="sr-only"
                 />
                 <span className="font-bold">Individual Services</span>
@@ -367,10 +249,7 @@ export default function EditSalaryContractModal({
                   name="targetScope"
                   value="SPA_TOTAL"
                   checked={targetScope === 'SPA_TOTAL'}
-                  onChange={() => {
-                    setTargetScope('SPA_TOTAL');
-                    setSelectedPreset('custom');
-                  }}
+                  onChange={() => setTargetScope('SPA_TOTAL')}
                   className="sr-only"
                 />
                 <span className="font-bold">Spa Total Sales</span>
