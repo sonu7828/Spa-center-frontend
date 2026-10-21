@@ -101,19 +101,29 @@ export default function EditSalaryContractModal({
     }
   };
 
+  const isMarketer = staff.role === 'marketer' || (staff.specialties || []).some((s) => String(s).toLowerCase() === 'marketer');
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white border border-border rounded-[20px] w-full max-w-xl shadow-xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-border bg-soft-cream/40">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-sage-soft text-sage flex items-center justify-center border border-sage/20">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${
+              isMarketer
+                ? 'bg-[#EDE9FE] text-[#6D28D9] border-[#DDD6FE]'
+                : 'bg-sage-soft text-sage border-sage/20'
+            }`}>
               <Award size={20} />
             </div>
             <div>
               <h3 className="text-base font-bold text-charcoal">Salary & Commission Contract</h3>
               <p className="text-xs text-muted-gray">
-                Configure Mode A (Fixed Baseline) vs Mode B (Commission Tier) for <strong>{staff.name || staff.email}</strong>
+                Configure Mode A (Fixed Baseline) vs Mode B (Commission Tier) for{' '}
+                <strong className={isMarketer ? 'text-[#6D28D9]' : 'text-charcoal'}>
+                  {staff.name || staff.email}
+                </strong>
+                {isMarketer && <span className="ml-1 text-[11px] font-semibold text-[#6D28D9] bg-[#EDE9FE] px-2 py-0.5 rounded-full">Marketer</span>}
               </p>
             </div>
           </div>
@@ -156,7 +166,11 @@ export default function EditSalaryContractModal({
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
                 required
               />
-              <span className="text-[10px] text-muted-gray">Sales quota required to unlock commission tier</span>
+              <span className="text-[10px] text-muted-gray">
+                {isMarketer
+                  ? 'Target revenue from clients acquired by this marketer'
+                  : 'Sales quota required to unlock commission tier'}
+              </span>
             </div>
 
             {/* Below Target Fixed Salary (S_fixed) */}
@@ -173,7 +187,11 @@ export default function EditSalaryContractModal({
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
                 required
               />
-              <span className="text-[10px] text-muted-gray">Guaranteed floor payout if revenue &lt; target</span>
+              <span className="text-[10px] text-muted-gray">
+                {isMarketer
+                  ? 'Guaranteed base retainer if referred sales < target (0 for pure commission)'
+                  : 'Guaranteed floor payout if revenue < target'}
+              </span>
             </div>
 
             {/* Target Met Base Pay (B) */}
@@ -190,7 +208,11 @@ export default function EditSalaryContractModal({
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
                 required
               />
-              <span className="text-[10px] text-muted-gray">Base salary unlocked once quota reached</span>
+              <span className="text-[10px] text-muted-gray">
+                {isMarketer
+                  ? 'Base retainer unlocked once sales quota reached'
+                  : 'Base salary unlocked once quota reached'}
+              </span>
             </div>
 
             {/* Target Met Commission Rate (C%) */}
@@ -208,7 +230,11 @@ export default function EditSalaryContractModal({
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
                 required
               />
-              <span className="text-[10px] text-muted-gray">% on eligible sales once quota reached</span>
+              <span className="text-[10px] text-muted-gray">
+                {isMarketer
+                  ? '% referral commission on completed services by their clients'
+                  : '% on eligible sales once quota reached'}
+              </span>
             </div>
           </div>
 
@@ -221,7 +247,9 @@ export default function EditSalaryContractModal({
               <label
                 className={`p-3 rounded-[12px] border cursor-pointer flex flex-col gap-0.5 text-xs transition-all ${
                   targetScope === 'INDIVIDUAL'
-                    ? 'bg-sage-soft border-sage text-charcoal font-semibold'
+                    ? isMarketer
+                      ? 'bg-[#FAF5FF] border-[#6D28D9] text-charcoal font-semibold'
+                      : 'bg-sage-soft border-sage text-charcoal font-semibold'
                     : 'bg-white border-border text-muted-gray hover:bg-soft-cream'
                 }`}
               >
@@ -233,14 +261,22 @@ export default function EditSalaryContractModal({
                   onChange={() => setTargetScope('INDIVIDUAL')}
                   className="sr-only"
                 />
-                <span className="font-bold">Individual Services</span>
-                <span className="text-[10px] opacity-80">Technician personal sales (Barber, Nail, Esthetician)</span>
+                <span className={`font-bold ${targetScope === 'INDIVIDUAL' && isMarketer ? 'text-[#6D28D9]' : ''}`}>
+                  {isMarketer ? 'Referred Clients Sales' : 'Individual Services'}
+                </span>
+                <span className="text-[10px] opacity-80">
+                  {isMarketer
+                    ? 'Total sales generated by clients acquired by this Marketer'
+                    : 'Technician personal sales (Barber, Nail, Esthetician)'}
+                </span>
               </label>
 
               <label
                 className={`p-3 rounded-[12px] border cursor-pointer flex flex-col gap-0.5 text-xs transition-all ${
                   targetScope === 'SPA_TOTAL'
-                    ? 'bg-sage-soft border-sage text-charcoal font-semibold'
+                    ? isMarketer
+                      ? 'bg-[#FAF5FF] border-[#6D28D9] text-charcoal font-semibold'
+                      : 'bg-sage-soft border-sage text-charcoal font-semibold'
                     : 'bg-white border-border text-muted-gray hover:bg-soft-cream'
                 }`}
               >
@@ -252,8 +288,14 @@ export default function EditSalaryContractModal({
                   onChange={() => setTargetScope('SPA_TOTAL')}
                   className="sr-only"
                 />
-                <span className="font-bold">Spa Total Sales</span>
-                <span className="text-[10px] opacity-80">Overall salon revenue (Front Desk Receptionist)</span>
+                <span className={`font-bold ${targetScope === 'SPA_TOTAL' && isMarketer ? 'text-[#6D28D9]' : ''}`}>
+                  Spa Total Sales
+                </span>
+                <span className="text-[10px] opacity-80">
+                  {isMarketer
+                    ? 'Overall salon revenue (if managing entire salon growth)'
+                    : 'Overall salon revenue (Front Desk Receptionist)'}
+                </span>
               </label>
             </div>
           </div>
