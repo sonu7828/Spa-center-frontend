@@ -21,7 +21,7 @@
  * Source: WIREFRAME.md Screen 13, FLOW.md §28-29
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   User,
@@ -39,6 +39,9 @@ import {
   Zap,
   Calculator,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -49,6 +52,7 @@ import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useClients } from '../context/ClientsContext';
 import { useCommission } from '../context/CommissionContext';
 import { reportsApi, penaltiesApi, commissionsApi } from '../services/api';
+import { getDoualaTodayStr } from '../utils/timezone';
 
 export default function TechnicianDailySummary() {
   const navigate = useNavigate();
@@ -56,7 +60,7 @@ export default function TechnicianDailySummary() {
   const { user, allUsers } = useAuth();
   const { completedServices, techRevenue } = useOperations();
   const { clients } = useClients();
-  const { getEmployeeCommissionSummary } = useCommission();
+  const { getEmployeeCommissionSummary, finalizeStaffPayroll } = useCommission();
 
   const role = (user?.role || '').toLowerCase();
   const isTechnicianRole = role === 'technician';
@@ -116,6 +120,50 @@ export default function TechnicianDailySummary() {
   const [salaryLoading, setSalaryLoading] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
 
+  // Monthly Period State for Historical Review
+  const currentMonthStr = useMemo(() => getDoualaTodayStr().slice(0, 7), []);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
+  const isCurrentMonth = selectedMonth === currentMonthStr;
+
+  const goToPrevMonth = () => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const prevDate = new Date(Date.UTC(y, m - 2, 1));
+    setSelectedMonth(
+      `${prevDate.getUTCFullYear()}-${String(prevDate.getUTCMonth() + 1).padStart(2, '0')}`
+    );
+  };
+
+  const goToNextMonth = () => {
+    if (selectedMonth >= currentMonthStr) return;
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const nextDate = new Date(Date.UTC(y, m, 1));
+    setSelectedMonth(
+      `${nextDate.getUTCFullYear()}-${String(nextDate.getUTCMonth() + 1).padStart(2, '0')}`
+    );
+  };
+
+  const resetToCurrentMonth = () => {
+    setSelectedMonth(currentMonthStr);
+  };
+
+  const handleFinalizeMonth = async () => {
+    if (
+      !window.confirm(
+        `Finalize and freeze the payroll record for ${effectiveName} for ${
+          salarySummary?.period || selectedMonth
+        }? This locks the record against future modifications.`
+      )
+    )
+      return;
+    try {
+      await finalizeStaffPayroll(currentTech?.id, selectedMonth);
+      fetchSalarySummary();
+      alert(`Payroll record for ${salarySummary?.period || selectedMonth} finalized and frozen successfully!`);
+    } catch (err) {
+      alert(err?.message || 'Failed to finalize payroll');
+    }
+  };
+
   // Disciplinary Infractions & Penalties State (Feature 4)
   const [showPenaltyModal, setShowPenaltyModal] = useState(false);
   const [penalties, setPenalties] = useState([]);
@@ -153,7 +201,10 @@ export default function TechnicianDailySummary() {
     try {
       const targetId = (isTechnicianRole || isMarketer) ? user?.id : currentTech?.id;
       if (!targetId) return;
-      const res = await penaltiesApi.getPenalties({ staffId: String(targetId) });
+      const res = await penaltiesApi.getPenalties({
+        staffId: String(targetId),
+        month: selectedMonth,
+      });
       if (res?.data) {
         setPenalties(res.data.penalties || []);
         setTotalPenalties(res.data.totalPenalties || 0);
@@ -163,7 +214,7 @@ export default function TechnicianDailySummary() {
     } finally {
       setPenaltiesLoading(false);
     }
-  }, [isCleaner, isTechnicianRole, isMarketer, user?.id, currentTech?.id]);
+  }, [isCleaner, isTechnicianRole, isMarketer, user?.id, currentTech?.id, selectedMonth]);
 
   const fetchSalarySummary = useCallback(async () => {
     if (isCleaner) return;
@@ -171,7 +222,10 @@ export default function TechnicianDailySummary() {
     if (!targetId) return;
     setSalaryLoading(true);
     try {
-      const res = await commissionsApi.getSalarySummary({ technicianId: String(targetId) });
+      const res = await commissionsApi.getSalarySummary({
+        technicianId: String(targetId),
+        period: selectedMonth,
+      });
       if (res?.data) {
         setSalarySummary(res.data);
       }
@@ -180,7 +234,7 @@ export default function TechnicianDailySummary() {
     } finally {
       setSalaryLoading(false);
     }
-  }, [isCleaner, isTechnicianRole, isMarketer, user?.id, currentTech?.id]);
+  }, [isCleaner, isTechnicianRole, isMarketer, user?.id, currentTech?.id, selectedMonth]);
 
   useEffect(() => {
     fetchTechReport();
@@ -385,15 +439,58 @@ export default function TechnicianDailySummary() {
                   <Target size={22} />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-base sm:text-lg font-bold text-white tracking-wide">
                       Monthly Target Performance
                     </h3>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono">
-                      {salarySummary.period || 'Current Month'}
-                    </span>
+
+                    {/* Period / Month Navigation Controls */}
+                    <div className="inline-flex items-center gap-1 bg-slate-800/90 rounded-[10px] p-1 border border-slate-700 shadow-xs">
+                      <button
+                        onClick={goToPrevMonth}
+                        title="Previous Month"
+                        className="p-1 rounded-[6px] hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+                      >
+                        <ChevronLeft size={15} />
+                      </button>
+                      <span className="text-xs px-2 text-slate-200 font-mono font-semibold whitespace-nowrap">
+                        {salarySummary?.period || selectedMonth}
+                      </span>
+                      <button
+                        onClick={goToNextMonth}
+                        disabled={selectedMonth >= currentMonthStr}
+                        title="Next Month"
+                        className={`p-1 rounded-[6px] transition cursor-pointer ${
+                          selectedMonth >= currentMonthStr
+                            ? 'opacity-30 cursor-not-allowed text-slate-600'
+                            : 'hover:bg-slate-700 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <ChevronRight size={15} />
+                      </button>
+                      {!isCurrentMonth && (
+                        <button
+                          onClick={resetToCurrentMonth}
+                          className="px-2 py-0.5 rounded-[6px] bg-sage/20 hover:bg-sage/30 text-sage text-[10px] font-bold transition cursor-pointer ml-1"
+                        >
+                          Current
+                        </button>
+                      )}
+                    </div>
+
+                    {!isCurrentMonth && (
+                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-900/60 text-indigo-200 border border-indigo-700 font-semibold tracking-wide">
+                        Historical Month
+                      </span>
+                    )}
+
+                    {salarySummary?.isFinalized && (
+                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700 font-semibold flex items-center gap-1">
+                        <CheckCircle2 size={11} /> Locked Snapshot
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-400 mt-1">
                     Target Quota:{' '}
                     <span className="text-slate-200 font-semibold">
                       {sMonthlyTarget.toLocaleString()} FCFA
@@ -415,6 +512,17 @@ export default function TechnicianDailySummary() {
                     <Lock size={14} className="text-amber-400" />
                     <span>Mode A · Guaranteed Fixed Salary</span>
                   </div>
+                )}
+
+                {isManager && !isCurrentMonth && !salarySummary?.isFinalized && (
+                  <button
+                    onClick={handleFinalizeMonth}
+                    className="p-2 sm:px-3 sm:py-1.5 rounded-[10px] bg-emerald-700 hover:bg-emerald-600 text-white transition cursor-pointer flex items-center gap-1.5 text-xs font-semibold shadow-sm"
+                    title="Freeze and lock this month's payroll record"
+                  >
+                    <CheckCircle2 size={14} />
+                    <span className="hidden sm:inline">Finalize Month</span>
+                  </button>
                 )}
 
                 {isManager && (
