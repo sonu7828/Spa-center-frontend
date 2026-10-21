@@ -390,6 +390,59 @@ export default function TechnicianDailySummary() {
             ? 'Client referral tracking and acquisition performance summary.'
             : 'Individual daily performance and auto-calculation summary.'
         }
+        action={
+          <div className="flex items-center gap-2">
+            {/* Prominent Month Navigator in Top-Right Corner */}
+            <div className="flex items-center bg-white border border-border rounded-[12px] p-1 shadow-2xs hover:border-sage/50 transition-all">
+              <button
+                onClick={goToPrevMonth}
+                title="Previous Month"
+                className="p-1.5 rounded-[8px] hover:bg-soft-cream text-charcoal transition cursor-pointer"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <div className="flex items-center gap-2 px-3 py-1 text-xs sm:text-sm font-bold text-charcoal select-none whitespace-nowrap">
+                <Calendar size={15} className="text-sage shrink-0" />
+                <span>{salarySummary?.period || selectedMonth}</span>
+              </div>
+
+              <button
+                onClick={goToNextMonth}
+                disabled={selectedMonth >= currentMonthStr}
+                title="Next Month"
+                className={`p-1.5 rounded-[8px] transition cursor-pointer ${
+                  selectedMonth >= currentMonthStr
+                    ? 'opacity-30 cursor-not-allowed text-muted-gray'
+                    : 'hover:bg-soft-cream text-charcoal'
+                }`}
+              >
+                <ChevronRight size={16} />
+              </button>
+
+              {!isCurrentMonth && (
+                <button
+                  onClick={resetToCurrentMonth}
+                  className="ml-1 px-2.5 py-1 rounded-[8px] bg-sage text-white text-[11px] font-bold hover:bg-sage-hover transition cursor-pointer shadow-2xs"
+                >
+                  Current
+                </button>
+              )}
+            </div>
+
+            {!isCurrentMonth && (
+              <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-[8px] bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold">
+                Historical Month
+              </span>
+            )}
+
+            {salarySummary?.isFinalized && (
+              <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-[8px] bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold gap-1">
+                <CheckCircle2 size={13} className="text-emerald-600" /> Finalized
+              </span>
+            )}
+          </div>
+        }
       />
 
       {/* Technician Selector Tabs — only visible to Manager */}
@@ -439,54 +492,16 @@ export default function TechnicianDailySummary() {
                   <Target size={22} />
                 </div>
                 <div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <h3 className="text-base sm:text-lg font-bold text-white tracking-wide">
                       Monthly Target Performance
                     </h3>
-
-                    {/* Period / Month Navigation Controls */}
-                    <div className="inline-flex items-center gap-1 bg-slate-800/90 rounded-[10px] p-1 border border-slate-700 shadow-xs">
-                      <button
-                        onClick={goToPrevMonth}
-                        title="Previous Month"
-                        className="p-1 rounded-[6px] hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
-                      >
-                        <ChevronLeft size={15} />
-                      </button>
-                      <span className="text-xs px-2 text-slate-200 font-mono font-semibold whitespace-nowrap">
-                        {salarySummary?.period || selectedMonth}
-                      </span>
-                      <button
-                        onClick={goToNextMonth}
-                        disabled={selectedMonth >= currentMonthStr}
-                        title="Next Month"
-                        className={`p-1 rounded-[6px] transition cursor-pointer ${
-                          selectedMonth >= currentMonthStr
-                            ? 'opacity-30 cursor-not-allowed text-slate-600'
-                            : 'hover:bg-slate-700 text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        <ChevronRight size={15} />
-                      </button>
-                      {!isCurrentMonth && (
-                        <button
-                          onClick={resetToCurrentMonth}
-                          className="px-2 py-0.5 rounded-[6px] bg-sage/20 hover:bg-sage/30 text-sage text-[10px] font-bold transition cursor-pointer ml-1"
-                        >
-                          Current
-                        </button>
-                      )}
-                    </div>
-
+                    <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                      {salarySummary?.period || selectedMonth}
+                    </span>
                     {!isCurrentMonth && (
-                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-900/60 text-indigo-200 border border-indigo-700 font-semibold tracking-wide">
-                        Historical Month
-                      </span>
-                    )}
-
-                    {salarySummary?.isFinalized && (
-                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700 font-semibold flex items-center gap-1">
-                        <CheckCircle2 size={11} /> Locked Snapshot
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-900/60 text-indigo-200 border border-indigo-700 font-medium">
+                        Archive
                       </span>
                     )}
                   </div>
