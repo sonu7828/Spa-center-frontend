@@ -29,6 +29,16 @@ export default function RecordPenaltyModal({
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Lock background body scroll when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
   // Fetch live standard rules on open
   useEffect(() => {
     if (!isOpen) return;

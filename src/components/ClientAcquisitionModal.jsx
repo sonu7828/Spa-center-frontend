@@ -76,6 +76,16 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
   // Track if client was already created (for retry-safe flow)
   const [savedClientId, setSavedClientId] = useState(null);
 
+  // Lock background body scroll when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
   // Reset or initialize when opened
   useEffect(() => {
     if (isOpen) {
