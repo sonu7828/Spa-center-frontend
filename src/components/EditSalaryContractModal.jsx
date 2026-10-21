@@ -177,7 +177,7 @@ export default function EditSalaryContractModal({
               </h3>
               <p className="text-xs text-muted-gray">
                 {isManager
-                  ? `Set guaranteed monthly fixed salary for ${staff.name || staff.email}`
+                  ? `Set monthly fixed salary for ${staff.name || staff.email}`
                   : `Configure Mode A (Fixed Baseline) vs Mode B (Commission Tier) for ${staff.name || staff.email}`}
                 {isMarketer && <span className="ml-1 text-[11px] font-semibold text-[#6D28D9] bg-[#EDE9FE] px-2 py-0.5 rounded-full">Marketer</span>}
                 {isManager && <span className="ml-1 text-[11px] font-semibold text-slate-800 bg-slate-200 px-2 py-0.5 rounded-full">Salaried Manager</span>}
@@ -220,7 +220,7 @@ export default function EditSalaryContractModal({
                   </span>
                 </div>
                 <p className="text-xs text-muted-gray leading-relaxed">
-                  Managers hold executive administrative authority and do not perform billable salon services. They receive a <strong>100% guaranteed monthly fixed salary</strong> with <strong>0% service commission</strong>.
+                  Managers salon services handle nahi karte, isliye inki <strong>monthly fixed salary</strong> hoti hai (0% service commission).
                 </p>
               </div>
 
@@ -244,7 +244,7 @@ export default function EditSalaryContractModal({
                   </span>
                 </div>
                 <span className="text-[11px] text-muted-gray mt-1 block">
-                  Authoritative flat compensation paid to {staff.name || staff.email} each month.
+                  Monthly fixed salary for {staff.name || staff.email}.
                 </span>
               </div>
 
@@ -252,14 +252,14 @@ export default function EditSalaryContractModal({
               <div className="p-4 rounded-[14px] bg-sage-soft border border-sage/20 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-medium text-muted-gray block">
-                    Guaranteed Monthly Payout
+                    Monthly Fixed Salary
                   </span>
                   <span className="text-lg font-black text-charcoal font-mono">
                     {fixedNum.toLocaleString()} FCFA
                   </span>
                 </div>
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-white border border-sage/30 text-sage-hover">
-                  100% Guaranteed Floor
+                  Fixed Monthly Salary
                 </span>
               </div>
             </div>
@@ -303,8 +303,8 @@ export default function EditSalaryContractModal({
                   />
                   <span className="text-[10px] text-muted-gray">
                     {isMarketer
-                      ? 'Guaranteed base retainer if referred sales < target (0 for pure commission)'
-                      : 'Guaranteed floor payout if revenue < target'}
+                      ? 'Base retainer if referred sales < target (0 for pure commission)'
+                      : 'Fixed salary if sales are below target'}
                   </span>
                 </div>
 
@@ -432,7 +432,7 @@ export default function EditSalaryContractModal({
                     <span className="text-sm font-bold text-charcoal font-mono">
                       {fixedNum.toLocaleString()} FCFA
                     </span>
-                    <span className="text-[10px] text-muted-gray block mt-0.5">Guaranteed safety net baseline</span>
+                    <span className="text-[10px] text-muted-gray block mt-0.5">Fixed salary if target not reached</span>
                   </div>
 
                   <div className="bg-white p-3 rounded-[10px] border border-sage/40">
@@ -441,7 +441,7 @@ export default function EditSalaryContractModal({
                       {simulatedPayoutAtTarget.toLocaleString()} FCFA
                     </span>
                     <span className="text-[10px] text-sage font-medium block mt-0.5">
-                      +{simulatedGain.toLocaleString()} FCFA gain over fixed baseline!
+                      +{simulatedGain.toLocaleString()} FCFA gain over fixed salary!
                     </span>
                   </div>
                 </div>
@@ -450,7 +450,7 @@ export default function EditSalaryContractModal({
                   <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-900 text-[11px] rounded-[8px] flex items-start gap-2">
                     <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
                     <span>
-                      <strong>Advisory Warning:</strong> Base pay ({baseNum.toLocaleString()}) + target commission ({simulatedCommAtTarget.toLocaleString()}) = {(baseNum + simulatedCommAtTarget).toLocaleString()} FCFA, which is lower than the fixed salary ({fixedNum.toLocaleString()} FCFA). The employee will receive the guaranteed floor of {fixedNum.toLocaleString()} FCFA.
+                      <strong>Advisory Warning:</strong> Base pay ({baseNum.toLocaleString()}) + target commission ({simulatedCommAtTarget.toLocaleString()}) = {(baseNum + simulatedCommAtTarget).toLocaleString()} FCFA, which is lower than the fixed salary ({fixedNum.toLocaleString()} FCFA). The employee will receive the fixed salary of {fixedNum.toLocaleString()} FCFA.
                     </span>
                   </div>
                 )}

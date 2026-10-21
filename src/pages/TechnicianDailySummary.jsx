@@ -525,7 +525,7 @@ export default function TechnicianDailySummary() {
                 ) : (
                   <div className="px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
                     <Lock size={14} className="text-amber-400" />
-                    <span>Mode A · Guaranteed Fixed Salary</span>
+                    <span>Mode A · Fixed Salary</span>
                   </div>
                 )}
 
@@ -611,7 +611,7 @@ export default function TechnicianDailySummary() {
                 <div>
                   <div className="text-[10px] text-slate-400 uppercase font-semibold">Contract Terms</div>
                   <div className="text-slate-200 font-bold">
-                    {sCommissionRate}% comm · {sFixedSalary.toLocaleString()} floor
+                    {sCommissionRate}% comm · {sFixedSalary.toLocaleString()} fixed
                   </div>
                 </div>
               </div>
@@ -751,7 +751,7 @@ export default function TechnicianDailySummary() {
           {salarySummary ? (
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-gray">
-                {!sIsModeB ? 'Guaranteed Fixed Salary' : 'Base Salary'}
+                {!sIsModeB ? 'Fixed Salary' : 'Base Salary'}
               </span>
               <span className="font-semibold text-charcoal">
                 {!sIsModeB
@@ -782,7 +782,7 @@ export default function TechnicianDailySummary() {
                   </span>
                 </div>
                 <p className="text-[11px] text-amber-700 leading-relaxed">
-                  Locked until monthly target ({sMonthlyTarget.toLocaleString()} FCFA) is achieved. Guaranteed flat salary of {sFixedSalary.toLocaleString()} FCFA applies.
+                  Locked until monthly target ({sMonthlyTarget.toLocaleString()} FCFA) is achieved. Fixed salary of {sFixedSalary.toLocaleString()} FCFA applies.
                 </p>
               </div>
             ) : (
@@ -846,9 +846,9 @@ export default function TechnicianDailySummary() {
               {salarySummary && (
                 <span className="text-[11px] text-muted-gray">
                   {sFloorProtectionApplied
-                    ? `Protected by guaranteed minimum floor (${sFixedSalary.toLocaleString()} FCFA)`
+                    ? `Minimum fixed salary (${sFixedSalary.toLocaleString()} FCFA)`
                     : !sIsModeB
-                    ? `Guaranteed Flat Baseline (Target not yet met)`
+                    ? `Fixed Salary (Target not yet met)`
                     : `Base + Unlocked Net Commission`}
                 </span>
               )}

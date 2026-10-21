@@ -1274,7 +1274,7 @@ export default function Dashboard() {
               </span>
             </div>
             <p className="text-xs text-muted-gray mt-0.5">
-              Monthly sales quota tracking, Mode A (Floor) vs Mode B (Commission) live status
+              Monthly sales quota tracking: Mode A (Fixed Salary) vs Mode B (Commission)
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1323,7 +1323,7 @@ export default function Dashboard() {
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                          <Lock size={11} /> Mode A Floor
+                          <Lock size={11} /> Mode A (Fixed Salary)
                         </span>
                       )}
                     </div>

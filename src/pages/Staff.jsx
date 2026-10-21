@@ -539,7 +539,7 @@ export default function Staff() {
                             </span>
                           </div>
                           <span className="text-[10px] text-muted-gray">
-                            Rate: {u.salaryContract.commissionRate}% · Base: {Number(u.salaryContract.basePay).toLocaleString()} · Floor: {Number(u.salaryContract.fixedSalary).toLocaleString()}
+                            Rate: {u.salaryContract.commissionRate}% · Base: {Number(u.salaryContract.basePay).toLocaleString()} · Fixed: {Number(u.salaryContract.fixedSalary).toLocaleString()}
                           </span>
                         </div>
                       ) : (
@@ -670,7 +670,7 @@ export default function Staff() {
                         Target: {Number(u.salaryContract.monthlyTarget).toLocaleString()} FCFA ({u.salaryContract.targetScope === 'SPA_TOTAL' ? 'Spa' : 'Indiv'})
                       </span>
                       <span className="text-[10px] text-emerald-800 font-medium">
-                        {u.salaryContract.commissionRate}% comm · Base: {Number(u.salaryContract.basePay).toLocaleString()} · Floor: {Number(u.salaryContract.fixedSalary).toLocaleString()}
+                        {u.salaryContract.commissionRate}% comm · Base: {Number(u.salaryContract.basePay).toLocaleString()} · Fixed: {Number(u.salaryContract.fixedSalary).toLocaleString()}
                       </span>
                     </div>
                   </div>
