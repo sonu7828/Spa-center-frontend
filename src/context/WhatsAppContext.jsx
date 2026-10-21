@@ -196,13 +196,42 @@ export function WhatsAppProvider({ children }) {
     [isAuthenticated, hasAccess]
   );
 
+  const [retentionDays, setRetentionDays] = useState(30);
+
+  // Fetch retention policy
+  const fetchRetentionSettings = useCallback(async () => {
+    if (!isAuthenticated || !hasAccess) return;
+    try {
+      const res = await whatsappApi.getRetentionSettings();
+      if (res?.data?.retentionDays) {
+        setRetentionDays(res.data.retentionDays);
+      }
+    } catch (e) {
+      // fallback to 30
+    }
+  }, [isAuthenticated, hasAccess]);
+
+  // Update auto-cleanup retention days
+  const updateRetention = useCallback(async (days) => {
+    try {
+      const res = await whatsappApi.updateRetentionSettings(days);
+      if (res?.data?.retentionDays) {
+        setRetentionDays(res.data.retentionDays);
+      }
+      return res;
+    } catch (e) {
+      throw new Error(e.message || 'Failed to update retention policy');
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     if (hasAccess) {
       fetchAutomations();
       fetchLogs();
+      fetchRetentionSettings();
     }
-  }, [hasAccess, fetchAutomations, fetchLogs]);
+  }, [hasAccess, fetchAutomations, fetchLogs, fetchRetentionSettings]);
 
   // 3. Update automation configuration (Manager only)
   const updateAutomation = useCallback(
@@ -394,6 +423,8 @@ export function WhatsAppProvider({ children }) {
     toggleAutomation,
     updateTemplate,
     fetchLogs,
+    retentionDays,
+    updateRetention,
     purgeOldLogs,
     retryMessage,
     sendMessage,

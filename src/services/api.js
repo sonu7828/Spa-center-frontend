@@ -471,6 +471,12 @@ export const whatsappApi = {
       method: 'POST',
       body: JSON.stringify({ days }),
     }),
+  getRetentionSettings: () => apiRequest('/whatsapp/settings/retention'),
+  updateRetentionSettings: (days) =>
+    apiRequest('/whatsapp/settings/retention', {
+      method: 'PATCH',
+      body: JSON.stringify({ days }),
+    }),
   processReminders: (data = {}) =>
     apiRequest('/whatsapp/triggers/process-reminders', {
       method: 'POST',
