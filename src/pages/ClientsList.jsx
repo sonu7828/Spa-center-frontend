@@ -9,9 +9,9 @@
  * Source: WIREFRAME.md Screen 02, DESIGN-SYSTEM.md §17
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Search, Eye, RotateCcw, UserX, TriangleAlert, X } from 'lucide-react';
+import { UserPlus, Search, Eye, RotateCcw, UserX, TriangleAlert, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -68,6 +68,40 @@ export default function ClientsList() {
       );
     });
   }, [clients, search, statusFilter, user]);
+
+  // ── 50/50 Pagination Logic ──
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset to first page when search query or status filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  const totalFiltered = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
+  const endIndex = Math.min(startIndex + PAGE_SIZE, totalFiltered);
+
+  const paginatedClients = useMemo(
+    () => filtered.slice(startIndex, endIndex),
+    [filtered, startIndex, endIndex]
+  );
+
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (safeCurrentPage <= 3) {
+      return [1, 2, 3, 4, '...', totalPages];
+    }
+    if (safeCurrentPage >= totalPages - 2) {
+      return [1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', safeCurrentPage - 1, safeCurrentPage, safeCurrentPage + 1, '...', totalPages];
+  }, [safeCurrentPage, totalPages]);
 
   return (
     <div>
@@ -161,7 +195,7 @@ export default function ClientsList() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((client) => {
+              {paginatedClients.map((client) => {
                 const isInactive = client.status === 'INACTIVE' || client.isActive === false;
                 return (
                   <tr
@@ -235,7 +269,7 @@ export default function ClientsList() {
 
         {/* Tablet & Mobile Stacked Cards View (No horizontal scroll) */}
         <div className="block md:hidden divide-y divide-border/60">
-          {filtered.map((client) => {
+          {paginatedClients.map((client) => {
             const isInactive = client.status === 'INACTIVE' || client.isActive === false;
             return (
               <div
@@ -323,9 +357,74 @@ export default function ClientsList() {
         </div>
 
         {/* Empty State */}
-        {filtered.length === 0 && (
+        {totalFiltered === 0 && (
           <div className="p-8 text-center">
             <p className="text-sm text-muted-gray">No clients found.</p>
+          </div>
+        )}
+
+        {/* ── 50/50 Pagination Bar ── */}
+        {totalFiltered > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-border bg-soft-cream/30 text-xs">
+            <div className="text-muted-gray font-medium">
+              Showing <span className="font-semibold text-charcoal">{startIndex + 1}</span> to{' '}
+              <span className="font-semibold text-charcoal">{endIndex}</span> of{' '}
+              <span className="font-semibold text-charcoal">{totalFiltered}</span> clients
+              {totalFiltered !== totalCount && (
+                <span className="text-muted-gray/70 ml-1">
+                  (filtered from {totalCount} total)
+                </span>
+              )}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-border bg-white text-charcoal hover:bg-soft-cream disabled:opacity-40 disabled:cursor-not-allowed font-medium transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  title="Previous Page"
+                >
+                  <ChevronLeft size={14} />
+                  <span className="hidden sm:inline">Previous</span>
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  {pageNumbers.map((p, idx) =>
+                    p === '...' ? (
+                      <span key={`dots-${idx}`} className="px-1.5 text-muted-gray font-bold select-none">
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setCurrentPage(p)}
+                        className={`min-w-[32px] h-[32px] rounded-[8px] text-xs font-bold transition cursor-pointer flex items-center justify-center ${
+                          safeCurrentPage === p
+                            ? 'bg-charcoal text-white shadow-xs'
+                            : 'bg-white border border-border/80 text-muted-gray hover:text-charcoal hover:bg-soft-cream'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-border bg-white text-charcoal hover:bg-soft-cream disabled:opacity-40 disabled:cursor-not-allowed font-medium transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  title="Next Page"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
