@@ -321,16 +321,6 @@ export default function Dashboard() {
         <PageHeader
           title="Marketer Dashboard"
           subtitle={`Welcome, ${user?.name} · Client Acquisition & Referral Tracking`}
-          action={
-            <Button
-              variant="primary"
-              onClick={() => setShowAcquisitionModal(true)}
-              className="bg-[#6D28D9] hover:bg-[#5B21B6] text-white border-none shadow-sm text-xs font-bold"
-            >
-              <UserPlus size={15} strokeWidth={2.2} />
-              Add New Client
-            </Button>
-          }
         />
 
         {acquisitionSuccess && (
