@@ -220,7 +220,7 @@ export default function EditSalaryContractModal({
                   </span>
                 </div>
                 <p className="text-xs text-muted-gray leading-relaxed">
-                  Managers salon services handle nahi karte, isliye inki <strong>monthly fixed salary</strong> hoti hai (0% service commission).
+                  Managers do not perform salon services. They receive a <strong>fixed monthly salary</strong> with <strong>0% service commission</strong>.
                 </p>
               </div>
 
@@ -368,7 +368,7 @@ export default function EditSalaryContractModal({
                           Referred Clients Sales (Only Their Clients)
                         </span>
                         <span className="text-[10px] text-muted-gray">
-                          Marketer ka target sirf unke laaye hue clients ke kharch se count hoga
+                          Quota tracks revenue generated only by clients acquired by this marketer
                         </span>
                       </div>
                     </div>
