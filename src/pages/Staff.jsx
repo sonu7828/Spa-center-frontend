@@ -494,105 +494,105 @@ export default function Staff() {
               </tr>
             </thead>
             <tbody>
-              {activeUsers.map((u) => (
-                <tr key={u.id} className="border-b border-border/40 last:border-b-0 hover:bg-soft-cream/30 transition-colors">
-                  <td className="px-5 py-3.5 text-sm font-semibold text-charcoal">{u.name}</td>
-                  <td className="px-5 py-3.5 text-sm text-muted-gray">{u.email}</td>
-                  <td className="px-5 py-3.5 text-sm text-charcoal font-medium">{u.phone || '—'}</td>
-                  <td className="px-5 py-3.5">
-                    {(() => {
-                      const isMarketer = u.role === 'marketer' || (u.role === 'technician' && (u.specialties || []).includes('Marketer'));
-                      const displayRole = isMarketer ? 'marketer' : u.role;
-                      return (
-                        <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize ${roleBadgeStyles[displayRole] || 'bg-soft-cream text-charcoal border-border'}`}>
-                          {displayRole}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {u.salaryContract && (Number(u.salaryContract.monthlyTarget) > 0 || Number(u.salaryContract.fixedSalary) > 0) ? (
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1.5 text-xs font-semibold text-charcoal">
-                          <span className="text-emerald-700 font-bold">
-                            {Number(u.salaryContract.monthlyTarget).toLocaleString()} FCFA
-                          </span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/60 font-semibold">
-                            {u.salaryContract.targetScope === 'SPA_TOTAL' ? 'Spa Total' : 'Target'}
+              {activeUsers.map((u) => {
+                const isMarketer = u.role === 'marketer' || (u.role === 'technician' && (u.specialties || []).includes('Marketer'));
+                const displayRole = isMarketer ? 'marketer' : u.role;
+                return (
+                  <tr key={u.id} className="border-b border-border/40 last:border-b-0 hover:bg-soft-cream/30 transition-colors">
+                    <td className="px-5 py-3.5 text-sm font-semibold text-charcoal">{u.name}</td>
+                    <td className="px-5 py-3.5 text-sm text-muted-gray">{u.email}</td>
+                    <td className="px-5 py-3.5 text-sm text-charcoal font-medium">{u.phone || '—'}</td>
+                    <td className="px-5 py-3.5">
+                      <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize ${roleBadgeStyles[displayRole] || 'bg-soft-cream text-charcoal border-border'}`}>
+                        {displayRole}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {u.salaryContract && (Number(u.salaryContract.monthlyTarget) > 0 || Number(u.salaryContract.fixedSalary) > 0) ? (
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-charcoal">
+                            <span className="text-emerald-700 font-bold">
+                              {Number(u.salaryContract.monthlyTarget).toLocaleString()} FCFA
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/60 font-semibold">
+                              {u.salaryContract.targetScope === 'SPA_TOTAL' ? 'Spa Total' : 'Target'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-muted-gray">
+                            Rate: {u.salaryContract.commissionRate}% · Base: {Number(u.salaryContract.basePay).toLocaleString()} · Floor: {Number(u.salaryContract.fixedSalary).toLocaleString()}
                           </span>
                         </div>
-                        <span className="text-[10px] text-muted-gray">
-                          Rate: {u.salaryContract.commissionRate}% · Base: {Number(u.salaryContract.basePay).toLocaleString()} · Floor: {Number(u.salaryContract.fixedSalary).toLocaleString()}
+                      ) : (
+                        <span className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60">
+                          Pending Contract
                         </span>
-                      </div>
-                    ) : (
-                      <span className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60">
-                        Pending Contract
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {u.specialties?.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {u.specialties.map((s) => {
-                          const displayName = s === 'Massage' ? 'Body Massage' : s;
-                          return (
-                            <span
-                              key={displayName}
-                              className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-soft-cream text-charcoal border border-border"
-                            >
-                              {displayName}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-gray">—</span>
-                    )}
-                  </td>
-                  {isManager && (
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => setSalaryContractStaff(u)}
-                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer flex items-center gap-1"
-                          title="Target & Salary Contract Settings"
-                        >
-                          <Calculator size={12} className="text-emerald-700" /> Contract
-                        </button>
-                        <button
-                          onClick={() => openEditModal(u)}
-                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer flex items-center gap-1"
-                          title="Edit"
-                        >
-                          <Pencil size={12} /> Edit
-                        </button>
-                        <button
-                          onClick={() => openResetModal(u)}
-                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center gap-1"
-                          title="Reset Password"
-                        >
-                          <RotateCcw size={11} /> Reset PW
-                        </button>
-                        <button
-                          onClick={() => setPenaltyModalStaff(u)}
-                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-rose-700 bg-rose-50 border border-rose-200/70 hover:bg-rose-100 transition-all cursor-pointer flex items-center gap-1"
-                          title="Record Disciplinary Penalty"
-                        >
-                          <ShieldAlert size={12} className="text-rose-600" /> Penalty
-                        </button>
-                        <button
-                          onClick={() => deactivateUser(u.id)}
-                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center gap-1"
-                          title="Deactivate"
-                        >
-                          <UserX size={12} /> Deactivate
-                        </button>
-                      </div>
+                      )}
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td className="px-5 py-3.5">
+                      {u.specialties?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {u.specialties.map((s) => {
+                            const displayName = s === 'Massage' ? 'Body Massage' : s;
+                            return (
+                              <span
+                                key={displayName}
+                                className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-soft-cream text-charcoal border border-border"
+                              >
+                                {displayName}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-gray">—</span>
+                      )}
+                    </td>
+                    {isManager && (
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setSalaryContractStaff(u)}
+                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer flex items-center gap-1"
+                            title="Target & Salary Contract Settings"
+                          >
+                            <Calculator size={12} className="text-emerald-700" /> Contract
+                          </button>
+                          <button
+                            onClick={() => openEditModal(u)}
+                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer flex items-center gap-1"
+                            title="Edit"
+                          >
+                            <Pencil size={12} /> Edit
+                          </button>
+                          <button
+                            onClick={() => openResetModal(u)}
+                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center gap-1"
+                            title="Reset Password"
+                          >
+                            <RotateCcw size={11} /> Reset PW
+                          </button>
+                          {!isMarketer && (
+                            <button
+                              onClick={() => setPenaltyModalStaff(u)}
+                              className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-rose-700 bg-rose-50 border border-rose-200/70 hover:bg-rose-100 transition-all cursor-pointer flex items-center gap-1"
+                              title="Record Disciplinary Penalty"
+                            >
+                              <ShieldAlert size={12} className="text-rose-600" /> Penalty
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deactivateUser(u.id)}
+                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center gap-1"
+                            title="Deactivate"
+                          >
+                            <UserX size={12} /> Deactivate
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -666,13 +666,15 @@ export default function Staff() {
                   >
                     <RotateCcw size={11} /> Reset PW
                   </button>
-                  <button
-                    onClick={() => setPenaltyModalStaff(u)}
-                    className="flex-1 min-w-[75px] h-[36px] px-2 rounded-[8px] text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200/70 hover:bg-rose-100 transition-all cursor-pointer flex items-center justify-center gap-1"
-                    title="Record Penalty"
-                  >
-                    <ShieldAlert size={12} className="text-rose-600" /> Penalty
-                  </button>
+                  {!isMarketer && (
+                    <button
+                      onClick={() => setPenaltyModalStaff(u)}
+                      className="flex-1 min-w-[75px] h-[36px] px-2 rounded-[8px] text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200/70 hover:bg-rose-100 transition-all cursor-pointer flex items-center justify-center gap-1"
+                      title="Record Penalty"
+                    >
+                      <ShieldAlert size={12} className="text-rose-600" /> Penalty
+                    </button>
+                  )}
                   <button
                     onClick={() => deactivateUser(u.id)}
                     className="flex-1 min-w-[65px] h-[36px] px-2 rounded-[8px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center justify-center gap-1"
@@ -1028,7 +1030,10 @@ export default function Staff() {
             setPenaltyModalStaff(null);
           }}
           defaultStaffId={penaltyModalStaff?.id}
-          staffList={allUsers.filter((u) => u.active !== false)}
+          staffList={allUsers.filter((u) => {
+            const isMarketer = u.role === 'marketer' || (u.role === 'technician' && (u.specialties || []).includes('Marketer'));
+            return u.active !== false && !isMarketer;
+          })}
         />
       )}
 
