@@ -509,9 +509,25 @@ export default function Staff() {
                     </td>
                     <td className="px-5 py-3.5">
                       {u.role === 'manager' ? (
-                        <span className="inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                          Management
-                        </span>
+                        Number(u.salaryContract?.fixedSalary) > 0 ? (
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-charcoal">
+                              <span className="text-emerald-700 font-bold">
+                                {Number(u.salaryContract.fixedSalary).toLocaleString()} FCFA
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                                Fixed Salary
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-muted-gray">
+                              Management Remuneration
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60">
+                            Pending Salary
+                          </span>
+                        )
                       ) : u.salaryContract && (Number(u.salaryContract.monthlyTarget) > 0 || Number(u.salaryContract.fixedSalary) > 0) ? (
                         <div className="flex flex-col gap-0.5">
                           <div className="flex items-center gap-1.5 text-xs font-semibold text-charcoal">
@@ -554,15 +570,13 @@ export default function Staff() {
                     {isManager && (
                       <td className="px-5 py-3.5">
                         <div className="flex items-center justify-end gap-1.5">
-                          {u.role !== 'manager' && (
-                            <button
-                              onClick={() => setSalaryContractStaff(u)}
-                              className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer flex items-center gap-1"
-                              title="Target & Salary Contract Settings"
-                            >
-                              <Calculator size={12} className="text-emerald-700" /> Contract
-                            </button>
-                          )}
+                          <button
+                            onClick={() => setSalaryContractStaff(u)}
+                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer flex items-center gap-1"
+                            title={u.role === 'manager' ? 'Set Monthly Fixed Salary' : 'Target & Salary Contract Settings'}
+                          >
+                            <Calculator size={12} className="text-emerald-700" /> Contract
+                          </button>
                           <button
                             onClick={() => openEditModal(u)}
                             className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer flex items-center gap-1"
@@ -637,9 +651,18 @@ export default function Staff() {
                 )}
 
                 {u.role === 'manager' ? (
-                  <span className="inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                    Management
-                  </span>
+                  Number(u.salaryContract?.fixedSalary) > 0 ? (
+                    <div className="px-3 py-2 rounded-[9px] bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-[11px] text-charcoal font-bold block">
+                          Salary: {Number(u.salaryContract.fixedSalary).toLocaleString()} FCFA
+                        </span>
+                        <span className="text-[10px] text-muted-gray font-medium">
+                          Monthly Fixed Remuneration (Management)
+                        </span>
+                      </div>
+                    </div>
+                  ) : null
                 ) : u.salaryContract && (Number(u.salaryContract.monthlyTarget) > 0 || Number(u.salaryContract.fixedSalary) > 0) ? (
                   <div className="px-3 py-2 rounded-[9px] bg-emerald-50/80 border border-emerald-200/70 flex items-center justify-between text-xs">
                     <div>
@@ -655,14 +678,12 @@ export default function Staff() {
 
                 {isManager && (
                   <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border/40">
-                    {u.role !== 'manager' && (
-                      <button
-                        onClick={() => setSalaryContractStaff(u)}
-                        className="flex-1 min-w-[85px] h-[36px] px-2 rounded-[8px] text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer flex items-center justify-center gap-1"
-                      >
-                        <Calculator size={12} className="text-emerald-700" /> Contract
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setSalaryContractStaff(u)}
+                      className="flex-1 min-w-[85px] h-[36px] px-2 rounded-[8px] text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Calculator size={12} className="text-emerald-700" /> Contract
+                    </button>
                     <button
                       onClick={() => openEditModal(u)}
                       className="flex-1 min-w-[70px] h-[36px] px-2 rounded-[8px] text-xs font-semibold text-charcoal bg-soft-cream border border-border hover:bg-sage-soft transition-all cursor-pointer flex items-center justify-center gap-1"
