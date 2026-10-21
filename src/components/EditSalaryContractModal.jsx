@@ -160,7 +160,7 @@ export default function EditSalaryContractModal({
               <input
                 type="number"
                 min="0"
-                step="10000"
+                step="any"
                 value={monthlyTarget}
                 onChange={(e) => setMonthlyTarget(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
@@ -181,7 +181,7 @@ export default function EditSalaryContractModal({
               <input
                 type="number"
                 min="0"
-                step="5000"
+                step="any"
                 value={fixedSalary}
                 onChange={(e) => setFixedSalary(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
@@ -202,7 +202,7 @@ export default function EditSalaryContractModal({
               <input
                 type="number"
                 min="0"
-                step="5000"
+                step="any"
                 value={basePay}
                 onChange={(e) => setBasePay(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
@@ -224,7 +224,7 @@ export default function EditSalaryContractModal({
                 type="number"
                 min="0"
                 max="100"
-                step="1"
+                step="any"
                 value={commissionRate}
                 onChange={(e) => setCommissionRate(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-[12px] border border-border bg-white text-xs sm:text-sm font-semibold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
