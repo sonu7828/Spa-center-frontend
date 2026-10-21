@@ -27,7 +27,7 @@ const MANAGER_ROUTES = [
   '/', '/dashboard', '/clients', '/clients/new', '/clients/:id',
   '/appointments', '/appointments/new', '/appointments/:id',
   '/appointments/:id/late', '/appointments/:id/no-show', '/appointments/:id/close',
-  '/stock', '/technicians/daily', '/referrals', '/rebooking', '/daily-close',
+  '/stock', '/technicians/daily', '/summary', '/referrals', '/rebooking', '/daily-close',
   '/staff', '/services', '/cleaning-records', '/loyalty-settings', '/social-media',
   '/whatsapp-automations', '/client-feedback', '/invoices', '/products',
   '/retail', '/shared-work', '/expenses', '/expenses/new', '/attendance', '/attendance/manager',
@@ -41,14 +41,14 @@ const RECEPTION_ROUTES = [
   '/referrals', '/rebooking', '/invoices', '/expenses', '/expenses/new', '/attendance',
   '/whatsapp-automations', '/client-feedback',
   '/services', '/products', '/retail', '/stock',
-  '/staff', '/attendance/manager', '/technicians/daily', '/shared-work',
+  '/staff', '/attendance/manager', '/technicians/daily', '/summary', '/shared-work',
   '/cleaning-records', '/loyalty-settings', '/social-media', '/daily-close',
 ];
 
 const TECHNICIAN_ROUTES = [
   '/', '/dashboard', '/appointments', '/appointments/:id', '/appointments/:id/close',
   '/clients', '/clients/new', '/clients/:id', '/services', '/invoices',
-  '/technicians/daily', '/shared-work', '/attendance',
+  '/technicians/daily', '/summary', '/shared-work', '/attendance',
 ];
 
 export const MARKETER_ROUTES = [
@@ -58,6 +58,7 @@ export const MARKETER_ROUTES = [
   '/clients/new',
   '/clients/:id',
   '/technicians/daily',
+  '/summary',
 ];
 
 const CLEANER_ROUTES = [

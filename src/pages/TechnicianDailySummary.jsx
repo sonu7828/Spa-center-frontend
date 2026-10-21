@@ -22,7 +22,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   User,
   Award,
@@ -52,6 +52,7 @@ import { reportsApi, penaltiesApi, commissionsApi } from '../services/api';
 
 export default function TechnicianDailySummary() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, allUsers } = useAuth();
   const { completedServices, techRevenue } = useOperations();
   const { clients } = useClients();
@@ -67,10 +68,32 @@ export default function TechnicianDailySummary() {
     (u) => u.role === 'technician' && u.active !== false
   );
 
+  const queryTechId = searchParams.get('technicianId') || searchParams.get('id');
+  const queryTechName = searchParams.get('name') || searchParams.get('technician');
+
+  // Match technician requested via URL query params
+  const matchedQueryTech = !isTechnicianRole && !isMarketer
+    ? dynamicTechnicians.find(
+        (t) =>
+          (queryTechId && String(t.id) === String(queryTechId)) ||
+          (queryTechName && t.name?.toLowerCase().trim() === queryTechName.toLowerCase().trim())
+      )
+    : null;
+
   const initialName = (isTechnicianRole || isMarketer)
     ? user?.name || 'Staff'
-    : dynamicTechnicians[0]?.name || 'Amina';
+    : matchedQueryTech?.name || dynamicTechnicians[0]?.name || 'Amina';
   const [selectedTechName, setSelectedTechName] = useState(initialName);
+
+  // Sync selectedTechName whenever dynamicTechnicians or query parameters change
+  useEffect(() => {
+    if (isTechnicianRole || isMarketer) return;
+    if (matchedQueryTech && matchedQueryTech.name !== selectedTechName) {
+      setSelectedTechName(matchedQueryTech.name);
+    } else if (!selectedTechName && dynamicTechnicians.length > 0) {
+      setSelectedTechName(dynamicTechnicians[0].name);
+    }
+  }, [matchedQueryTech, dynamicTechnicians, isTechnicianRole, isMarketer, selectedTechName]);
 
   // If technician or marketer, lock to their own name
   const effectiveName = (isTechnicianRole || isMarketer)
@@ -321,7 +344,10 @@ export default function TechnicianDailySummary() {
           {dynamicTechnicians.map((tech) => (
             <button
               key={tech.id}
-              onClick={() => setSelectedTechName(tech.name)}
+              onClick={() => {
+                setSelectedTechName(tech.name);
+                setSearchParams({ technicianId: tech.id });
+              }}
               className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-[12px] text-xs sm:text-sm font-medium transition-all duration-150 cursor-pointer flex items-center gap-2 border whitespace-nowrap shrink-0 ${
                 selectedTechName === tech.name
                   ? 'bg-sage text-charcoal font-semibold border-sage shadow-sm'

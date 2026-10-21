@@ -1358,7 +1358,7 @@ export default function Dashboard() {
                       )}
                     </span>
                     <button
-                      onClick={() => navigate('/summary')}
+                      onClick={() => navigate(`/technicians/daily?technicianId=${tech.id}`)}
                       className="font-bold text-sage-hover hover:underline cursor-pointer"
                     >
                       View Summary →

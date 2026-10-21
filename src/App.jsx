@@ -161,6 +161,7 @@ export default function App() {
                             <Route path="appointments/:id/close" element={<CloseService />} />
                             <Route path="stock" element={<Stock />} />
                             <Route path="technicians/daily" element={<TechnicianDailySummary />} />
+                            <Route path="summary" element={<Navigate to="/technicians/daily" replace />} />
                             <Route path="referrals" element={<Referrals />} />
                             <Route path="rebooking" element={<Rebooking />} />
                             <Route path="daily-close" element={<DailyClose />} />
