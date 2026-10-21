@@ -50,6 +50,7 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -92,6 +93,7 @@ export default function WhatsAppAutomations() {
     updateAutomation,
     toggleAutomation,
     fetchLogs,
+    purgeOldLogs,
     retryMessage,
     processReminders,
     triggerDailyClose,
@@ -117,6 +119,11 @@ export default function WhatsAppAutomations() {
   const [processingReminders, setProcessingReminders] = useState(false);
   const [triggeringDailyClose, setTriggeringDailyClose] = useState(false);
   const [retryingLogId, setRetryingLogId] = useState(null);
+
+  // Purge old logs modal state (Manager only)
+  const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [purgeDays, setPurgeDays] = useState(30);
+  const [purgingLogs, setPurgingLogs] = useState(false);
 
   // =========================================================================
   // RBAC GUARD: TECHNICIAN & CLEANER ACCESS DENIED
@@ -203,7 +210,20 @@ export default function WhatsAppAutomations() {
     }
   };
 
-
+  // Purge old logs handler (Manager only)
+  const handlePurgeLogs = async () => {
+    setPurgingLogs(true);
+    try {
+      const res = await purgeOldLogs(purgeDays);
+      const count = res?.data?.deletedCount ?? 0;
+      showNotification(`Successfully cleaned ${count} message logs older than ${purgeDays} days.`);
+      setShowPurgeModal(false);
+    } catch (err) {
+      showNotification(err.message || 'Failed to clean old logs', true);
+    } finally {
+      setPurgingLogs(false);
+    }
+  };
 
   const searchTimeoutRef = useRef(null);
 
@@ -498,15 +518,30 @@ export default function WhatsAppAutomations() {
               <p className="text-xs text-muted-gray">Real-time log of dispatched messages, client recipients, and delivery states</p>
             </div>
 
-            <Button
-              variant="secondary"
-              onClick={() => fetchLogs()}
-              disabled={logsLoading}
-              className="h-8 text-xs px-3 font-semibold cursor-pointer shrink-0"
-            >
-              <RotateCw size={13} className={logsLoading ? 'animate-spin' : ''} />
-              Refresh Logs
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => fetchLogs()}
+                disabled={logsLoading}
+                className="h-8 text-xs px-3 font-semibold cursor-pointer shrink-0"
+              >
+                <RotateCw size={13} className={logsLoading ? 'animate-spin' : ''} />
+                Refresh Logs
+              </Button>
+
+              {isManager && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowPurgeModal(true)}
+                  disabled={logsLoading || purgingLogs}
+                  className="h-8 text-xs px-3 font-semibold cursor-pointer shrink-0 text-rose-700 bg-rose-50/70 hover:bg-rose-100 border border-rose-200"
+                  title="Clean old WhatsApp message logs"
+                >
+                  <Trash2 size={13} className="text-rose-600" />
+                  Clean Old Logs
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Filters Bar */}
@@ -726,6 +761,100 @@ export default function WhatsAppAutomations() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Purge Old Message Logs Confirmation Modal (Manager Only) ── */}
+      {showPurgeModal && (
+        <div className="fixed inset-0 bg-charcoal/40 backdrop-blur-xs z-[70] flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-border rounded-[18px] max-w-md w-full shadow-2xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100 shrink-0">
+                  <Trash2 size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-charcoal">Clean Old Message Logs</h3>
+                  <p className="text-xs text-muted-gray">Manage log retention and optimize database storage</p>
+                </div>
+              </div>
+              <button
+                onClick={() => !purgingLogs && setShowPurgeModal(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-muted-gray hover:text-charcoal hover:bg-black/5 transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-[12px] bg-amber-50/70 border border-amber-200/70 text-xs text-amber-900 space-y-1">
+              <span className="font-bold flex items-center gap-1.5">
+                <ShieldCheck size={14} className="text-amber-700" />
+                Automatic Daily Cleanup Active
+              </span>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                System har raat 12:00 baje 30 din se purane logs automatically delete kar deta hai. Agar aapko turant data saaf karna hai, toh niche se timeframe select karein.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-charcoal">
+                Delete Logs Older Than:
+              </label>
+              <div className="grid grid-cols-2 gap-2.5">
+                {[
+                  { days: 15, label: '15 Days', desc: 'Aggressive Cleanup' },
+                  { days: 30, label: '30 Days', desc: 'Recommended', badge: 'Standard' },
+                  { days: 60, label: '60 Days', desc: '2 Months Retention' },
+                  { days: 90, label: '90 Days', desc: 'Quarterly Retention' },
+                ].map((opt) => (
+                  <button
+                    key={opt.days}
+                    type="button"
+                    onClick={() => setPurgeDays(opt.days)}
+                    className={`p-3 rounded-[12px] border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      purgeDays === opt.days
+                        ? 'bg-rose-50/70 border-rose-300 ring-1 ring-rose-300'
+                        : 'bg-white border-border hover:bg-soft-cream/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-charcoal">{opt.label}</span>
+                      {opt.badge && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sage-soft text-[#4F6748]">
+                          {opt.badge}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-gray mt-1">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-[11px] text-muted-gray">
+              Pichle <strong>{purgeDays} din</strong> ke saare messages safe rahenge. Sirf usse purana data delete hoga.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border/70">
+              <Button
+                variant="ghost"
+                onClick={() => setShowPurgeModal(false)}
+                disabled={purgingLogs}
+                className="text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <button
+                type="button"
+                onClick={handlePurgeLogs}
+                disabled={purgingLogs}
+                className="px-4 py-2 rounded-[10px] bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-sm cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Trash2 size={13} className={purgingLogs ? 'animate-pulse' : ''} />
+                {purgingLogs ? 'Cleaning...' : `Clean Logs (> ${purgeDays} Days)`}
+              </button>
+            </div>
           </div>
         </div>
       )}

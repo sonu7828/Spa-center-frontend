@@ -466,6 +466,11 @@ export const whatsappApi = {
     const qs = searchParams.toString();
     return apiRequest('/whatsapp/logs' + (qs ? '?' + qs : ''));
   },
+  purgeOldLogs: (days = 30) =>
+    apiRequest('/whatsapp/logs/purge', {
+      method: 'POST',
+      body: JSON.stringify({ days }),
+    }),
   processReminders: (data = {}) =>
     apiRequest('/whatsapp/triggers/process-reminders', {
       method: 'POST',

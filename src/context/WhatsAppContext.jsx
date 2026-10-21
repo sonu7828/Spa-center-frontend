@@ -368,6 +368,20 @@ export function WhatsAppProvider({ children }) {
     [fetchLogs]
   );
 
+  // 5. Purge old message logs (Manager only)
+  const purgeOldLogs = useCallback(
+    async (days = 30) => {
+      try {
+        const res = await whatsappApi.purgeOldLogs(days);
+        await fetchLogs({ page: 1 });
+        return res;
+      } catch (err) {
+        throw new Error(err.message || 'Failed to purge old message logs');
+      }
+    },
+    [fetchLogs]
+  );
+
   const value = {
     automations,
     logs,
@@ -380,6 +394,7 @@ export function WhatsAppProvider({ children }) {
     toggleAutomation,
     updateTemplate,
     fetchLogs,
+    purgeOldLogs,
     retryMessage,
     sendMessage,
     processReminders,
