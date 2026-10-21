@@ -12,7 +12,7 @@
  * Source: WIREFRAME.md Screen 04, FLOW.md §8, DESIGN-SYSTEM.md §18
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { loyaltyApi, uploadsApi, mediaApi } from '../services/api';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -50,10 +50,10 @@ import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
 import { useLoyalty } from '../context/LoyaltyContext';
 import { useSocial } from '../context/SocialContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useFeedback } from '../context/FeedbackContext';
 
-const tabs = [
+const ALL_TABS = [
   { key: 'history', label: 'Service History' },
   { key: 'photos', label: 'Before / After' },
   { key: 'loyalty', label: 'Loyalty Points' },
@@ -71,7 +71,22 @@ export default function ClientFile() {
     }
   }, [id, fetchClientFull]);
   const { user } = useAuth();
+  const isMarketer = isMarketerUser(user) || (user?.role || '').toLowerCase() === 'marketer';
   const [activeTab, setActiveTab] = useState('history');
+
+  const visibleTabs = useMemo(() => {
+    if (isMarketer) {
+      return [{ key: 'history', label: 'Service History' }];
+    }
+    return ALL_TABS;
+  }, [isMarketer]);
+
+  // Ensure marketer always stays on history tab
+  useEffect(() => {
+    if (isMarketer && activeTab !== 'history') {
+      setActiveTab('history');
+    }
+  }, [isMarketer, activeTab]);
 
   // Edit Details state
   const [isEditing, setIsEditing] = useState(false);
@@ -389,21 +404,42 @@ export default function ClientFile() {
         </div>
       )}
 
-      {/* ── Tabs ── */}
-      <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+      {/* ── Tabs / Section Header ── */}
+      {isMarketer ? (
+        <div className="flex items-center justify-between pb-3 mb-4 border-b border-border">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-[8px] bg-sage-soft text-sage flex items-center justify-center border border-sage/20">
+              <FileText size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-charcoal">
+                Client Service & Visit History
+              </h3>
+              <p className="text-[11px] text-muted-gray">
+                Completed services record for commission settlement & referral tracking.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-[6px] text-[10px] font-bold bg-[#EDE9FE] text-[#6D28D9] border border-[#DDD6FE]">
+            Marketer View
+          </span>
+        </div>
+      ) : (
+        <Tabs tabs={visibleTabs} activeTab={activeTab} onChange={setActiveTab} />
+      )}
 
       {/* ── Tab Content ── */}
       <div className="mt-4">
         {activeTab === 'history' && (
           <ServiceHistoryTab history={mergedHistory} client={client} />
         )}
-        {activeTab === 'photos' && (
+        {!isMarketer && activeTab === 'photos' && (
           <BeforeAfterTab client={client} onUpdateClient={updateClient} onAddMedia={addClientMedia} />
         )}
-        {activeTab === 'loyalty' && (
+        {!isMarketer && activeTab === 'loyalty' && (
           <LoyaltyPointsTab clientId={client.id} user={user} />
         )}
-        {activeTab === 'feedback' && (
+        {!isMarketer && activeTab === 'feedback' && (
           <FeedbackHistoryTab clientId={client.id} />
         )}
       </div>
