@@ -25,19 +25,11 @@ export default function ClientsList() {
   const canManageStatus = user?.role === 'manager' || user?.role === 'reception';
   const { clients, setClientStatus } = useClients();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState(isMarketer ? 'mine' : 'all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [clientToDeactivate, setClientToDeactivate] = useState(null);
   const [clientToActivate, setClientToActivate] = useState(null);
 
-  const totalCount = clients.length;
-  const activeCount = useMemo(
-    () => clients.filter((c) => c.status !== 'INACTIVE' && c.isActive !== false).length,
-    [clients]
-  );
-  const inactiveCount = useMemo(
-    () => clients.filter((c) => c.status === 'INACTIVE' || c.isActive === false).length,
-    [clients]
-  );
+  // Derive marketer's own introduced clients
   const myClients = useMemo(
     () =>
       clients.filter(
@@ -48,12 +40,27 @@ export default function ClientsList() {
     [clients, user]
   );
 
+  // If Marketer, lock the client directory strictly to their own introduced clients
+  const displayedClients = useMemo(() => {
+    return isMarketer ? myClients : clients;
+  }, [isMarketer, myClients, clients]);
+
+  const totalCount = displayedClients.length;
+  const activeCount = useMemo(
+    () => displayedClients.filter((c) => c.status !== 'INACTIVE' && c.isActive !== false).length,
+    [displayedClients]
+  );
+  const inactiveCount = useMemo(
+    () => displayedClients.filter((c) => c.status === 'INACTIVE' || c.isActive === false).length,
+    [displayedClients]
+  );
+
   const filtered = useMemo(() => {
-    return clients.filter((c) => {
+    return displayedClients.filter((c) => {
       const isClientInactive = c.status === 'INACTIVE' || c.isActive === false;
       if (statusFilter === 'active' && isClientInactive) return false;
       if (statusFilter === 'inactive' && !isClientInactive) return false;
-      if (statusFilter === 'mine') {
+      if (statusFilter === 'mine' && !isMarketer) {
         const isMine =
           (c.introducedById && String(c.introducedById) === String(user?.id)) ||
           (c.introducedBy && user?.name && c.introducedBy.toLowerCase().trim() === user.name.toLowerCase().trim());
@@ -67,7 +74,7 @@ export default function ClientsList() {
         (c.phone && c.phone.includes(q))
       );
     });
-  }, [clients, search, statusFilter, user]);
+  }, [displayedClients, search, statusFilter, isMarketer, user]);
 
   // ── 50/50 Pagination Logic ──
   const PAGE_SIZE = 50;
@@ -106,8 +113,12 @@ export default function ClientsList() {
   return (
     <div>
       <PageHeader
-        title="Clients"
-        subtitle="Manage client profiles and service history."
+        title={isMarketer ? 'My Introduced Clients' : 'Clients'}
+        subtitle={
+          isMarketer
+            ? 'Track clients introduced by you and acquisition performance.'
+            : 'Manage client profiles and service history.'
+        }
         action={
           <Button onClick={() => navigate('/clients/new')}>
             <UserPlus size={16} strokeWidth={1.8} />
@@ -135,13 +146,19 @@ export default function ClientsList() {
 
         {/* Status Filter Tabs (Desktop: right side; Mobile: horizontal wrap/scroll) */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 shrink-0">
-          {[
-            ...(isMarketer ? [{ id: 'mine', label: 'Introduced by Me', count: myClients.length }] : []),
-            { id: 'all', label: 'All Clients', count: totalCount },
-            { id: 'active', label: 'Active Clients', count: activeCount },
-            { id: 'inactive', label: 'Inactive Clients', count: inactiveCount },
-            ...(!isMarketer ? [{ id: 'mine', label: 'Introduced by Me', count: myClients.length }] : []),
-          ].map((f) => {
+          {(isMarketer
+            ? [
+                { id: 'all', label: 'My Clients', count: totalCount },
+                { id: 'active', label: 'Active', count: activeCount },
+                { id: 'inactive', label: 'Inactive', count: inactiveCount },
+              ]
+            : [
+                { id: 'all', label: 'All Clients', count: totalCount },
+                { id: 'active', label: 'Active Clients', count: activeCount },
+                { id: 'inactive', label: 'Inactive Clients', count: inactiveCount },
+                { id: 'mine', label: 'Introduced by Me', count: myClients.length },
+              ]
+          ).map((f) => {
             const isActive = statusFilter === f.id;
             return (
               <button
@@ -358,8 +375,32 @@ export default function ClientsList() {
 
         {/* Empty State */}
         {totalFiltered === 0 && (
-          <div className="p-8 text-center">
-            <p className="text-sm text-muted-gray">No clients found.</p>
+          <div className="p-8 sm:p-12 text-center">
+            {isMarketer ? (
+              <div className="max-w-md mx-auto space-y-3">
+                <div className="w-12 h-12 rounded-full bg-sage-soft text-sage flex items-center justify-center mx-auto border border-sage/20">
+                  <UserPlus size={22} />
+                </div>
+                <h3 className="text-base font-bold text-charcoal">
+                  {search ? 'No matching clients found' : 'No clients introduced yet'}
+                </h3>
+                <p className="text-xs text-muted-gray leading-relaxed">
+                  {search
+                    ? 'No clients match your search query. Try searching with another name or phone number.'
+                    : "You haven't introduced any clients yet. Click below to register your first client referral and start earning commission!"}
+                </p>
+                {!search && (
+                  <div className="pt-1">
+                    <Button onClick={() => navigate('/clients/new')} className="h-9 text-xs">
+                      <UserPlus size={14} />
+                      Register First Client
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-gray">No clients found.</p>
+            )}
           </div>
         )}
 
