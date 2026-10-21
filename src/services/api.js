@@ -72,7 +72,9 @@ export async function apiRequest(endpoint, options = {}) {
 
     return data;
   } catch (error) {
-    console.error('[API Error] ' + (options.method || 'GET') + ' ' + endpoint + ':', error);
+    if (!options?.silent) {
+      console.error('[API Error] ' + (options.method || 'GET') + ' ' + endpoint + ':', error);
+    }
     throw error;
   }
 }
@@ -471,11 +473,12 @@ export const whatsappApi = {
       method: 'POST',
       body: JSON.stringify({ days }),
     }),
-  getRetentionSettings: () => apiRequest('/whatsapp/settings/retention'),
+  getRetentionSettings: () => apiRequest('/whatsapp/settings/retention', { silent: true }),
   updateRetentionSettings: (days) =>
     apiRequest('/whatsapp/settings/retention', {
       method: 'PATCH',
       body: JSON.stringify({ days }),
+      silent: true,
     }),
   processReminders: (data = {}) =>
     apiRequest('/whatsapp/triggers/process-reminders', {
