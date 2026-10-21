@@ -17,7 +17,7 @@
  *   - TECHNICIAN / CLEANER: Blocked from WhatsApp management
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { whatsappApi } from '../services/api';
 
@@ -86,6 +86,9 @@ export function WhatsAppProvider({ children }) {
     totalPages: 1,
   });
 
+  const paginationRef = useRef({ page: 1, limit: 20 });
+  const activeParamsRef = useRef({});
+
   const [automationsLoading, setAutomationsLoading] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -153,15 +156,35 @@ export function WhatsAppProvider({ children }) {
       if (!isAuthenticated || !hasAccess) return;
       setLogsLoading(true);
       try {
-        const res = await whatsappApi.getLogs({
-          page: pagination.page,
-          limit: pagination.limit,
+        const mergedParams = {
+          page: params.page !== undefined ? params.page : paginationRef.current.page,
+          limit: params.limit !== undefined ? params.limit : paginationRef.current.limit,
+          ...activeParamsRef.current,
           ...params,
+        };
+
+        // Clean empty string or undefined
+        const cleanParams = {};
+        Object.entries(mergedParams).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== '' && v !== 'ALL') {
+            cleanParams[k] = v;
+          }
         });
+
+        // Track active params
+        activeParamsRef.current = { ...cleanParams };
+        delete activeParamsRef.current.page;
+        delete activeParamsRef.current.limit;
+
+        const res = await whatsappApi.getLogs(cleanParams);
         if (res?.data) {
           setLogs(res.data.logs || []);
           if (res.data.pagination) {
             setPagination(res.data.pagination);
+            paginationRef.current = {
+              page: res.data.pagination.page,
+              limit: res.data.pagination.limit,
+            };
           }
         }
       } catch (err) {
@@ -170,7 +193,7 @@ export function WhatsAppProvider({ children }) {
         setLogsLoading(false);
       }
     },
-    [isAuthenticated, hasAccess, pagination.page, pagination.limit]
+    [isAuthenticated, hasAccess]
   );
 
   // Initial load

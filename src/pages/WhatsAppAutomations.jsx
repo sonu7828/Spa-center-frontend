@@ -25,7 +25,7 @@
  *       TECHNICIAN / CLEANER: Blocked with luxury 403 Access Denied screen
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Cake,
@@ -48,6 +48,8 @@ import {
   CreditCard,
   Sparkles,
   ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -203,21 +205,53 @@ export default function WhatsAppAutomations() {
 
 
 
-  // Filtered Logs
-  const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      if (logStatusFilter !== 'ALL' && log.status !== logStatusFilter) return false;
-      if (logTypeFilter !== 'ALL' && log.automationType !== logTypeFilter) return false;
-      if (logSearch.trim()) {
-        const q = logSearch.toLowerCase();
-        const clientName = (log.client?.name || '').toLowerCase();
-        const phone = (log.recipientPhone || '').toLowerCase();
-        const msg = (log.message || '').toLowerCase();
-        return clientName.includes(q) || phone.includes(q) || msg.includes(q);
-      }
-      return true;
-    });
-  }, [logs, logStatusFilter, logTypeFilter, logSearch]);
+  const searchTimeoutRef = useRef(null);
+
+  const currentPage = pagination?.page || 1;
+  const totalPages = pagination?.totalPages || 1;
+  const totalLogs = pagination?.total || 0;
+  const pageSize = pagination?.limit || 20;
+
+  // Filter change handlers that query backend
+  const handleStatusFilterChange = (status) => {
+    setLogStatusFilter(status);
+    fetchLogs({ status: status === 'ALL' ? undefined : status, page: 1 });
+  };
+
+  const handleTypeFilterChange = (type) => {
+    setLogTypeFilter(type);
+    fetchLogs({ automationType: type === 'ALL' ? undefined : type, page: 1 });
+  };
+
+  const handleSearchChange = (val) => {
+    setLogSearch(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchLogs({ search: val.trim() || undefined, page: 1 });
+    }, 350);
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchLogs({ page: newPage });
+  };
+
+  const handleLimitChange = (newLimit) => {
+    fetchLogs({ limit: newLimit, page: 1 });
+  };
+
+  // Page Numbers Array for Pagination Bar
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (currentPage >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+  }, [currentPage, totalPages]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -483,10 +517,10 @@ export default function WhatsAppAutomations() {
               </label>
               <select
                 value={logStatusFilter}
-                onChange={(e) => setLogStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 bg-soft-cream/50 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
+                onChange={(e) => handleStatusFilterChange(e.target.value)}
+                className="w-full px-3 py-2 bg-soft-cream/50 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage cursor-pointer"
               >
-                <option value="ALL">All Statuses ({logs.length})</option>
+                <option value="ALL">All Statuses ({totalLogs})</option>
                 <option value="QUEUED">QUEUED</option>
                 <option value="PENDING">PENDING</option>
                 <option value="SENT">SENT</option>
@@ -502,8 +536,8 @@ export default function WhatsAppAutomations() {
               </label>
               <select
                 value={logTypeFilter}
-                onChange={(e) => setLogTypeFilter(e.target.value)}
-                className="w-full px-3 py-2 bg-soft-cream/50 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
+                onChange={(e) => handleTypeFilterChange(e.target.value)}
+                className="w-full px-3 py-2 bg-soft-cream/50 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage cursor-pointer"
               >
                 <option value="ALL">All Automation Types</option>
                 <option value="BIRTHDAY">Birthday Greeting</option>
@@ -525,9 +559,9 @@ export default function WhatsAppAutomations() {
                 <Search size={14} className="absolute left-3 top-2.5 text-muted-gray" />
                 <input
                   type="text"
-                  placeholder="Search recipient..."
+                  placeholder="Search recipient or message..."
                   value={logSearch}
-                  onChange={(e) => setLogSearch(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 bg-soft-cream/50 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
                 />
               </div>
@@ -548,14 +582,14 @@ export default function WhatsAppAutomations() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40 bg-white">
-                {filteredLogs.length === 0 ? (
+                {logs.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-xs text-muted-gray">
                       {logsLoading ? 'Loading audit logs...' : 'No message logs found for this filter.'}
                     </td>
                   </tr>
                 ) : (
-                  filteredLogs.map((log) => {
+                  logs.map((log) => {
                     const clientName = log.client?.name || 'Client';
                     const phone = log.recipientPhone || log.client?.phone || '—';
                     const isFailed = log.status === 'FAILED';
@@ -620,6 +654,78 @@ export default function WhatsAppAutomations() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Pagination Controls Bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs text-muted-gray">
+            <div className="flex items-center gap-2">
+              <span>
+                Showing {totalLogs === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+                {Math.min(currentPage * pageSize, totalLogs)} of {totalLogs.toLocaleString()} messages
+              </span>
+              <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-border/80">
+                <span className="text-[11px]">Show:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => handleLimitChange(Number(e.target.value))}
+                  className="px-2 py-1 bg-white border border-border rounded-[6px] text-xs font-semibold text-charcoal outline-none focus:border-sage cursor-pointer"
+                >
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1 || logsLoading}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-border bg-white text-charcoal hover:bg-soft-cream disabled:opacity-40 disabled:cursor-not-allowed font-medium transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  title="Previous Page"
+                >
+                  <ChevronLeft size={14} />
+                  <span className="hidden sm:inline">Previous</span>
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  {pageNumbers.map((p, idx) =>
+                    p === '...' ? (
+                      <span key={`dots-${idx}`} className="px-1.5 text-muted-gray font-bold select-none">
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => handlePageChange(p)}
+                        disabled={logsLoading}
+                        className={`min-w-[32px] h-[32px] rounded-[8px] text-xs font-bold transition cursor-pointer flex items-center justify-center ${
+                          currentPage === p
+                            ? 'bg-charcoal text-white shadow-xs'
+                            : 'bg-white border border-border/80 text-muted-gray hover:text-charcoal hover:bg-soft-cream'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages || logsLoading}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-border bg-white text-charcoal hover:bg-soft-cream disabled:opacity-40 disabled:cursor-not-allowed font-medium transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  title="Next Page"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
