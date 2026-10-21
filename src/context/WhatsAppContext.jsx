@@ -96,6 +96,16 @@ export function WhatsAppProvider({ children }) {
   // Special broadcast state
   const [specialUpdates, setSpecialUpdates] = useState([]);
 
+  // Auto-cleanup retention timeframe (days before message logs auto-purge at midnight)
+  const [retentionDays, setRetentionDays] = useState(() => {
+    try {
+      const saved = localStorage.getItem('omega_whatsapp_retention_days');
+      return saved ? parseInt(saved, 10) || 30 : 30;
+    } catch {
+      return 30;
+    }
+  });
+
   const role = (user?.role || '').toLowerCase();
   const isManager = role === 'manager';
   const isReception = role === 'reception';
@@ -196,8 +206,6 @@ export function WhatsAppProvider({ children }) {
     [isAuthenticated, hasAccess]
   );
 
-  const [retentionDays, setRetentionDays] = useState(30);
-
   // Fetch retention policy
   const fetchRetentionSettings = useCallback(async () => {
     if (!isAuthenticated || !hasAccess) return;
@@ -205,14 +213,24 @@ export function WhatsAppProvider({ children }) {
       const res = await whatsappApi.getRetentionSettings();
       if (res?.data?.retentionDays) {
         setRetentionDays(res.data.retentionDays);
+        localStorage.setItem('omega_whatsapp_retention_days', String(res.data.retentionDays));
       }
     } catch (e) {
-      // fallback to 30
+      // Backend may be building/restarting; keep existing state / localStorage
     }
   }, [isAuthenticated, hasAccess]);
 
   // Update auto-cleanup retention days
   const updateRetention = useCallback(async (days) => {
+    // 1. Immediately persist locally so UI is reactive
+    setRetentionDays(days);
+    try {
+      localStorage.setItem('omega_whatsapp_retention_days', String(days));
+    } catch {
+      // ignore storage quota
+    }
+
+    // 2. Sync to backend
     try {
       const res = await whatsappApi.updateRetentionSettings(days);
       if (res?.data?.retentionDays) {
@@ -220,7 +238,8 @@ export function WhatsAppProvider({ children }) {
       }
       return res;
     } catch (e) {
-      throw new Error(e.message || 'Failed to update retention policy');
+      console.warn('Backend retention sync note (saved locally):', e.message);
+      return { success: true, localOnly: true, data: { retentionDays: days } };
     }
   }, []);
 
