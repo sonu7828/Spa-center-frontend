@@ -47,12 +47,14 @@ export default function JobSeekers() {
 
   // Add Candidate Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [candidateToDelete, setCandidateToDelete] = useState(null);
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
     positionApplied: 'Massage Therapist',
     notes: '',
   });
+
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -301,11 +303,7 @@ export default function JobSeekers() {
                     {/* Action (Delete) */}
                     <td className="py-3 px-4 text-right whitespace-nowrap">
                       <button
-                        onClick={() => {
-                          if (window.confirm(`Delete ${candidate.fullName}?`)) {
-                            deleteJobSeeker(candidate.id);
-                          }
-                        }}
+                        onClick={() => setCandidateToDelete(candidate)}
                         className="p-1 text-muted-gray hover:text-rose-600 transition cursor-pointer"
                         title="Delete candidate"
                       >
@@ -434,6 +432,54 @@ export default function JobSeekers() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* DELETE CONFIRMATION POPUP MODAL                                       */}
+      {/* ===================================================================== */}
+      {candidateToDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setCandidateToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-[18px] max-w-sm w-full p-5 shadow-2xl text-center space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Trash icon */}
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center mx-auto">
+              <Trash2 size={20} />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-charcoal">Delete Candidate?</h3>
+              <p className="text-xs text-muted-gray leading-relaxed">
+                Are you sure you want to remove <strong className="text-charcoal font-semibold">{candidateToDelete.fullName}</strong> from job seekers? This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setCandidateToDelete(null)}
+                className="flex-1 h-9.5 text-xs font-semibold"
+              >
+                Cancel
+              </Button>
+              <button
+                onClick={() => {
+                  deleteJobSeeker(candidateToDelete.id);
+                  setCandidateToDelete(null);
+                }}
+                className="flex-1 h-9.5 px-3 rounded-[10px] bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Trash2 size={13} />
+                <span>Yes, Delete</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
