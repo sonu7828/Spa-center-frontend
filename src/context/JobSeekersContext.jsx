@@ -16,24 +16,23 @@ const JobSeekersContext = createContext(null);
 
 export const JOB_SEEKER_POSITIONS = [
   'Massage Therapist',
-  'Esthetician (Facials & Skin)',
   'Nail Technician',
-  'Hair Stylist & Braider',
-  'Spa Receptionist',
-  'Spa Cleaner',
-  'Sales & Marketing Representative',
-  'Spa Operations Assistant',
-  'Other Position',
+  'Esthetician / Facial',
+  'Receptionist',
+  'Cleaner',
+  'Marketer',
+  'Hair Stylist',
+  'Other',
 ];
 
 export const JOB_SEEKER_STATUSES = [
-  { value: 'ALL', label: 'All Candidates' },
-  { value: 'NEW', label: 'New Walk-In', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-  { value: 'INTERVIEW_SCHEDULED', label: 'Interview Scheduled', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-  { value: 'SHORTLISTED', label: 'Shortlisted', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { value: 'ALL', label: 'All Statuses' },
+  { value: 'NEW', label: 'Applied', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  { value: 'INTERVIEW_SCHEDULED', label: 'Interview', color: 'bg-amber-50 text-amber-700 border-amber-200' },
   { value: 'HIRED', label: 'Hired', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  { value: 'REJECTED', label: 'Archived / Rejected', color: 'bg-slate-100 text-slate-600 border-slate-200' },
+  { value: 'REJECTED', label: 'Rejected', color: 'bg-slate-100 text-slate-600 border-slate-200' },
 ];
+
 
 const INITIAL_DEMO_CANDIDATES = [
   {
