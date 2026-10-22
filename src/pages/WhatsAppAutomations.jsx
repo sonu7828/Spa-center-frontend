@@ -162,6 +162,20 @@ export default function WhatsAppAutomations() {
     }
   };
 
+  // Change scheduled execution timing (Manager only)
+  const handleTimingChange = async (auto, newTiming) => {
+    if (!isManager) {
+      showNotification('Manager permission required to change automation timing.', true);
+      return;
+    }
+    try {
+      await updateAutomation(auto.type, { timing: newTiming });
+      showNotification(`${auto.title} dispatch time updated to ${newTiming} (Africa/Douala). Dynamic scheduler updated.`);
+    } catch (err) {
+      showNotification(err.message || 'Error updating automation timing', true);
+    }
+  };
+
   // Process reminders button handler
   const handleProcessReminders = async () => {
     setProcessingReminders(true);
@@ -386,12 +400,38 @@ export default function WhatsAppAutomations() {
          ===================================================================== */}
       {activeTab === 'automations' && (
         <div className="space-y-4">
+          {/* Scheduling Frequency & Anti-Spam Guard Card */}
+          <div className="bg-white border border-border rounded-[14px] p-4 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-[10px] bg-sage-soft border border-sage/30 flex items-center justify-center text-[#4F6748] shrink-0 mt-0.5">
+                <Clock size={18} />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-charcoal flex items-center gap-2">
+                  Automation Timing & Frequency Policy
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#4F6748] bg-[#EAF2E8] border border-[#4F6748]/20 px-2 py-0.5 rounded-full">
+                    30-Day Anti-Spam Active
+                  </span>
+                </h4>
+                <p className="text-[11px] text-muted-gray mt-0.5">
+                  Scheduled daily automations (Rebooking, Daily Close, Celebrations) run at your chosen hour below in <strong>Africa/Douala</strong> time. Rebooking strictly requires &ge; 30 days of inactivity and enforces a 30-day cooldown.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+              <span className="text-[11px] font-semibold text-muted-gray">Rebooking Inactivity:</span>
+              <span className="text-[11px] font-bold text-charcoal bg-soft-cream border border-border px-2.5 py-1 rounded-[8px]">
+                30+ Days Since Visit
+              </span>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
             <h2 className="text-base sm:text-lg font-bold text-charcoal">
               Standard Automation Rules
             </h2>
             <span className="text-xs text-muted-gray">
-              {isManager ? 'Manager: Toggle ON/OFF to activate or deactivate automations.' : 'Reception: Operational view only.'}
+              {isManager ? 'Manager: Choose dispatch time and toggle ON/OFF.' : 'Reception: Operational view only.'}
             </span>
           </div>
 
@@ -445,11 +485,47 @@ export default function WhatsAppAutomations() {
                       </div>
                     </div>
 
-                    {/* Metadata Sub-bar */}
+                    {/* Metadata Sub-bar with Interactive Timing Selector */}
                     <div className="px-5 py-2.5 bg-soft-cream/40 border-b border-border/40 flex items-center justify-between text-xs text-muted-gray flex-wrap gap-2">
                       <div className="flex items-center gap-1.5 font-medium">
-                        <Clock size={13} className="text-sage" />
-                        <span>Timing: <strong className="text-charcoal">{auto.timing || 'Immediate'}</strong></span>
+                        <Clock size={13} className="text-sage shrink-0" />
+                        {['REBOOKING', 'DAILY_CLOSE_BOSS', 'BIRTHDAY', 'ANNIVERSARY'].includes(auto.type) ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-muted-gray text-xs">Timing:</span>
+                            {isManager ? (
+                              <select
+                                value={auto.timing || (auto.type === 'DAILY_CLOSE_BOSS' ? '19:30' : auto.type === 'BIRTHDAY' ? '09:00' : '10:00')}
+                                onChange={(e) => handleTimingChange(auto, e.target.value)}
+                                className="text-xs font-bold text-charcoal bg-white border border-border/90 rounded-[6px] px-2 py-0.5 shadow-2xs hover:border-sage focus:outline-none focus:ring-1 focus:ring-sage cursor-pointer"
+                                title="Click to choose dispatch time"
+                              >
+                                {[
+                                  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+                                  '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+                                  '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
+                                  '17:00', '17:30', '18:00', '18:30', '19:00', '19:30',
+                                  '20:00', '20:30', '21:00', '21:30', '22:00'
+                                ].map((t) => (
+                                  <option key={t} value={t}>
+                                    {t}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <strong className="text-charcoal font-bold">{auto.timing || '10:00'}</strong>
+                            )}
+                            <span className="text-[10px] text-muted-gray/70 font-mono">(Douala)</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span>Timing: <strong className="text-charcoal">{auto.timing || 'Immediate'}</strong></span>
+                            {auto.type.includes('APPOINTMENT') && (
+                              <span className="text-[10px] font-semibold text-[#8B6E58] bg-[#F7F2EE] px-1.5 py-0.5 rounded border border-[#E6DDD5]">
+                                Relative
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span

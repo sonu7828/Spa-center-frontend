@@ -54,11 +54,16 @@ const TECHNICIAN_ROUTES = [
 export const MARKETER_ROUTES = [
   '/',
   '/dashboard',
+  '/services',
   '/clients',
   '/clients/new',
   '/clients/:id',
+  '/appointments',
+  '/appointments/new',
+  '/appointments/:id',
   '/technicians/daily',
   '/summary',
+  '/invoices',
 ];
 
 const CLEANER_ROUTES = [

@@ -42,6 +42,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Calendar,
+  FileText,
+  Check,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -51,6 +53,8 @@ import { useOperations } from '../context/OperationsContext';
 import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useClients } from '../context/ClientsContext';
 import { useCommission } from '../context/CommissionContext';
+import { useAppointments } from '../context/AppointmentsContext';
+import { useInvoices } from '../context/InvoiceContext';
 import { reportsApi, penaltiesApi, commissionsApi } from '../services/api';
 import { getDoualaTodayStr } from '../utils/timezone';
 
@@ -60,6 +64,8 @@ export default function TechnicianDailySummary() {
   const { user, allUsers } = useAuth();
   const { completedServices, techRevenue } = useOperations();
   const { clients } = useClients();
+  const { appointments } = useAppointments();
+  const { invoices } = useInvoices();
   const { getEmployeeCommissionSummary, finalizeStaffPayroll } = useCommission();
 
   const role = (user?.role || '').toLowerCase();
@@ -303,6 +309,31 @@ export default function TechnicianDailySummary() {
       (c.introducedById && (String(c.introducedById) === String(currentTech?.id) || ((isTechnicianRole || isMarketer) && String(c.introducedById) === String(user?.id)))) ||
       (c.introducedBy && (c.introducedBy.toLowerCase().trim() === effectiveName.toLowerCase().trim() || ((isTechnicianRole || isMarketer) && c.introducedBy.toLowerCase().trim() === (user?.name || '').toLowerCase().trim())))
   );
+
+  // Marketer closed appointments & target
+  const marketerTargetCount = Number(sContract.targetAppointments || sContract.monthlyTarget || 20);
+  const marketerClosedAppointments = useMemo(() => {
+    const referredIds = new Set(myReferredClients.map((c) => String(c.id)));
+    return (appointments || []).filter(
+      (a) =>
+        referredIds.has(String(a.clientId)) &&
+        (a.status === 'COMPLETED' || a.status === 'PAID')
+    );
+  }, [myReferredClients, appointments]);
+
+  const closedAppointmentsCount = marketerClosedAppointments.length;
+  const isMarketerTargetMet = closedAppointmentsCount >= marketerTargetCount;
+
+  // Invoices belonging to clients prospected by this marketer
+  const myProspectedInvoices = useMemo(() => {
+    const referredIds = new Set(myReferredClients.map((c) => String(c.id)));
+    return (invoices || []).filter(
+      (inv) =>
+        (referredIds.has(String(inv.clientId)) ||
+        (inv.introducedById && String(inv.introducedById) === String(user?.id))) &&
+        (inv.status === 'PAID' || inv.status === 'COMPLETED')
+    );
+  }, [invoices, myReferredClients, user?.id]);
 
   // -------------------------------------------------------------------------
   // Resilient Normalization for Target Salary Performance (Zero-NaN Guarantee)
@@ -748,78 +779,139 @@ export default function TechnicianDailySummary() {
 
         {/* Divider & Calculations */}
         <div className="border-t border-border pt-5 mb-6 space-y-3">
-          {salarySummary ? (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-gray">
-                {!sIsModeB ? 'Fixed Salary' : 'Base Salary'}
-              </span>
-              <span className="font-semibold text-charcoal">
-                {!sIsModeB
-                  ? `${sFixedSalary.toLocaleString()} FCFA`
-                  : `${sBasePay.toLocaleString()} FCFA`}
-              </span>
-            </div>
-          ) : !isMarketer ? (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-gray">Base Salary</span>
-              <span className="text-muted-gray font-mono text-xs bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
-                [Calculated]
-              </span>
-            </div>
-          ) : null}
+          {isMarketer ? (
+            <div className="space-y-3">
+              {/* Target Closed Appointments Progress Card */}
+              <div className={`p-4 rounded-[14px] border ${
+                isMarketerTargetMet
+                  ? 'bg-emerald-50/70 border-emerald-200'
+                  : 'bg-warm-ivory/60 border-border'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Target size={16} className={isMarketerTargetMet ? 'text-emerald-700' : 'text-[#6D28D9]'} />
+                    <span className="text-xs sm:text-sm font-bold text-charcoal">
+                      Monthly Closed Bookings Target: {marketerTargetCount}
+                    </span>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-[6px] text-[10px] font-bold ${
+                    isMarketerTargetMet
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {isMarketerTargetMet ? 'Target Achieved' : `${Math.max(0, marketerTargetCount - closedAppointmentsCount)} More Needed`}
+                  </span>
+                </div>
 
-          {/* Commission Calculation with Target Engine Integration */}
-          {salarySummary ? (
-            !sIsModeB ? (
-              <div className="p-3 rounded-[12px] bg-amber-50/70 border border-amber-200/70 space-y-1">
-                <div className="flex items-center justify-between text-xs sm:text-sm">
-                  <span className="text-amber-900 font-semibold flex items-center gap-1.5">
-                    <Lock size={14} className="text-amber-600" />
-                    Conditional Unearned Commission (Locked)
-                  </span>
-                  <span className="font-bold text-amber-900">
-                    {sUnearnedLocked.toLocaleString()} FCFA
+                {/* Progress Bar */}
+                <div className="w-full bg-soft-cream/80 rounded-full h-2.5 overflow-hidden mb-2 border border-border/50">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      isMarketerTargetMet ? 'bg-emerald-600' : 'bg-[#6D28D9]'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.round((closedAppointmentsCount / Math.max(1, marketerTargetCount)) * 100))}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-muted-gray">
+                  <span>Closed this month: <strong>{closedAppointmentsCount}</strong> bookings</span>
+                  <span>{Math.min(100, Math.round((closedAppointmentsCount / Math.max(1, marketerTargetCount)) * 100))}% complete</span>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center justify-between text-xs">
+                  <span className="text-muted-gray">Fixed Base Salary:</span>
+                  <span className={`font-bold ${isMarketerTargetMet ? 'text-emerald-700' : 'text-muted-gray'}`}>
+                    {sFixedSalary > 0 ? `${sFixedSalary.toLocaleString()} FCFA` : '50,000 FCFA'}
+                    {!isMarketerTargetMet && <span className="ml-1.5 text-[10px] font-normal text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">(Locked until target reached)</span>}
                   </span>
                 </div>
-                <p className="text-[11px] text-amber-700 leading-relaxed">
-                  Locked until monthly target ({sMonthlyTarget.toLocaleString()} FCFA) is achieved. Fixed salary of {sFixedSalary.toLocaleString()} FCFA applies.
-                </p>
               </div>
-            ) : (
-              <div className="p-3 rounded-[12px] bg-emerald-50/70 border border-emerald-200/70 space-y-1">
-                <div className="flex items-center justify-between text-xs sm:text-sm">
-                  <span className="text-emerald-900 font-semibold flex items-center gap-1.5">
-                    <Unlock size={14} className="text-emerald-600" />
-                    Net Earned Commission (Unlocked)
+
+              {/* Compulsory Guaranteed Commission Row */}
+              <div className="p-3.5 rounded-[12px] bg-[#EDE9FE]/50 border border-[#DDD6FE] flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-[#6D28D9] flex items-center gap-1.5">
+                    <Sparkles size={14} /> Guaranteed % Commission (Always Paid)
                   </span>
-                  <span className="font-bold text-emerald-800">
-                    {sNetCommission.toLocaleString()} FCFA
-                  </span>
+                  <p className="text-[11px] text-muted-gray mt-0.5">
+                    Compulsory on all completed services brought by you, regardless of target.
+                  </p>
                 </div>
-                <p className="text-[11px] text-emerald-700">
-                  Target reached! Paid as Base ({sBasePay.toLocaleString()}) + Net Commission ({sNetCommission.toLocaleString()}).
-                </p>
+                <span className="text-sm font-extrabold text-[#6D28D9] font-mono">
+                  {(commissionEarned || sNetCommission || 0).toLocaleString('en-US')} FCFA
+                </span>
               </div>
-            )
-          ) : (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-charcoal font-medium">Referral Commission</span>
-              {isReception ? (
-                <span className="font-mono text-xs text-muted-gray bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
-                  [Confidential - Manager Only]
-                </span>
-              ) : (
-                <span
-                  className={`font-extrabold px-2.5 py-1 rounded-[6px] text-xs ${
-                    isMarketer
-                      ? 'bg-[#EDE9FE] text-[#6D28D9] border border-[#DDD6FE]'
-                      : 'bg-sage-soft text-[#4F6748] border border-sage/20'
-                  }`}
-                >
-                  {(commissionEarned || 0).toLocaleString('en-US')} FCFA
-                </span>
-              )}
             </div>
+          ) : (
+            <>
+              {salarySummary ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-gray">
+                    {!sIsModeB ? 'Fixed Salary' : 'Base Salary'}
+                  </span>
+                  <span className="font-semibold text-charcoal">
+                    {!sIsModeB
+                      ? `${sFixedSalary.toLocaleString()} FCFA`
+                      : `${sBasePay.toLocaleString()} FCFA`}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-gray">Base Salary</span>
+                  <span className="text-muted-gray font-mono text-xs bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
+                    [Calculated]
+                  </span>
+                </div>
+              )}
+
+              {/* Commission Calculation with Target Engine Integration */}
+              {salarySummary ? (
+                !sIsModeB ? (
+                  <div className="p-3 rounded-[12px] bg-amber-50/70 border border-amber-200/70 space-y-1">
+                    <div className="flex items-center justify-between text-xs sm:text-sm">
+                      <span className="text-amber-900 font-semibold flex items-center gap-1.5">
+                        <Lock size={14} className="text-amber-600" />
+                        Conditional Unearned Commission (Locked)
+                      </span>
+                      <span className="font-bold text-amber-900">
+                        {sUnearnedLocked.toLocaleString()} FCFA
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-700 leading-relaxed">
+                      Locked until monthly target ({sMonthlyTarget.toLocaleString()} FCFA) is achieved. Fixed salary of {sFixedSalary.toLocaleString()} FCFA applies.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-[12px] bg-emerald-50/70 border border-emerald-200/70 space-y-1">
+                    <div className="flex items-center justify-between text-xs sm:text-sm">
+                      <span className="text-emerald-900 font-semibold flex items-center gap-1.5">
+                        <Unlock size={14} className="text-emerald-600" />
+                        Net Earned Commission (Unlocked)
+                      </span>
+                      <span className="font-bold text-emerald-800">
+                        {sNetCommission.toLocaleString()} FCFA
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-700">
+                      Target reached! Paid as Base ({sBasePay.toLocaleString()}) + Net Commission ({sNetCommission.toLocaleString()}).
+                    </p>
+                  </div>
+                )
+              ) : (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-charcoal font-medium">Referral Commission</span>
+                  {isReception ? (
+                    <span className="font-mono text-xs text-muted-gray bg-soft-cream px-2 py-1 rounded-[6px] border border-border">
+                      [Confidential - Manager Only]
+                    </span>
+                  ) : (
+                    <span className="font-extrabold px-2.5 py-1 rounded-[6px] text-xs bg-sage-soft text-[#4F6748] border border-sage/20">
+                      {(commissionEarned || 0).toLocaleString('en-US')} FCFA
+                    </span>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           {/* Penalties Deduction Row if any */}
@@ -843,27 +935,25 @@ export default function TechnicianDailySummary() {
               <span className="text-sm font-bold text-charcoal block">
                 Projected Monthly Payout
               </span>
-              {salarySummary && (
-                <span className="text-[11px] text-muted-gray">
-                  {sFloorProtectionApplied
+              <span className="text-[11px] text-muted-gray">
+                {isMarketer
+                  ? (isMarketerTargetMet
+                    ? `Fixed Salary (${(sFixedSalary || 50000).toLocaleString()} FCFA) + Guaranteed Commission`
+                    : `Guaranteed Commission only (${marketerTargetCount - closedAppointmentsCount} more bookings to unlock Fixed Salary)`)
+                  : (sFloorProtectionApplied
                     ? `Minimum fixed salary (${sFixedSalary.toLocaleString()} FCFA)`
                     : !sIsModeB
                     ? `Fixed Salary (Target not yet met)`
-                    : `Base + Unlocked Net Commission`}
-                </span>
-              )}
+                    : `Base + Unlocked Net Commission`)}
+              </span>
             </div>
           </div>
           <div className="text-left sm:text-right">
-            {salarySummary ? (
-              <span className="text-lg font-black text-charcoal">
-                {sEffectivePayout.toLocaleString()} FCFA
-              </span>
-            ) : (
-              <span className="font-mono text-xs text-charcoal bg-white/80 px-2.5 py-1 rounded-[6px] border border-sage/30">
-                [Calculated]
-              </span>
-            )}
+            <span className="text-lg font-black text-charcoal">
+              {isMarketer
+                ? ((isMarketerTargetMet ? (sFixedSalary || 50000) : 0) + (commissionEarned || sNetCommission || 0)).toLocaleString()
+                : (salarySummary ? sEffectivePayout.toLocaleString() : '0')} FCFA
+            </span>
           </div>
         </div>
       </div>
@@ -918,6 +1008,60 @@ export default function TechnicianDailySummary() {
           </div>
         )}
       </div>
+
+      {/* Prospected Clients Invoices & Receipts for Marketer */}
+      {isMarketer && (
+        <div className="mt-6 bg-white border border-border rounded-[16px] p-4 sm:p-6 shadow-card">
+          <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
+            <div className="flex items-center gap-2">
+              <FileText size={18} className="text-[#6D28D9]" />
+              <h3 className="text-base font-bold text-charcoal">
+                Prospected Clients Invoices ({myProspectedInvoices.length})
+              </h3>
+            </div>
+            <span className="text-xs text-muted-gray">
+              Invoices & payments collected from your referrals
+            </span>
+          </div>
+
+          {myProspectedInvoices.length === 0 ? (
+            <div className="text-center py-6 text-muted-gray text-xs sm:text-sm bg-soft-cream/30 rounded-[10px] border border-border/50">
+              No paid invoices for your prospected clients yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead>
+                  <tr className="border-b border-border/60 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">
+                    <th className="py-2.5 px-3">Invoice #</th>
+                    <th className="py-2.5 px-3">Client</th>
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Total Paid</th>
+                    <th className="py-2.5 px-3">Your Commission</th>
+                    <th className="py-2.5 px-3 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {myProspectedInvoices.map((inv) => (
+                    <tr key={inv.id} className="border-b border-border/30 last:border-b-0 hover:bg-soft-cream/20">
+                      <td className="py-2.5 px-3 font-mono font-bold text-charcoal">{inv.invoiceNumber}</td>
+                      <td className="py-2.5 px-3 font-semibold text-charcoal">{inv.clientName}</td>
+                      <td className="py-2.5 px-3 text-muted-gray">{inv.date}</td>
+                      <td className="py-2.5 px-3 font-bold text-charcoal">{(inv.total || 0).toLocaleString()} FCFA</td>
+                      <td className="py-2.5 px-3 font-bold text-[#6D28D9]">+{Math.round((inv.total || 0) * 0.1).toLocaleString()} FCFA</td>
+                      <td className="py-2.5 px-3 text-right">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Check size={10} /> Paid
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Disciplinary Infractions & Penalties Section (Feature 4) */}
       <div className="mt-6 bg-white border border-border rounded-[16px] p-4 sm:p-6 shadow-card">

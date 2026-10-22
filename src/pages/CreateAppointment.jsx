@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, TriangleAlert, Check, Plus, X, ChevronDown, Search, User, Sparkles } from 'lucide-react';
+import { ArrowLeft, TriangleAlert, Check, Plus, X, ChevronDown, Search, User, Sparkles, Award } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -83,6 +83,7 @@ export default function CreateAppointment() {
   // Desktop & Universal Searchable Client Dropdown state
   const [isClientOpen, setIsClientOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
+  const [prospectPromoPercent, setProspectPromoPercent] = useState(0); // 0 | 5 | 10 | 15 | 20
   const clientDropdownRef = useRef(null);
   const clientSearchInputRef = useRef(null);
 
@@ -286,6 +287,7 @@ export default function CreateAppointment() {
         time: form.time,
         totalDuration: totalDurationMinutes,
         duration: totalDurationMinutes,
+        notes: prospectPromoPercent > 0 ? `Marketer Prospect Promo: ${prospectPromoPercent}% Discount` : undefined,
       });
 
       setSaved(true);
@@ -783,6 +785,38 @@ export default function CreateAppointment() {
               ))}
             </select>
           </div>
+        </div>
+
+        {/* Marketer Prospecting Welcome Promo (5%, 10%, 15%, 20%) */}
+        <div className="bg-warm-ivory/50 border border-border/80 rounded-[12px] p-3.5 sm:p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-[13px] font-semibold text-charcoal flex items-center gap-1.5">
+              <Award size={15} className="text-[#8B6E58]" />
+              Prospecting Welcome Promo Discount
+            </label>
+            <span className="text-[11px] text-muted-gray">For first-time prospects</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {[0, 5, 10, 15, 20].map((rate) => (
+              <button
+                key={rate}
+                type="button"
+                onClick={() => setProspectPromoPercent(rate)}
+                className={`px-3 py-1.5 rounded-[9px] text-xs font-semibold border transition-all cursor-pointer ${
+                  prospectPromoPercent === rate
+                    ? 'bg-charcoal text-white border-charcoal font-bold shadow-2xs'
+                    : 'bg-white text-charcoal border-border hover:bg-soft-cream'
+                }`}
+              >
+                {rate === 0 ? 'No Promo (0%)' : `${rate}% Off`}
+              </button>
+            ))}
+          </div>
+          {prospectPromoPercent > 0 && (
+            <p className="text-[11px] text-[#4F6748] font-medium mt-2">
+              ✓ {prospectPromoPercent}% will be automatically deducted from the client invoice at checkout.
+            </p>
+          )}
         </div>
 
         {/* Save */}

@@ -452,6 +452,9 @@ export default function PendingInvoices() {
   // Loyalty redemption state per invoice in Pending view
   const [redeemState, setRedeemState] = useState({});
 
+  // Marketer / First-time prospect promo discount selection per invoice (0 | 5 | 10 | 15 | 20)
+  const [prospectDiscounts, setProspectDiscounts] = useState({});
+
   // Receipt modal state
   const [receiptInvoice, setReceiptInvoice] = useState(null);
 
@@ -1407,7 +1410,18 @@ export default function PendingInvoices() {
         rs.wantRedeem && enteredPts > 0
           ? Math.min(clientLoyalty.balance, enteredPts)
           : 0;
-      const discountAmount = calculateDiscount(validPtsToRedeem);
+      const loyaltyDiscountAmount = calculateDiscount(validPtsToRedeem);
+
+      // Calculate marketer prospect promo discount
+      const aptForPromo = invoice.appointmentId
+        ? appointments.find((a) => String(a.id) === String(invoice.appointmentId))
+        : null;
+      const parsedAptPromo = aptForPromo?.notes?.match(/(\d+)%\s*Discount/i)?.[1]
+        ? parseInt(aptForPromo.notes.match(/(\d+)%\s*Discount/i)[1], 10)
+        : 0;
+      const prospectPercent = prospectDiscounts[invoice.id] !== undefined ? prospectDiscounts[invoice.id] : parsedAptPromo;
+      const prospectDiscountAmount = Math.round((Number(invoice.total || 0) * prospectPercent) / 100);
+      const discountAmount = loyaltyDiscountAmount + prospectDiscountAmount;
       const finalTotal = Math.max(0, invoice.total - discountAmount);
 
       // Loyalty: calculate earned points from SERVICE items ONLY (retail excluded)
@@ -1914,13 +1928,20 @@ export default function PendingInvoices() {
                   rs.wantRedeem && enteredPts > 0
                     ? Math.min(clientLoyalty.balance, enteredPts)
                     : 0;
-                const discountAmount = calculateDiscount(validPtsToRedeem);
-                const finalTotal = Math.max(0, invoice.total - discountAmount);
-                const invNum = formatInvoiceNumber(invoice);
+                const loyaltyDiscountAmount = calculateDiscount(validPtsToRedeem);
 
                 const linkedApt = invoice.appointmentId
                   ? appointments.find((a) => String(a.id) === String(invoice.appointmentId))
                   : null;
+                const parsedAptPromo = linkedApt?.notes?.match(/(\d+)%\s*Discount/i)?.[1]
+                  ? parseInt(linkedApt.notes.match(/(\d+)%\s*Discount/i)[1], 10)
+                  : 0;
+                const prospectPercent = prospectDiscounts[invoice.id] !== undefined ? prospectDiscounts[invoice.id] : parsedAptPromo;
+                const prospectDiscountAmount = Math.round((Number(invoice.total || 0) * prospectPercent) / 100);
+                const discountAmount = loyaltyDiscountAmount + prospectDiscountAmount;
+                const finalTotal = Math.max(0, invoice.total - discountAmount);
+                const invNum = formatInvoiceNumber(invoice);
+
                 const techItems = invoice.items
                   .map((it) =>
                     it.technician && it.technician !== 'Staff' && it.technician !== 'Technician'
@@ -2123,6 +2144,37 @@ export default function PendingInvoices() {
                                   )}{' '}
                                   pts
                                 </span>
+                              </div>
+                            </div>
+
+                            {/* Marketer Prospecting Promo Discount (5%, 10%, 15%, 20%) */}
+                            <div className="p-3.5 bg-warm-ivory/50 border border-border/80 rounded-[12px] space-y-2 mb-4">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-charcoal flex items-center gap-1.5">
+                                  <Award size={14} className="text-[#8B6E58]" />
+                                  Marketer Prospect Welcome Promo
+                                </span>
+                                {prospectPercent > 0 && (
+                                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                    -{prospectDiscountAmount.toLocaleString('en-US')} FCFA ({prospectPercent}%)
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {[0, 5, 10, 15, 20].map((rate) => (
+                                  <button
+                                    key={rate}
+                                    type="button"
+                                    onClick={() => setProspectDiscounts((prev) => ({ ...prev, [invoice.id]: rate }))}
+                                    className={`px-2.5 py-1 rounded-[8px] text-xs font-semibold border transition-all cursor-pointer ${
+                                      prospectPercent === rate
+                                        ? 'bg-charcoal text-white border-charcoal font-bold shadow-2xs'
+                                        : 'bg-white text-charcoal border-border hover:bg-soft-cream'
+                                    }`}
+                                  >
+                                    {rate === 0 ? 'No Promo (0%)' : `${rate}% Off`}
+                                  </button>
+                                ))}
                               </div>
                             </div>
 
