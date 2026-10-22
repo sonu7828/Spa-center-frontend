@@ -34,6 +34,7 @@ import {
   ShoppingBag,
   Receipt,
   Clock,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth, isMarketerUser } from '../context/AuthContext';
 
@@ -59,6 +60,7 @@ const navSections = [
       { to: '/cleaning-records', label: 'Cleaning',        icon: ClipboardCheck, roles: ['manager', 'reception'] },
       { to: '/cleaning',         label: 'Cleaning',        icon: Camera,         roles: ['cleaner'] },
       { to: '/staff',            label: 'Staff',           icon: UserCog,        roles: ['manager', 'reception'] },
+      { to: '/job-seekers',      label: 'Job Seekers',     icon: Briefcase,      roles: ['manager', 'reception'] },
       { to: '/daily-close',      label: 'Daily Close',     icon: FileCheck,      roles: ['manager', 'reception'] },
       { to: '/attendance/manager', label: 'Staff Attendance', icon: Clock,        roles: ['manager', 'reception'] },
       { to: '/attendance',       label: 'My Attendance',   icon: Clock,          roles: ['technician', 'reception'] },

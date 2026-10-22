@@ -28,7 +28,7 @@ const MANAGER_ROUTES = [
   '/appointments', '/appointments/new', '/appointments/:id',
   '/appointments/:id/late', '/appointments/:id/no-show', '/appointments/:id/close',
   '/stock', '/technicians/daily', '/summary', '/referrals', '/rebooking', '/daily-close',
-  '/staff', '/services', '/cleaning-records', '/loyalty-settings', '/social-media',
+  '/staff', '/job-seekers', '/services', '/cleaning-records', '/loyalty-settings', '/social-media',
   '/whatsapp-automations', '/client-feedback', '/invoices', '/products',
   '/retail', '/shared-work', '/expenses', '/expenses/new', '/attendance', '/attendance/manager',
 ];
@@ -41,7 +41,7 @@ const RECEPTION_ROUTES = [
   '/referrals', '/rebooking', '/invoices', '/expenses', '/expenses/new', '/attendance',
   '/whatsapp-automations', '/client-feedback',
   '/services', '/products', '/retail', '/stock',
-  '/staff', '/attendance/manager', '/technicians/daily', '/summary', '/shared-work',
+  '/staff', '/job-seekers', '/attendance/manager', '/technicians/daily', '/summary', '/shared-work',
   '/cleaning-records', '/loyalty-settings', '/social-media', '/daily-close',
 ];
 

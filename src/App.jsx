@@ -42,6 +42,7 @@ import { ExpensesProvider } from './context/ExpensesContext';
 import { AttendanceProvider } from './context/AttendanceContext';
 import { CommissionProvider } from './context/CommissionContext';
 import { ReportsProvider } from './context/ReportsContext';
+import { JobSeekersProvider } from './context/JobSeekersContext';
 import AppShell from './components/AppShell';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
@@ -75,6 +76,7 @@ import SharedWork from './pages/SharedWork';
 import Expenses from './pages/Expenses';
 import Attendance from './pages/Attendance';
 import AttendanceManager from './pages/AttendanceManager';
+import JobSeekers from './pages/JobSeekers';
 
 /**
  * ProtectedRoute — Redirects to /login if not authenticated,
@@ -124,6 +126,7 @@ export default function App() {
                     <AttendanceProvider>
                     <CommissionProvider>
                     <ReportsProvider>
+                    <JobSeekersProvider>
                     <BrowserRouter>
                       <ErrorBoundary>
                         <Routes>
@@ -166,6 +169,7 @@ export default function App() {
                             <Route path="rebooking" element={<Rebooking />} />
                             <Route path="daily-close" element={<DailyClose />} />
                             <Route path="staff" element={<Staff />} />
+                            <Route path="job-seekers" element={<JobSeekers />} />
                             <Route path="services" element={<Services />} />
                             <Route path="social-media" element={<SocialMedia />} />
                             <Route path="cleaning" element={<CleaningUpload />} />
@@ -188,6 +192,7 @@ export default function App() {
                         </Routes>
                       </ErrorBoundary>
                     </BrowserRouter>
+                    </JobSeekersProvider>
                     </ReportsProvider>
                     </CommissionProvider>
                     </AttendanceProvider>

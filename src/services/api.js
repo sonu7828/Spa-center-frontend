@@ -694,4 +694,27 @@ export const penaltiesApi = {
     apiRequest('/penalties/' + id, {
       method: 'DELETE',
     }),
-};
+};
+
+export const jobSeekersApi = {
+  getAll: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest('/job-seekers' + (query ? '?' + query : ''));
+  },
+  getById: (id) => apiRequest('/job-seekers/' + id),
+  create: (data) =>
+    apiRequest('/job-seekers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id, data) =>
+    apiRequest('/job-seekers/' + id, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    apiRequest('/job-seekers/' + id, {
+      method: 'DELETE',
+    }),
+};
+
