@@ -248,9 +248,8 @@ export function WhatsAppProvider({ children }) {
     if (hasAccess) {
       fetchAutomations();
       fetchLogs();
-      fetchRetentionSettings();
     }
-  }, [hasAccess, fetchAutomations, fetchLogs, fetchRetentionSettings]);
+  }, [hasAccess, fetchAutomations, fetchLogs]);
 
   // 3. Update automation configuration (Manager only)
   const updateAutomation = useCallback(
