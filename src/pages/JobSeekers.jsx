@@ -26,6 +26,21 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 
+function formatDisplayDate(raw) {
+  if (!raw) return '—';
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return String(raw).slice(0, 10);
+    return d.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return String(raw).slice(0, 10) || '—';
+  }
+}
+
 export default function JobSeekers() {
   const { user } = useAuth();
   const role = (user?.role || '').toLowerCase();
@@ -276,7 +291,7 @@ export default function JobSeekers() {
 
                     {/* Date Applied */}
                     <td className="py-3 px-4 text-muted-gray whitespace-nowrap">
-                      {candidate.appliedDate || candidate.createdAt?.split('T')[0]}
+                      {formatDisplayDate(candidate.appliedDate || candidate.createdAt)}
                     </td>
 
                     {/* Notes */}

@@ -303,38 +303,6 @@ export default function TechnicianDailySummary() {
     year: 'numeric',
   });
 
-  // Derive referred clients list for this technician or marketer
-  const myReferredClients = clients.filter(
-    (c) =>
-      (c.introducedById && (String(c.introducedById) === String(currentTech?.id) || ((isTechnicianRole || isMarketer) && String(c.introducedById) === String(user?.id)))) ||
-      (c.introducedBy && (c.introducedBy.toLowerCase().trim() === effectiveName.toLowerCase().trim() || ((isTechnicianRole || isMarketer) && c.introducedBy.toLowerCase().trim() === (user?.name || '').toLowerCase().trim())))
-  );
-
-  // Marketer closed appointments & target
-  const marketerTargetCount = Number(sContract.targetAppointments || sContract.monthlyTarget || 20);
-  const marketerClosedAppointments = useMemo(() => {
-    const referredIds = new Set(myReferredClients.map((c) => String(c.id)));
-    return (appointments || []).filter(
-      (a) =>
-        referredIds.has(String(a.clientId)) &&
-        (a.status === 'COMPLETED' || a.status === 'PAID')
-    );
-  }, [myReferredClients, appointments]);
-
-  const closedAppointmentsCount = marketerClosedAppointments.length;
-  const isMarketerTargetMet = closedAppointmentsCount >= marketerTargetCount;
-
-  // Invoices belonging to clients prospected by this marketer
-  const myProspectedInvoices = useMemo(() => {
-    const referredIds = new Set(myReferredClients.map((c) => String(c.id)));
-    return (invoices || []).filter(
-      (inv) =>
-        (referredIds.has(String(inv.clientId)) ||
-        (inv.introducedById && String(inv.introducedById) === String(user?.id))) &&
-        (inv.status === 'PAID' || inv.status === 'COMPLETED')
-    );
-  }, [invoices, myReferredClients, user?.id]);
-
   // -------------------------------------------------------------------------
   // Resilient Normalization for Target Salary Performance (Zero-NaN Guarantee)
   // Handles both legacy Railway backend payloads and enhanced alias properties
@@ -367,6 +335,38 @@ export default function TechnicianDailySummary() {
   const sRemainingToTarget = Number(
     rawRemaining != null ? rawRemaining : Math.max(0, sMonthlyTarget - sMtdSales)
   ) || 0;
+
+  // Derive referred clients list for this technician or marketer
+  const myReferredClients = clients.filter(
+    (c) =>
+      (c.introducedById && (String(c.introducedById) === String(currentTech?.id) || ((isTechnicianRole || isMarketer) && String(c.introducedById) === String(user?.id)))) ||
+      (c.introducedBy && (c.introducedBy.toLowerCase().trim() === effectiveName.toLowerCase().trim() || ((isTechnicianRole || isMarketer) && c.introducedBy.toLowerCase().trim() === (user?.name || '').toLowerCase().trim())))
+  );
+
+  // Marketer closed appointments & target
+  const marketerTargetCount = Number(sContract.targetAppointments || sContract.monthlyTarget || 20);
+  const marketerClosedAppointments = useMemo(() => {
+    const referredIds = new Set(myReferredClients.map((c) => String(c.id)));
+    return (appointments || []).filter(
+      (a) =>
+        referredIds.has(String(a.clientId)) &&
+        (a.status === 'COMPLETED' || a.status === 'PAID')
+    );
+  }, [myReferredClients, appointments]);
+
+  const closedAppointmentsCount = marketerClosedAppointments.length;
+  const isMarketerTargetMet = closedAppointmentsCount >= marketerTargetCount;
+
+  // Invoices belonging to clients prospected by this marketer
+  const myProspectedInvoices = useMemo(() => {
+    const referredIds = new Set(myReferredClients.map((c) => String(c.id)));
+    return (invoices || []).filter(
+      (inv) =>
+        (referredIds.has(String(inv.clientId)) ||
+        (inv.introducedById && String(inv.introducedById) === String(user?.id))) &&
+        (inv.status === 'PAID' || inv.status === 'COMPLETED')
+    );
+  }, [invoices, myReferredClients, user?.id]);
 
   // Active Mode: Mode B (Target Met) vs Mode A (Below Target)
   const sIsModeB =

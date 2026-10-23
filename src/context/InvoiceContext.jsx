@@ -139,7 +139,7 @@ export function formatBackendInvoice(inv, allUsers = []) {
 export function InvoiceProvider({ children }) {
   const { isAuthenticated, user, allUsers } = useAuth();
   const userRole = (user?.role || '').toLowerCase();
-  const hasAccess = userRole === 'manager' || userRole === 'reception' || userRole === 'technician';
+  const hasAccess = userRole === 'manager' || userRole === 'reception' || userRole === 'technician' || userRole === 'marketer';
 
   const getCachedInvoices = () => {
     try {

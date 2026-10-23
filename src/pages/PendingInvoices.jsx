@@ -55,7 +55,7 @@ import { useClients } from '../context/ClientsContext';
 import { useLoyalty } from '../context/LoyaltyContext';
 import { useWhatsApp } from '../context/WhatsAppContext';
 import { useFeedback } from '../context/FeedbackContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useRetail } from '../context/RetailContext';
 import { useCommission } from '../context/CommissionContext';
 import { useAppointments } from '../context/AppointmentsContext';
@@ -382,10 +382,12 @@ function SearchableSelect({
 
 export default function PendingInvoices() {
   const { user, allUsers } = useAuth();
-  const isTechnician = user?.role === 'technician';
-  const canCollectPayment = user?.role === 'manager' || user?.role === 'reception';
-  const canSellRetail = user?.role === 'manager' || user?.role === 'reception';
-  const canCreateInvoice = user?.role === 'manager' || user?.role === 'reception';
+  const role = (user?.role || '').toLowerCase();
+  const isTechnician = role === 'technician';
+  const isMarketer = role === 'marketer' || isMarketerUser(user);
+  const canCollectPayment = (role === 'manager' || role === 'reception') && !isMarketer;
+  const canSellRetail = (role === 'manager' || role === 'reception') && !isMarketer;
+  const canCreateInvoice = role === 'manager' || role === 'reception' || isMarketer;
 
   const {
     invoices,
@@ -976,7 +978,7 @@ export default function PendingInvoices() {
     setNewServiceClientId('');
     setNewServiceWalkInName('');
     setNewServiceWalkInPhone('+237 ');
-    setNewServiceIntroducedById('');
+    setNewServiceIntroducedById(isMarketer ? String(user?.id) : '');
     setNewServiceLines([
       {
         id: Date.now(),
@@ -1124,6 +1126,11 @@ export default function PendingInvoices() {
     if (isSubmittingServiceInvoice) return;
     setNewServiceError('');
 
+    // Safety guard: Marketer cannot collect payment
+    if (isMarketer) {
+      collectNow = false;
+    }
+
     // 1. Client Validation
     let resolvedClient = null;
     let clientName = '';
@@ -1191,7 +1198,9 @@ export default function PendingInvoices() {
     }
 
     // 4. Referral Staff
-    const refStaff = referralStaff.find((s) => String(s.id) === String(newServiceIntroducedById));
+    const refStaff = isMarketer
+      ? (allUsers?.find((s) => String(s.id) === String(user?.id)) || { id: user?.id, name: user?.name })
+      : referralStaff.find((s) => String(s.id) === String(newServiceIntroducedById));
 
     setIsSubmittingServiceInvoice(true);
     try {
@@ -1728,8 +1737,14 @@ export default function PendingInvoices() {
   return (
     <div>
       <PageHeader
-        title={isTechnician ? "My Invoices" : "Invoices"}
-        subtitle={isTechnician ? "View your service invoices and payment status." : "Reception & Manager Invoices Management."}
+        title={isMarketer ? "Marketer Invoices" : isTechnician ? "My Invoices" : "Invoices"}
+        subtitle={
+          isMarketer
+            ? "Create service invoices for your clients and track pending payment."
+            : isTechnician
+            ? "View your service invoices and payment status."
+            : "Reception & Manager Invoices Management."
+        }
         action={
           <div className="flex items-center gap-2">
             <Button
@@ -3795,23 +3810,30 @@ export default function PendingInvoices() {
                   <label className="block text-[11px] font-semibold text-muted-gray mb-1">
                     Introduced By / Referral Staff (Optional for Commission)
                   </label>
-                  <SearchableSelect
-                    value={newServiceIntroducedById}
-                    onChange={(val) => setNewServiceIntroducedById(val)}
-                    placeholder="None / Direct Visit"
-                    searchPlaceholder="Search staff name..."
-                    heightClass="h-[38px]"
-                    options={[
-                      { value: '', label: 'None / Direct Visit' },
-                      ...referralStaff.map((staff) => ({
-                        value: String(staff.id),
-                        label: staff.name,
-                        sublabel: staff.role
-                          ? `${staff.role.charAt(0).toUpperCase() + staff.role.slice(1)}`
-                          : '',
-                      })),
-                    ]}
-                  />
+                  {isMarketer ? (
+                    <div className="flex items-center gap-2 p-2.5 rounded-[10px] bg-[#EDE9FE]/70 border border-[#DDD6FE] text-xs font-semibold text-[#6D28D9]">
+                      <Sparkles size={14} className="shrink-0" />
+                      <span>Credited to you: <strong>{user?.name}</strong> (Marketer Referral)</span>
+                    </div>
+                  ) : (
+                    <SearchableSelect
+                      value={newServiceIntroducedById}
+                      onChange={(val) => setNewServiceIntroducedById(val)}
+                      placeholder="None / Direct Visit"
+                      searchPlaceholder="Search staff name..."
+                      heightClass="h-[38px]"
+                      options={[
+                        { value: '', label: 'None / Direct Visit' },
+                        ...referralStaff.map((staff) => ({
+                          value: String(staff.id),
+                          label: staff.name,
+                          sublabel: staff.role
+                            ? `${staff.role.charAt(0).toUpperCase() + staff.role.slice(1)}`
+                            : '',
+                        })),
+                      ]}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -4082,68 +4104,83 @@ export default function PendingInvoices() {
 
               {/* 5. Payment Selection (for instant checkout) */}
               <div className="p-4 rounded-[14px] bg-warm-ivory/60 border border-border/80 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-charcoal uppercase tracking-wider">
-                    Select Workflow:
-                  </label>
-                  <div className="flex items-center gap-1 bg-white p-1 rounded-[10px] border border-border text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setNewServiceActionChoice('pending')}
-                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pending'
-                          ? 'bg-[#4F6748] text-white shadow-xs'
-                          : 'text-muted-gray hover:text-charcoal'
-                        }`}
-                    >
-                      Pending Invoice
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewServiceActionChoice('pay_now')}
-                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pay_now'
-                          ? 'bg-[#4F6748] text-white shadow-xs'
-                          : 'text-muted-gray hover:text-charcoal'
-                        }`}
-                    >
-                      Collect Now
-                    </button>
-                  </div>
-                </div>
-
-                {newServiceActionChoice === 'pay_now' ? (
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1.5">
-                      Payment Method:
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {PAYMENT_METHODS.map((pm) => {
-                        const isSelected = newServicePaymentMethod === pm.key;
-                        return (
-                          <button
-                            key={pm.key}
-                            type="button"
-                            onClick={() => setNewServicePaymentMethod(pm.key)}
-                            className={`h-[40px] px-2.5 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${isSelected
-                                ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
-                                : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
-                              }`}
-                          >
-                            <span
-                              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-sage bg-sage' : 'border-muted-gray/50 bg-white'
-                                }`}
-                            >
-                              {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                            </span>
-                            <span>{pm.label}</span>
-                          </button>
-                        );
-                      })}
+                {isMarketer ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs font-bold text-[#6D28D9]">
+                      <Sparkles size={15} className="shrink-0" />
+                      <span>Pending Invoice Mode (Payment at Reception)</span>
                     </div>
+                    <p className="text-[11px] text-muted-gray leading-relaxed">
+                      This invoice will be registered as <strong>PENDING</strong> for your client with your selected technician.
+                      Payment collection is handled at the Reception counter when your client completes their service.
+                    </p>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-muted-gray">
-                    Invoice will be created in <strong>Pending</strong> status so Reception can review and collect payment when the client is ready.
-                  </p>
+                  <>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-charcoal uppercase tracking-wider">
+                        Select Workflow:
+                      </label>
+                      <div className="flex items-center gap-1 bg-white p-1 rounded-[10px] border border-border text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setNewServiceActionChoice('pending')}
+                          className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pending'
+                              ? 'bg-[#4F6748] text-white shadow-xs'
+                              : 'text-muted-gray hover:text-charcoal'
+                            }`}
+                        >
+                          Pending Invoice
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewServiceActionChoice('pay_now')}
+                          className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pay_now'
+                              ? 'bg-[#4F6748] text-white shadow-xs'
+                              : 'text-muted-gray hover:text-charcoal'
+                            }`}
+                        >
+                          Collect Now
+                        </button>
+                      </div>
+                    </div>
+
+                    {newServiceActionChoice === 'pay_now' ? (
+                      <div>
+                        <label className="block text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1.5">
+                          Payment Method:
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {PAYMENT_METHODS.map((pm) => {
+                            const isSelected = newServicePaymentMethod === pm.key;
+                            return (
+                              <button
+                                key={pm.key}
+                                type="button"
+                                onClick={() => setNewServicePaymentMethod(pm.key)}
+                                className={`h-[40px] px-2.5 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${isSelected
+                                    ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                                    : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
+                                  }`}
+                              >
+                                <span
+                                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-sage bg-sage' : 'border-muted-gray/50 bg-white'
+                                    }`}
+                                >
+                                  {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                </span>
+                                <span>{pm.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-muted-gray">
+                        Invoice will be created in <strong>Pending</strong> status so Reception can review and collect payment when the client is ready.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -4169,7 +4206,7 @@ export default function PendingInvoices() {
                   Cancel
                 </Button>
 
-                {newServiceActionChoice === 'pay_now' ? (
+                {newServiceActionChoice === 'pay_now' && !isMarketer ? (
                   <Button
                     className="flex-1 sm:flex-none min-w-[210px]"
                     disabled={isSubmittingServiceInvoice || newServiceGrandTotal <= 0}
@@ -4189,13 +4226,14 @@ export default function PendingInvoices() {
                   </Button>
                 ) : (
                   <Button
+                    variant="primary"
                     className="flex-1 sm:flex-none min-w-[190px]"
                     disabled={isSubmittingServiceInvoice || newServiceGrandTotal <= 0}
                     onClick={() => handleSubmitWalkInServiceInvoice(false)}
                   >
                     {isSubmittingServiceInvoice ? (
                       <>
-                        <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
+                        <Loader2 size={16} className="animate-spin text-white shrink-0" />
                         <span>Creating Invoice...</span>
                       </>
                     ) : (

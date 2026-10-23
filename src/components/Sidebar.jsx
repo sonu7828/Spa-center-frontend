@@ -96,6 +96,7 @@ export default function Sidebar({ isOpen, onClose }) {
             { to: '/services',          label: 'Services Catalog',  icon: Sparkles,        roles: ['marketer', 'technician'] },
             { to: '/clients',           label: 'Clients Directory', icon: Users,           roles: ['marketer', 'technician'] },
             { to: '/appointments',      label: 'Appointments',      icon: CalendarDays,    roles: ['marketer', 'technician'] },
+            { to: '/invoices',          label: 'Invoices',          icon: FileText,        roles: ['marketer', 'technician'] },
             { to: '/technicians/daily', label: 'My Performance',    icon: ClipboardList,   roles: ['marketer', 'technician'] },
           ],
         },
