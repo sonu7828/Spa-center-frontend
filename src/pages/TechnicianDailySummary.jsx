@@ -72,17 +72,17 @@ export default function TechnicianDailySummary() {
   const isTechnicianRole = role === 'technician';
   const isReception = role === 'reception';
   const isCleaner = role === 'cleaner';
-  const isMarketer = isMarketerUser(user);
+  const isUserMarketer = isMarketerUser(user);
 
   const dynamicTechnicians = allUsers.filter(
-    (u) => u.role === 'technician' && u.active !== false
+    (u) => (u.role === 'technician' || u.role === 'marketer' || isMarketerUser(u)) && u.active !== false
   );
 
   const queryTechId = searchParams.get('technicianId') || searchParams.get('id');
   const queryTechName = searchParams.get('name') || searchParams.get('technician');
 
   // Match technician requested via URL query params
-  const matchedQueryTech = !isTechnicianRole && !isMarketer
+  const matchedQueryTech = !isTechnicianRole && !isUserMarketer
     ? dynamicTechnicians.find(
         (t) =>
           (queryTechId && String(t.id) === String(queryTechId)) ||
@@ -90,30 +90,32 @@ export default function TechnicianDailySummary() {
       )
     : null;
 
-  const initialName = (isTechnicianRole || isMarketer)
+  const initialName = (isTechnicianRole || isUserMarketer)
     ? user?.name || 'Staff'
     : matchedQueryTech?.name || dynamicTechnicians[0]?.name || 'Amina';
   const [selectedTechName, setSelectedTechName] = useState(initialName);
 
   // Sync selectedTechName whenever dynamicTechnicians or query parameters change
   useEffect(() => {
-    if (isTechnicianRole || isMarketer) return;
+    if (isTechnicianRole || isUserMarketer) return;
     if (matchedQueryTech && matchedQueryTech.name !== selectedTechName) {
       setSelectedTechName(matchedQueryTech.name);
     } else if (!selectedTechName && dynamicTechnicians.length > 0) {
       setSelectedTechName(dynamicTechnicians[0].name);
     }
-  }, [matchedQueryTech, dynamicTechnicians, isTechnicianRole, isMarketer, selectedTechName]);
+  }, [matchedQueryTech, dynamicTechnicians, isTechnicianRole, isUserMarketer, selectedTechName]);
 
   // If technician or marketer, lock to their own name
-  const effectiveName = (isTechnicianRole || isMarketer)
+  const effectiveName = (isTechnicianRole || isUserMarketer)
     ? user?.name || 'Staff'
     : selectedTechName;
 
-  const currentTech = (isTechnicianRole || isMarketer)
+  const currentTech = (isTechnicianRole || isUserMarketer)
     ? (user || { id: user?.id || 1, name: user?.name || 'Staff', specialties: [] })
     : (dynamicTechnicians.find((t) => t.name === effectiveName) ||
        dynamicTechnicians[0] || { id: 1, name: 'Technician', specialties: [] });
+
+  const isMarketer = isUserMarketer || isMarketerUser(currentTech) || currentTech?.role === 'marketer';
 
   const isManager = role === 'manager';
 
@@ -205,7 +207,7 @@ export default function TechnicianDailySummary() {
     if (isCleaner) return;
     setPenaltiesLoading(true);
     try {
-      const targetId = (isTechnicianRole || isMarketer) ? user?.id : currentTech?.id;
+      const targetId = (isTechnicianRole || isUserMarketer) ? user?.id : currentTech?.id;
       if (!targetId) return;
       const res = await penaltiesApi.getPenalties({
         staffId: String(targetId),
@@ -220,11 +222,11 @@ export default function TechnicianDailySummary() {
     } finally {
       setPenaltiesLoading(false);
     }
-  }, [isCleaner, isTechnicianRole, isMarketer, user?.id, currentTech?.id, selectedMonth]);
+  }, [isCleaner, isTechnicianRole, isUserMarketer, user?.id, currentTech?.id, selectedMonth]);
 
   const fetchSalarySummary = useCallback(async () => {
     if (isCleaner) return;
-    const targetId = (isTechnicianRole || isMarketer) ? user?.id : currentTech?.id;
+    const targetId = (isTechnicianRole || isUserMarketer) ? user?.id : currentTech?.id;
     if (!targetId) return;
     setSalaryLoading(true);
     try {
@@ -240,7 +242,7 @@ export default function TechnicianDailySummary() {
     } finally {
       setSalaryLoading(false);
     }
-  }, [isCleaner, isTechnicianRole, isMarketer, user?.id, currentTech?.id, selectedMonth]);
+  }, [isCleaner, isTechnicianRole, isUserMarketer, user?.id, currentTech?.id, selectedMonth]);
 
   useEffect(() => {
     fetchTechReport();
@@ -338,8 +340,8 @@ export default function TechnicianDailySummary() {
   // Derive referred clients list for this technician or marketer
   const myReferredClients = clients.filter(
     (c) =>
-      (c.introducedById && (String(c.introducedById) === String(currentTech?.id) || ((isTechnicianRole || isMarketer) && String(c.introducedById) === String(user?.id)))) ||
-      (c.introducedBy && (c.introducedBy.toLowerCase().trim() === effectiveName.toLowerCase().trim() || ((isTechnicianRole || isMarketer) && c.introducedBy.toLowerCase().trim() === (user?.name || '').toLowerCase().trim())))
+      (c.introducedById && String(c.introducedById) === String(currentTech?.id)) ||
+      (c.introducedBy && c.introducedBy.toLowerCase().trim() === effectiveName.toLowerCase().trim())
   );
 
   // Marketer target evaluation:
@@ -368,13 +370,14 @@ export default function TechnicianDailySummary() {
   // Invoices belonging to clients prospected by this marketer
   const myProspectedInvoices = useMemo(() => {
     const referredIds = new Set(myReferredClients.map((c) => String(c.id)));
+    const targetUserId = String(currentTech?.id);
     return (invoices || []).filter(
       (inv) =>
         (referredIds.has(String(inv.clientId)) ||
-        (inv.introducedById && String(inv.introducedById) === String(user?.id))) &&
+        (inv.introducedById && String(inv.introducedById) === targetUserId)) &&
         (inv.status === 'PAID' || inv.status === 'COMPLETED')
     );
-  }, [invoices, myReferredClients, user?.id]);
+  }, [invoices, myReferredClients, currentTech?.id]);
 
   // Active Mode: Mode B (Target Met) vs Mode A (Below Target)
   const sIsModeB =
@@ -491,8 +494,8 @@ export default function TechnicianDailySummary() {
         }
       />
 
-      {/* Technician Selector Tabs — only visible to Manager */}
-      {!isTechnicianRole && !isMarketer && (
+      {/* Technician & Marketer Selector Tabs — visible to Manager */}
+      {!isTechnicianRole && !isUserMarketer && (
         <div className="flex gap-2 mb-6 overflow-x-auto pb-1.5 scrollbar-none">
           {dynamicTechnicians.map((tech) => (
             <button
@@ -508,7 +511,7 @@ export default function TechnicianDailySummary() {
               }`}
             >
               <User size={15} />
-              {tech.name} — {(tech.specialties || []).join(', ') || 'Technician'}
+              {tech.name} — {(tech.specialties || []).join(', ') || (tech.role === 'marketer' ? 'Marketer' : 'Technician')}
             </button>
           ))}
         </div>
