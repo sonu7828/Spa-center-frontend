@@ -343,8 +343,15 @@ export default function TechnicianDailySummary() {
       (c.introducedBy && (c.introducedBy.toLowerCase().trim() === effectiveName.toLowerCase().trim() || ((isTechnicianRole || isMarketer) && c.introducedBy.toLowerCase().trim() === (user?.name || '').toLowerCase().trim())))
   );
 
-  // Marketer closed appointments & target
-  const marketerTargetCount = Number(sContract.targetAppointments || sContract.monthlyTarget || 20);
+  // Marketer target evaluation:
+  // If targetAppointments is explicitly set (e.g. 10 or 20 bookings), track by bookings count.
+  // Otherwise, track by monthly sales target in FCFA (sIsTargetMet).
+  const hasSpecificBookingTarget = Boolean(
+    sContract.targetAppointments &&
+    Number(sContract.targetAppointments) > 0 &&
+    Number(sContract.targetAppointments) < 1000
+  );
+  const marketerTargetCount = hasSpecificBookingTarget ? Number(sContract.targetAppointments) : 0;
   const marketerClosedAppointments = useMemo(() => {
     const referredIds = new Set(myReferredClients.map((c) => String(c.id)));
     return (appointments || []).filter(
@@ -355,7 +362,9 @@ export default function TechnicianDailySummary() {
   }, [myReferredClients, appointments]);
 
   const closedAppointmentsCount = marketerClosedAppointments.length;
-  const isMarketerTargetMet = closedAppointmentsCount >= marketerTargetCount;
+  const isMarketerTargetMet = hasSpecificBookingTarget
+    ? closedAppointmentsCount >= marketerTargetCount
+    : Boolean(sIsTargetMet || (sMonthlyTarget > 0 && sMtdSales >= sMonthlyTarget));
 
   // Invoices belonging to clients prospected by this marketer
   const myProspectedInvoices = useMemo(() => {
@@ -781,7 +790,7 @@ export default function TechnicianDailySummary() {
         <div className="border-t border-border pt-5 mb-6 space-y-3">
           {isMarketer ? (
             <div className="space-y-3">
-              {/* Target Closed Appointments Progress Card */}
+              {/* Target Progress Card */}
               <div className={`p-4 rounded-[14px] border ${
                 isMarketerTargetMet
                   ? 'bg-emerald-50/70 border-emerald-200'
@@ -791,7 +800,9 @@ export default function TechnicianDailySummary() {
                   <div className="flex items-center gap-2">
                     <Target size={16} className={isMarketerTargetMet ? 'text-emerald-700' : 'text-[#6D28D9]'} />
                     <span className="text-xs sm:text-sm font-bold text-charcoal">
-                      Monthly Closed Bookings Target: {marketerTargetCount}
+                      {hasSpecificBookingTarget
+                        ? `Monthly Closed Bookings Target: ${marketerTargetCount}`
+                        : `Monthly Sales Target: ${sMonthlyTarget.toLocaleString()} FCFA`}
                     </span>
                   </div>
                   <span className={`px-2 py-0.5 rounded-[6px] text-[10px] font-bold ${
@@ -799,7 +810,11 @@ export default function TechnicianDailySummary() {
                       ? 'bg-emerald-100 text-emerald-800'
                       : 'bg-amber-100 text-amber-800'
                   }`}>
-                    {isMarketerTargetMet ? 'Target Achieved' : `${Math.max(0, marketerTargetCount - closedAppointmentsCount)} More Needed`}
+                    {isMarketerTargetMet
+                      ? 'Target Achieved 🎉'
+                      : (hasSpecificBookingTarget
+                        ? `${Math.max(0, marketerTargetCount - closedAppointmentsCount)} More Needed`
+                        : `${sRemainingToTarget.toLocaleString()} FCFA More Needed`)}
                   </span>
                 </div>
 
@@ -809,20 +824,44 @@ export default function TechnicianDailySummary() {
                     className={`h-full rounded-full transition-all duration-300 ${
                       isMarketerTargetMet ? 'bg-emerald-600' : 'bg-[#6D28D9]'
                     }`}
-                    style={{ width: `${Math.min(100, Math.round((closedAppointmentsCount / Math.max(1, marketerTargetCount)) * 100))}%` }}
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        hasSpecificBookingTarget
+                          ? Math.round((closedAppointmentsCount / Math.max(1, marketerTargetCount)) * 100)
+                          : sProgressPercent
+                      )}%`,
+                    }}
                   />
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-muted-gray">
-                  <span>Closed this month: <strong>{closedAppointmentsCount}</strong> bookings</span>
-                  <span>{Math.min(100, Math.round((closedAppointmentsCount / Math.max(1, marketerTargetCount)) * 100))}% complete</span>
+                  {hasSpecificBookingTarget ? (
+                    <>
+                      <span>Closed this month: <strong>{closedAppointmentsCount}</strong> bookings</span>
+                      <span>{Math.min(100, Math.round((closedAppointmentsCount / Math.max(1, marketerTargetCount)) * 100))}% complete</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Achieved this month: <strong>{sMtdSales.toLocaleString()} FCFA</strong></span>
+                      <span>{sProgressPercent}% complete</span>
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center justify-between text-xs">
                   <span className="text-muted-gray">Fixed Base Salary:</span>
                   <span className={`font-bold ${isMarketerTargetMet ? 'text-emerald-700' : 'text-muted-gray'}`}>
-                    {sFixedSalary > 0 ? `${sFixedSalary.toLocaleString()} FCFA` : '50,000 FCFA'}
-                    {!isMarketerTargetMet && <span className="ml-1.5 text-[10px] font-normal text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">(Locked until target reached)</span>}
+                    {sFixedSalary > 0 ? `${sFixedSalary.toLocaleString()} FCFA` : '0 FCFA'}
+                    {isMarketerTargetMet ? (
+                      <span className="ml-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded border border-emerald-300">
+                        (Unlocked ✓)
+                      </span>
+                    ) : (
+                      <span className="ml-1.5 text-[10px] font-normal text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                        (Locked until target reached)
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -938,8 +977,10 @@ export default function TechnicianDailySummary() {
               <span className="text-[11px] text-muted-gray">
                 {isMarketer
                   ? (isMarketerTargetMet
-                    ? `Fixed Salary (${(sFixedSalary || 50000).toLocaleString()} FCFA) + Guaranteed Commission`
-                    : `Guaranteed Commission only (${marketerTargetCount - closedAppointmentsCount} more bookings to unlock Fixed Salary)`)
+                    ? `Fixed Salary (${sFixedSalary.toLocaleString()} FCFA) + Guaranteed Commission`
+                    : (hasSpecificBookingTarget
+                      ? `Guaranteed Commission only (${marketerTargetCount - closedAppointmentsCount} more bookings to unlock Fixed Salary)`
+                      : `Guaranteed Commission only (${sRemainingToTarget.toLocaleString()} FCFA more sales to unlock Fixed Salary)`))
                   : (sFloorProtectionApplied
                     ? `Minimum fixed salary (${sFixedSalary.toLocaleString()} FCFA)`
                     : !sIsModeB
@@ -951,7 +992,7 @@ export default function TechnicianDailySummary() {
           <div className="text-left sm:text-right">
             <span className="text-lg font-black text-charcoal">
               {isMarketer
-                ? ((isMarketerTargetMet ? (sFixedSalary || 50000) : 0) + (commissionEarned || sNetCommission || 0)).toLocaleString()
+                ? ((isMarketerTargetMet ? sFixedSalary : 0) + (commissionEarned || sNetCommission || 0)).toLocaleString()
                 : (salarySummary ? sEffectivePayout.toLocaleString() : '0')} FCFA
             </span>
           </div>
