@@ -410,7 +410,8 @@ export default function TechnicianDailySummary() {
     (sIsModeB ? Math.max(sFixedSalary, sBasePay + sNetCommission) : sFixedSalary)
   ) || 0;
 
-  const marketerTotalPayout = (isMarketerTargetMet ? sFixedSalary : 0) + (commissionEarned || sNetCommission || 0);
+  const marketerBaseOrFixed = isMarketerTargetMet ? (sBasePay || sFixedSalary) : sFixedSalary;
+  const marketerTotalPayout = marketerBaseOrFixed + (commissionEarned || sNetCommission || 0);
 
   const sFloorProtectionApplied = Boolean(
     sCalc.floorProtectionApplied ||
@@ -653,7 +654,9 @@ export default function TechnicianDailySummary() {
                 <div>
                   <div className="text-[10px] text-slate-400 uppercase font-semibold">Contract Terms</div>
                   <div className="text-slate-200 font-bold">
-                    {sCommissionRate}% comm · {sFixedSalary.toLocaleString()} fixed
+                    {isMarketer
+                      ? `${sCommissionRate}% comm · ${sFixedSalary.toLocaleString()} flat / ${(sBasePay || 2500).toLocaleString()} base`
+                      : `${sCommissionRate}% comm · ${sFixedSalary.toLocaleString()} fixed`}
                   </div>
                 </div>
               </div>
@@ -851,20 +854,31 @@ export default function TechnicianDailySummary() {
                   )}
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center justify-between text-xs">
-                  <span className="text-muted-gray">Fixed Base Salary:</span>
-                  <span className={`font-bold ${isMarketerTargetMet ? 'text-emerald-700' : 'text-muted-gray'}`}>
-                    {sFixedSalary > 0 ? `${sFixedSalary.toLocaleString()} FCFA` : '0 FCFA'}
-                    {isMarketerTargetMet ? (
-                      <span className="ml-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded border border-emerald-300">
-                        (Unlocked ✓)
-                      </span>
-                    ) : (
-                      <span className="ml-1.5 text-[10px] font-normal text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                        (Locked until target reached)
-                      </span>
-                    )}
-                  </span>
+                <div className="mt-3 pt-2.5 border-t border-border/50 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-gray">Target Met Base Pay (Mode B):</span>
+                    <span className={`font-bold ${isMarketerTargetMet ? 'text-emerald-700' : 'text-muted-gray'}`}>
+                      {(sBasePay || 2500).toLocaleString()} FCFA
+                      {isMarketerTargetMet ? (
+                        <span className="ml-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded border border-emerald-300">
+                          (Active Unlocked ✓)
+                        </span>
+                      ) : (
+                        <span className="ml-1.5 text-[10px] font-normal text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                          (Unlocks at target)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-muted-gray">
+                    <span>Below Target Flat Salary (Mode A):</span>
+                    <span className="font-semibold text-charcoal/80">
+                      {sFixedSalary > 0 ? `${sFixedSalary.toLocaleString()} FCFA` : '0 FCFA'}
+                      {isMarketerTargetMet && (
+                        <span className="ml-1 text-[10px] text-muted-gray font-normal">(Base retainer if sales &lt; target)</span>
+                      )}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -979,10 +993,8 @@ export default function TechnicianDailySummary() {
               <span className="text-[11px] text-muted-gray">
                 {isMarketer
                   ? (isMarketerTargetMet
-                    ? `Fixed Salary (${sFixedSalary.toLocaleString()} FCFA) + Guaranteed Commission`
-                    : (hasSpecificBookingTarget
-                      ? `Guaranteed Commission only (${marketerTargetCount - closedAppointmentsCount} more bookings to unlock Fixed Salary)`
-                      : `Guaranteed Commission only (${sRemainingToTarget.toLocaleString()} FCFA more sales to unlock Fixed Salary)`))
+                    ? `Target Met Base Pay (${(sBasePay || 2500).toLocaleString()} FCFA) + Guaranteed Commission (${(commissionEarned || sNetCommission || 0).toLocaleString()} FCFA)`
+                    : `Below Target Flat Salary (${sFixedSalary.toLocaleString()} FCFA) + Guaranteed Commission`)
                   : (sFloorProtectionApplied
                     ? `Minimum fixed salary (${sFixedSalary.toLocaleString()} FCFA)`
                     : !sIsModeB
