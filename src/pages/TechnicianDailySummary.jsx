@@ -410,6 +410,8 @@ export default function TechnicianDailySummary() {
     (sIsModeB ? Math.max(sFixedSalary, sBasePay + sNetCommission) : sFixedSalary)
   ) || 0;
 
+  const marketerTotalPayout = (isMarketerTargetMet ? sFixedSalary : 0) + (commissionEarned || sNetCommission || 0);
+
   const sFloorProtectionApplied = Boolean(
     sCalc.floorProtectionApplied ||
     (sIsModeB && sEffectivePayout === sFixedSalary && (sBasePay + sNetCommission) < sFixedSalary)
@@ -661,7 +663,7 @@ export default function TechnicianDailySummary() {
                 <div>
                   <div className="text-[10px] text-slate-400 uppercase font-semibold">Projected Payout</div>
                   <div className="text-emerald-300 font-bold text-sm">
-                    {sEffectivePayout.toLocaleString()} FCFA
+                    {(isMarketer ? marketerTotalPayout : sEffectivePayout).toLocaleString()} FCFA
                   </div>
                 </div>
               </div>
@@ -992,7 +994,7 @@ export default function TechnicianDailySummary() {
           <div className="text-left sm:text-right">
             <span className="text-lg font-black text-charcoal">
               {isMarketer
-                ? ((isMarketerTargetMet ? sFixedSalary : 0) + (commissionEarned || sNetCommission || 0)).toLocaleString()
+                ? marketerTotalPayout.toLocaleString()
                 : (salarySummary ? sEffectivePayout.toLocaleString() : '0')} FCFA
             </span>
           </div>
