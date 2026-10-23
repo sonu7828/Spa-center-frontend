@@ -44,6 +44,7 @@ import {
   Calendar,
   FileText,
   Check,
+  Loader2,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -229,6 +230,7 @@ export default function TechnicianDailySummary() {
     const targetId = (isTechnicianRole || isUserMarketer) ? user?.id : currentTech?.id;
     if (!targetId) return;
     setSalaryLoading(true);
+    setSalarySummary(null);
     try {
       const res = await commissionsApi.getSalarySummary({
         technicianId: String(targetId),
@@ -501,8 +503,12 @@ export default function TechnicianDailySummary() {
             <button
               key={tech.id}
               onClick={() => {
-                setSelectedTechName(tech.name);
-                setSearchParams({ technicianId: tech.id });
+                if (selectedTechName !== tech.name) {
+                  setSalarySummary(null);
+                  setSalaryLoading(true);
+                  setSelectedTechName(tech.name);
+                  setSearchParams({ technicianId: tech.id });
+                }
               }}
               className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-[12px] text-xs sm:text-sm font-medium transition-all duration-150 cursor-pointer flex items-center gap-2 border whitespace-nowrap shrink-0 ${
                 selectedTechName === tech.name
@@ -516,6 +522,24 @@ export default function TechnicianDailySummary() {
           ))}
         </div>
       )}
+
+      {/* Loading State Spinner while switching technician/marketer */}
+      {salaryLoading ? (
+        <div className="bg-white border border-border rounded-[20px] p-12 text-center shadow-card flex flex-col items-center justify-center my-6 space-y-3 min-h-[340px]">
+          <div className="w-12 h-12 rounded-full bg-sage-soft border border-sage/30 flex items-center justify-center text-sage">
+            <Loader2 size={26} className="animate-spin text-sage" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-charcoal">
+              Loading Performance Summary for {effectiveName}...
+            </h3>
+            <p className="text-xs text-muted-gray mt-1 max-w-sm mx-auto">
+              Fetching monthly sales quota, commission calculation, and contract mode.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
 
       {/* Target Progress Hero Gauge */}
       {salarySummary && (
@@ -687,7 +711,7 @@ export default function TechnicianDailySummary() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 sm:pb-5 border-b border-border mb-5 gap-2">
           <div>
             <h2 className="text-lg sm:text-xl font-semibold text-charcoal">
-              {isMarketer ? user?.name || currentTech.name : currentTech.name}
+              {currentTech.name}
             </h2>
             <p className="text-xs sm:text-sm text-muted-gray">
               {isMarketer
@@ -1235,6 +1259,8 @@ export default function TechnicianDailySummary() {
           </div>
         )}
       </div>
+    </>
+  )}
 
       {/* Record Penalty Modal */}
       {showPenaltyModal && (
