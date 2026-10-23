@@ -67,7 +67,7 @@ export default function TechnicianDailySummary() {
   const { clients } = useClients();
   const { appointments } = useAppointments();
   const { invoices } = useInvoices();
-  const { getEmployeeCommissionSummary, finalizeStaffPayroll } = useCommission();
+  const { getEmployeeCommissionSummary, finalizeStaffPayroll, commissionFixedAmount } = useCommission();
 
   const role = (user?.role || '').toLowerCase();
   const isTechnicianRole = role === 'technician';
@@ -372,11 +372,16 @@ export default function TechnicianDailySummary() {
     let sales = 0;
     let comm = 0;
     let svcCount = 0;
-    const rate = sCommissionRate > 0 ? sCommissionRate / 100 : 0.1;
     (myProspectedInvoices || []).forEach((inv) => {
       const net = getInvoiceNetPaid(inv);
       sales += net;
-      comm += Math.round(net * rate);
+      if (sCommissionRate > 0) {
+        comm += Math.round(net * (sCommissionRate / 100));
+      } else if (commissionFixedAmount != null && Number(commissionFixedAmount) > 0) {
+        comm += Number(commissionFixedAmount);
+      } else {
+        comm += Math.round(net * 0.1);
+      }
       svcCount += inv.items?.length || 1;
     });
     return {
@@ -384,7 +389,7 @@ export default function TechnicianDailySummary() {
       prospectedTotalCommission: comm,
       prospectedCompletedServices: svcCount,
     };
-  }, [myProspectedInvoices, sCommissionRate]);
+  }, [myProspectedInvoices, sCommissionRate, commissionFixedAmount]);
 
   // Marketer target evaluation:
   // If targetAppointments is explicitly set (e.g. 10 or 20 bookings), track by bookings count.
@@ -1180,8 +1185,11 @@ export default function TechnicianDailySummary() {
                     const grossTotal = Number(inv.total || 0);
                     const netPaid = getInvoiceNetPaid(inv);
                     const discountAmt = Number(inv.discount || 0) || Math.max(0, grossTotal - netPaid);
+                    const isFixedRule = sCommissionRate <= 0 && commissionFixedAmount != null && Number(commissionFixedAmount) > 0;
                     const commRate = sCommissionRate > 0 ? sCommissionRate : 10;
-                    const commAmt = Math.round(netPaid * (commRate / 100));
+                    const commAmt = isFixedRule
+                      ? Number(commissionFixedAmount)
+                      : Math.round(netPaid * (commRate / 100));
                     const hasDiscount = discountAmt > 0 && grossTotal > netPaid;
 
                     return (
@@ -1205,7 +1213,7 @@ export default function TechnicianDailySummary() {
                         <td className="py-2.5 px-3 font-bold text-[#6D28D9]">
                           +{commAmt.toLocaleString()} FCFA
                           <div className="text-[10px] text-muted-gray font-normal">
-                            ({commRate}% on {netPaid.toLocaleString()} FCFA)
+                            {isFixedRule ? '(Fixed amount rule)' : `(${commRate}% on ${netPaid.toLocaleString()} FCFA)`}
                           </div>
                         </td>
                         <td className="py-2.5 px-3 text-right">

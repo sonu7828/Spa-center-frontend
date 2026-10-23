@@ -20,7 +20,7 @@
  * Source: WIREFRAME.md Screen 14 + Referral Commission Spec §1, §6, §7, §9
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   TrendingUp,
   Calendar,
@@ -34,6 +34,10 @@ import {
   X,
   Sliders,
   ShieldAlert,
+  Percent,
+  Coins,
+  Save,
+  Loader2,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -44,7 +48,10 @@ export default function Referrals() {
   const { user } = useAuth();
   const {
     commissionRate,
+    commissionFixedAmount,
+    commissionRuleMode,
     setCommissionRate,
+    setCommissionRule,
     commissions,
     summary,
     isLoading,
@@ -84,6 +91,24 @@ export default function Referrals() {
     setTimeout(() => setNotice(''), 3500);
   };
 
+  // Manager Referral Rule state (Percentage or Fixed Amount)
+  const [ruleMode, setRuleMode] = useState(
+    commissionRuleMode || (commissionFixedAmount ? 'fixed' : 'percentage')
+  );
+  const [customPercentInput, setCustomPercentInput] = useState(
+    commissionRate ? String(commissionRate) : '10'
+  );
+  const [customAmountInput, setCustomAmountInput] = useState(
+    commissionFixedAmount ? String(commissionFixedAmount) : '2000'
+  );
+  const [isSavingRule, setIsSavingRule] = useState(false);
+
+  useEffect(() => {
+    if (commissionRuleMode) setRuleMode(commissionRuleMode);
+    if (commissionRate) setCustomPercentInput(String(commissionRate));
+    if (commissionFixedAmount) setCustomAmountInput(String(commissionFixedAmount));
+  }, [commissionRuleMode, commissionRate, commissionFixedAmount]);
+
   // Cleaner access blocked
   if (isCleaner) {
     return (
@@ -98,7 +123,6 @@ export default function Referrals() {
       </div>
     );
   }
-
 
   // Commission data
   const employeeSummaries = isTechnician
@@ -120,12 +144,47 @@ export default function Referrals() {
     0
   );
 
-  // Manager Rule Update
-  const handleUpdatePercentage = async (newPercentage) => {
+  // Manager Rule Updates (Percentage or Fixed Amount)
+  const handleApplyPercentage = async (rateVal) => {
     if (!isManager) return;
-    await setCommissionRate(newPercentage);
-    showToast(`Referral Commission Rule updated to ${newPercentage}%.`);
+    setIsSavingRule(true);
+    try {
+      const parsed = Math.max(0.1, Math.min(100, Number(rateVal) || 10));
+      setCustomPercentInput(String(parsed));
+      setRuleMode('percentage');
+      await setCommissionRule({
+        mode: 'percentage',
+        percentage: parsed,
+      });
+      showToast(`Referral Commission Rule updated to ${parsed}%.`);
+    } catch (err) {
+      showToast(err?.message || 'Failed to update commission percentage');
+    } finally {
+      setIsSavingRule(false);
+    }
   };
+
+  const handleApplyFixedAmount = async (amountVal) => {
+    if (!isManager) return;
+    setIsSavingRule(true);
+    try {
+      const parsed = Math.max(100, Math.round(Number(amountVal) || 1000));
+      setCustomAmountInput(String(parsed));
+      setRuleMode('fixed');
+      await setCommissionRule({
+        mode: 'fixed',
+        fixedAmount: parsed,
+      });
+      showToast(`Referral Commission Rule updated to ${parsed.toLocaleString()} FCFA (Fixed).`);
+    } catch (err) {
+      showToast(err?.message || 'Failed to update fixed commission');
+    } finally {
+      setIsSavingRule(false);
+    }
+  };
+
+  // Backward compatibility alias
+  const handleUpdatePercentage = handleApplyPercentage;
 
   // Manager Approve Action
   const handleApprove = async (commId) => {
@@ -345,43 +404,235 @@ export default function Referrals() {
                       Referral Commission Rule
                     </h2>
                     <p className="text-xs text-muted-gray">
-                      Commission rate percentage awarded from paid invoices.
+                      Configure how employees are rewarded when referred clients pay for services.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 bg-warm-ivory px-3.5 py-1.5 rounded-[10px] border border-border/80 self-start sm:self-auto">
-                  <span className="text-xs text-muted-gray">Default Rule:</span>
-                  <span className="text-base font-extrabold text-[#4F6748]">
-                    {commissionRate}%
+                <div className="flex items-center gap-2 bg-warm-ivory px-3.5 py-2 rounded-[12px] border border-border/80 self-start sm:self-auto shadow-2xs">
+                  <span className="text-xs text-muted-gray font-medium">Default Rule:</span>
+                  <span className="text-sm sm:text-base font-extrabold text-[#4F6748] font-mono flex items-center gap-1">
+                    {ruleMode === 'fixed' && commissionFixedAmount
+                      ? `${Number(commissionFixedAmount).toLocaleString()} FCFA (Fixed)`
+                      : `${commissionRate || 10}%`}
                   </span>
                 </div>
               </div>
 
-              <div className="mt-4 pt-1">
-                <label className="text-xs font-semibold text-charcoal block mb-2">
-                  Quick Commission Percentage
-                </label>
-                <div className="flex flex-wrap items-center gap-2.5">
-                  {[5, 10, 15].map((rate) => (
+              {/* Mode Toggle & Custom Setup */}
+              <div className="mt-5 space-y-4">
+                {/* 1. Choose Calculation Type */}
+                <div>
+                  <span className="text-xs font-semibold text-charcoal block mb-2">
+                    Commission Reward Mode
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
                     <button
-                      key={rate}
                       type="button"
-                      onClick={() => handleUpdatePercentage(rate)}
-                      className={`px-4 py-2.5 rounded-[10px] text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
-                        commissionRate === rate
-                          ? 'bg-sage text-white border-sage shadow-xs'
-                          : 'bg-soft-cream hover:bg-white text-charcoal border-border'
+                      onClick={() => setRuleMode('percentage')}
+                      className={`p-3 rounded-[12px] border transition-all text-left flex items-start gap-3 cursor-pointer ${
+                        ruleMode === 'percentage'
+                          ? 'bg-sage-soft/70 border-sage text-charcoal shadow-xs'
+                          : 'bg-white hover:bg-soft-cream/50 border-border text-muted-gray'
                       }`}
                     >
-                      {commissionRate === rate && <Check size={14} strokeWidth={2.5} />}
-                      <span>{rate}%</span>
+                      <div
+                        className={`p-2 rounded-[8px] shrink-0 ${
+                          ruleMode === 'percentage'
+                            ? 'bg-sage text-white'
+                            : 'bg-soft-cream text-charcoal'
+                        }`}
+                      >
+                        <Percent size={18} />
+                      </div>
+                      <div>
+                        <div className="text-xs sm:text-sm font-bold text-charcoal flex items-center gap-1.5">
+                          Percentage Commission (%)
+                          {ruleMode === 'percentage' && (
+                            <CheckCircle2 size={14} className="text-sage" />
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-gray mt-0.5">
+                          Calculated as a % share of the client's paid invoice total.
+                        </p>
+                      </div>
                     </button>
-                  ))}
+
+                    <button
+                      type="button"
+                      onClick={() => setRuleMode('fixed')}
+                      className={`p-3 rounded-[12px] border transition-all text-left flex items-start gap-3 cursor-pointer ${
+                        ruleMode === 'fixed'
+                          ? 'bg-sage-soft/70 border-sage text-charcoal shadow-xs'
+                          : 'bg-white hover:bg-soft-cream/50 border-border text-muted-gray'
+                      }`}
+                    >
+                      <div
+                        className={`p-2 rounded-[8px] shrink-0 ${
+                          ruleMode === 'fixed'
+                            ? 'bg-sage text-white'
+                            : 'bg-soft-cream text-charcoal'
+                        }`}
+                      >
+                        <Coins size={18} />
+                      </div>
+                      <div>
+                        <div className="text-xs sm:text-sm font-bold text-charcoal flex items-center gap-1.5">
+                          Fixed Amount (FCFA)
+                          {ruleMode === 'fixed' && (
+                            <CheckCircle2 size={14} className="text-sage" />
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-gray mt-0.5">
+                          A guaranteed flat cash reward per referred client invoice.
+                        </p>
+                      </div>
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[11px] text-muted-gray mt-2.5">
-                  Calculated automatically on invoice payment. Performing technician productivity remains 100% untouched.
-                </p>
+
+                {/* 2. Parameters for Percentage Mode */}
+                {ruleMode === 'percentage' ? (
+                  <div className="pt-2 border-t border-border/60">
+                    <label className="text-xs font-semibold text-charcoal block mb-2">
+                      Quick Commission Percentage
+                    </label>
+
+                    {/* Quick selection pills */}
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      {[5, 10, 12, 15, 20].map((rate) => (
+                        <button
+                          key={rate}
+                          type="button"
+                          onClick={() => handleApplyPercentage(rate)}
+                          className={`px-3.5 py-1.5 rounded-[10px] text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                            ruleMode === 'percentage' && Number(commissionRate) === rate
+                              ? 'bg-sage text-white border-sage shadow-xs'
+                              : 'bg-soft-cream hover:bg-white text-charcoal border-border'
+                          }`}
+                        >
+                          {ruleMode === 'percentage' && Number(commissionRate) === rate && (
+                            <Check size={13} strokeWidth={2.5} />
+                          )}
+                          <span>{rate}%</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom input box */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleApplyPercentage(customPercentInput);
+                      }}
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md"
+                    >
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0.1"
+                          max="100"
+                          value={customPercentInput}
+                          onChange={(e) => setCustomPercentInput(e.target.value)}
+                          placeholder="Custom percentage (e.g. 8.5)"
+                          className="w-full px-3.5 py-2 pr-8 rounded-[10px] border border-border text-sm font-semibold text-charcoal focus:outline-none focus:border-sage bg-warm-ivory/30"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-gray">
+                          %
+                        </span>
+                      </div>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        disabled={isSavingRule || !customPercentInput}
+                        className="flex items-center justify-center gap-1.5 whitespace-nowrap py-2 px-4 rounded-[10px] text-xs font-bold cursor-pointer"
+                      >
+                        {isSavingRule ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Save size={14} />
+                        )}
+                        <span>Save Percentage</span>
+                      </Button>
+                    </form>
+
+                    <p className="text-[11px] text-muted-gray mt-2.5">
+                      Calculated automatically on invoice payment. Performing technician productivity remains 100% untouched.
+                    </p>
+                  </div>
+                ) : (
+                  /* 3. Parameters for Fixed Amount Mode */
+                  <div className="pt-2 border-t border-border/60">
+                    <label className="text-xs font-semibold text-charcoal block mb-2">
+                      Quick Fixed Cash Amount (FCFA)
+                    </label>
+
+                    {/* Quick selection pills */}
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      {[1000, 2000, 2500, 3000, 5000].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => handleApplyFixedAmount(amt)}
+                          className={`px-3.5 py-1.5 rounded-[10px] text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                            ruleMode === 'fixed' && Number(commissionFixedAmount) === amt
+                              ? 'bg-sage text-white border-sage shadow-xs'
+                              : 'bg-soft-cream hover:bg-white text-charcoal border-border'
+                          }`}
+                        >
+                          {ruleMode === 'fixed' && Number(commissionFixedAmount) === amt && (
+                            <Check size={13} strokeWidth={2.5} />
+                          )}
+                          <span>{amt.toLocaleString()} FCFA</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom input box */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleApplyFixedAmount(customAmountInput);
+                      }}
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md"
+                    >
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          step="100"
+                          min="100"
+                          value={customAmountInput}
+                          onChange={(e) => setCustomAmountInput(e.target.value)}
+                          placeholder="Fixed amount (e.g. 2500)"
+                          className="w-full px-3.5 py-2 pr-14 rounded-[10px] border border-border text-sm font-semibold text-charcoal focus:outline-none focus:border-sage bg-warm-ivory/30"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-gray">
+                          FCFA
+                        </span>
+                      </div>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        disabled={isSavingRule || !customAmountInput}
+                        className="flex items-center justify-center gap-1.5 whitespace-nowrap py-2 px-4 rounded-[10px] text-xs font-bold cursor-pointer"
+                      >
+                        {isSavingRule ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Save size={14} />
+                        )}
+                        <span>Save Fixed Amount</span>
+                      </Button>
+                    </form>
+
+                    <p className="text-[11px] text-muted-gray mt-2.5">
+                      Awarded as a flat cash commission per paid invoice of clients introduced by this employee, regardless of invoice total.
+                    </p>
+                  </div>
+                )}
               </div>
             </section>
           )}
