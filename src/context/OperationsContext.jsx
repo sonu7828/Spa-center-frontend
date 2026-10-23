@@ -19,7 +19,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { stockApi } from '../services/api';
-import { useAuth } from './AuthContext';
+import { useAuth, isMarketerUser } from './AuthContext';
 
 const OperationsContext = createContext();
 
@@ -124,7 +124,11 @@ function formatActivity(act) {
 
 export function OperationsProvider({ children }) {
   const { isAuthenticated, user } = useAuth();
-  const isCleaner = (user?.role || '').toLowerCase() === 'cleaner';
+  const userRole = (user?.role || '').toLowerCase();
+  const isCleaner = userRole === 'cleaner';
+  const isMarketer = userRole === 'marketer' || isMarketerUser(user);
+  const canAccessStock = isAuthenticated && ['manager', 'reception', 'technician'].includes(userRole) && !isMarketer;
+
   // Service stock items loaded from backend
   const [serviceStock, setServiceStock] = useState([]);
   const [isLoadingStock, setIsLoadingStock] = useState(true);
@@ -164,8 +168,10 @@ export function OperationsProvider({ children }) {
 
   // Load stock items and activity history from backend
   const refreshStock = useCallback(async () => {
-    if (!isAuthenticated || isCleaner) {
+    if (!canAccessStock) {
       setIsLoadingStock(false);
+      setServiceStock([]);
+      setStockAuditLog([]);
       return;
     }
     try {
@@ -211,15 +217,17 @@ export function OperationsProvider({ children }) {
     } finally {
       setIsLoadingStock(false);
     }
-  }, [isAuthenticated, isCleaner]);
+  }, [canAccessStock]);
 
   useEffect(() => {
-    if (isAuthenticated && !isCleaner) {
+    if (canAccessStock) {
       refreshStock();
     } else {
       setIsLoadingStock(false);
+      setServiceStock([]);
+      setStockAuditLog([]);
     }
-  }, [isAuthenticated, isCleaner, refreshStock]);
+  }, [canAccessStock, refreshStock]);
 
   // Check if an appointment was already closed
   const isAppointmentClosed = useCallback(
