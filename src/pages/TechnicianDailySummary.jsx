@@ -294,7 +294,9 @@ export default function TechnicianDailySummary() {
   // Real backend metrics prioritized
   const servicesToday = techReport?.servicesCompleted ?? fallbackServicesToday;
   const serviceProductivity = techReport?.revenueGenerated ?? fallbackProductivity;
-  const commissionEarned = techReport?.commissionEarned ?? commSummary.commissionEarned;
+  const commissionEarned = isMarketer
+    ? (sNetCommission || commSummary.commissionEarned || 0)
+    : (techReport?.commissionEarned ?? commSummary.commissionEarned);
   const averageTicket = techReport?.averageTicket ?? (servicesToday > 0 ? Math.round(serviceProductivity / servicesToday) : 0);
 
   const today = new Date().toLocaleDateString('en-GB', {
@@ -739,7 +741,7 @@ export default function TechnicianDailySummary() {
                 Referral Commission Rate
               </span>
               <span className="text-sm font-semibold text-charcoal font-mono">
-                10% per completed service
+                {sCommissionRate > 0 ? `${sCommissionRate}% per completed service` : '10% per completed service'}
               </span>
             </div>
           </div>
@@ -1103,7 +1105,7 @@ export default function TechnicianDailySummary() {
                       <td className="py-2.5 px-3 font-semibold text-charcoal">{inv.clientName}</td>
                       <td className="py-2.5 px-3 text-muted-gray">{inv.date}</td>
                       <td className="py-2.5 px-3 font-bold text-charcoal">{(inv.total || 0).toLocaleString()} FCFA</td>
-                      <td className="py-2.5 px-3 font-bold text-[#6D28D9]">+{Math.round((inv.total || 0) * 0.1).toLocaleString()} FCFA</td>
+                      <td className="py-2.5 px-3 font-bold text-[#6D28D9]">+{Math.round((inv.total || 0) * (sCommissionRate > 0 ? sCommissionRate / 100 : 0.1)).toLocaleString()} FCFA</td>
                       <td className="py-2.5 px-3 text-right">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           <Check size={10} /> Paid
