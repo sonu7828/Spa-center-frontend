@@ -44,6 +44,7 @@ import {
   Search,
   Filter,
   ArrowUpDown,
+  Lock,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -612,32 +613,62 @@ export default function PendingInvoices() {
     }
   }, [refreshInvoices]);
 
-  const myTechnicianId = user?.id;
-  const myTechnicianName = (user?.name || '').trim().toLowerCase();
+  const myUserId = user?.id;
+  const myUserName = (user?.name || '').trim().toLowerCase();
 
-  const filterByTechnician = useCallback((list) => {
-    if (!isTechnician) return list;
-    return (list || []).filter((inv) => {
-      if (inv.technicianId && String(inv.technicianId) === String(myTechnicianId)) return true;
-      if (inv.mainTechnicianId && String(inv.mainTechnicianId) === String(myTechnicianId)) return true;
-      if (Array.isArray(inv.items)) {
-        return inv.items.some(
-          (it) =>
-            (it.technicianId && String(it.technicianId) === String(myTechnicianId)) ||
-            (it.technician && String(it.technician).trim().toLowerCase() === myTechnicianName)
-        );
-      }
-      return false;
-    });
-  }, [isTechnician, myTechnicianId, myTechnicianName]);
+  const filterForUserRole = useCallback((list) => {
+    if (isTechnician) {
+      return (list || []).filter((inv) => {
+        if (inv.technicianId && String(inv.technicianId) === String(myUserId)) return true;
+        if (inv.mainTechnicianId && String(inv.mainTechnicianId) === String(myUserId)) return true;
+        if (Array.isArray(inv.items)) {
+          return inv.items.some(
+            (it) =>
+              (it.technicianId && String(it.technicianId) === String(myUserId)) ||
+              (it.technician && String(it.technician).trim().toLowerCase() === myUserName)
+          );
+        }
+        return false;
+      });
+    }
+
+    if (isMarketer) {
+      // Find all client IDs introduced by this marketer
+      const myClientIds = new Set(
+        (clients || [])
+          .filter((c) =>
+            (c.introducedById && String(c.introducedById) === String(myUserId)) ||
+            (c.introducedBy && c.introducedBy.trim().toLowerCase() === myUserName)
+          )
+          .map((c) => String(c.id))
+      );
+
+      return (list || []).filter((inv) => {
+        // 1. Created by this marketer
+        if (inv.createdById && String(inv.createdById) === String(myUserId)) return true;
+        // 2. Direct introducedBy attribute on invoice
+        if (inv.introducedById && String(inv.introducedById) === String(myUserId)) return true;
+        if (inv.introducedBy && inv.introducedBy.trim().toLowerCase() === myUserName) return true;
+        // 3. Client belongs to this marketer
+        if (inv.clientId && myClientIds.has(String(inv.clientId))) return true;
+        if (inv.client && (
+          (inv.client.introducedByEmployeeId && String(inv.client.introducedByEmployeeId) === String(myUserId)) ||
+          (inv.client.introducedBy && inv.client.introducedBy.trim().toLowerCase() === myUserName)
+        )) return true;
+        return false;
+      });
+    }
+
+    return list || [];
+  }, [isTechnician, isMarketer, myUserId, myUserName, clients]);
 
   const rawPendingInvoices = typeof getPendingInvoices === 'function' ? getPendingInvoices() : [];
   const rawPaidTodayInvoices = typeof getPaidTodayInvoices === 'function' ? getPaidTodayInvoices() : [];
   const rawHistoryInvoices = typeof getHistoryInvoices === 'function' ? getHistoryInvoices() : [];
 
-  const pendingInvoices = useMemo(() => filterByTechnician(rawPendingInvoices), [rawPendingInvoices, filterByTechnician]);
-  const paidTodayInvoices = useMemo(() => filterByTechnician(rawPaidTodayInvoices), [rawPaidTodayInvoices, filterByTechnician]);
-  const historyInvoices = useMemo(() => filterByTechnician(rawHistoryInvoices), [rawHistoryInvoices, filterByTechnician]);
+  const pendingInvoices = useMemo(() => filterForUserRole(rawPendingInvoices), [rawPendingInvoices, filterForUserRole]);
+  const paidTodayInvoices = useMemo(() => filterForUserRole(rawPaidTodayInvoices), [rawPaidTodayInvoices, filterForUserRole]);
+  const historyInvoices = useMemo(() => filterForUserRole(rawHistoryInvoices), [rawHistoryInvoices, filterForUserRole]);
 
   // --- History Tab Search, Filter & Pagination State ---
   const [historySearch, setHistorySearch] = useState('');
@@ -2229,37 +2260,51 @@ export default function PendingInvoices() {
                             </div>
 
                             {/* Collect Payment CTA */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
-                              <div className="text-xs text-muted-gray">
-                                Collecting will mark status as{' '}
-                                <span className="font-bold text-success">PAID</span> and move
-                                to Paid Today.
+                            {canCollectPayment ? (
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
+                                <div className="text-xs text-muted-gray">
+                                  Collecting will mark status as{' '}
+                                  <span className="font-bold text-success">PAID</span> and move
+                                  to Paid Today.
+                                </div>
+                                <Button
+                                  className="w-full sm:w-auto min-w-[220px]"
+                                  disabled={Boolean(collectingId)}
+                                  onClick={() => handleCollectPayment(invoice)}
+                                >
+                                  {collectingId === invoice.id ? (
+                                    <>
+                                      <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
+                                      <span>Collecting Payment...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
+                                      <span>
+                                        Collect Payment (
+                                        {(discountAmount > 0
+                                          ? finalTotal
+                                          : invoice.total
+                                        ).toLocaleString('en-US')}{' '}
+                                        FCFA)
+                                      </span>
+                                    </>
+                                  )}
+                                </Button>
                               </div>
-                              <Button
-                                className="w-full sm:w-auto min-w-[220px]"
-                                disabled={Boolean(collectingId)}
-                                onClick={() => handleCollectPayment(invoice)}
-                              >
-                                {collectingId === invoice.id ? (
-                                  <>
-                                    <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
-                                    <span>Collecting Payment...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
-                                    <span>
-                                      Collect Payment (
-                                      {(discountAmount > 0
-                                        ? finalTotal
-                                        : invoice.total
-                                      ).toLocaleString('en-US')}{' '}
-                                      FCFA)
-                                    </span>
-                                  </>
-                                )}
-                              </Button>
-                            </div>
+                            ) : (
+                              <div className="flex items-center justify-between gap-3 pt-3 border-t border-border bg-amber-50/70 p-3 rounded-[12px] border border-amber-200/80 text-amber-900 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <Lock size={15} className="text-amber-600 shrink-0" />
+                                  <span className="font-medium">
+                                    Pending Payment · Awaiting Reception Desk to collect
+                                  </span>
+                                </div>
+                                <span className="font-bold text-charcoal">
+                                  {(discountAmount > 0 ? finalTotal : invoice.total).toLocaleString('en-US')} FCFA
+                                </span>
+                              </div>
+                            )}
                           </>
                         ) : (
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border bg-warm-ivory/60 p-3.5 rounded-[12px] border border-border/80">
