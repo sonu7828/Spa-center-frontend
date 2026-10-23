@@ -448,22 +448,24 @@ export default function TechnicianDailySummary() {
   ) || 0;
 
   const sTotalPenalties = Number(
-    sCalc.totalPenalties ?? totalPenalties ?? sReferralDeductions ?? 0
+    totalPenalties || sCalc.totalPenalties || sReferralDeductions || 0
   ) || 0;
 
-  const sEffectivePayout = Number(
+  const rawTechPayout = Number(
     sCalc.currentProjectedPayout ??
     sCalc.effectivePayout ??
     sCalc.calculatedPayout ??
     (sIsModeB ? Math.max(sFixedSalary, sBasePay + sNetCommission) : sFixedSalary)
   ) || 0;
+  const sEffectivePayout = Math.max(0, rawTechPayout - sTotalPenalties);
 
   const marketerBaseOrFixed = isMarketerTargetMet ? (sBasePay || 2500) : (sFixedSalary || 2000);
-  const marketerTotalPayout = marketerBaseOrFixed + (commissionEarned || 0);
+  const marketerGrossPayout = marketerBaseOrFixed + (commissionEarned || 0);
+  const marketerTotalPayout = Math.max(0, marketerGrossPayout - sTotalPenalties);
 
   const sFloorProtectionApplied = Boolean(
     sCalc.floorProtectionApplied ||
-    (sIsModeB && sEffectivePayout === sFixedSalary && (sBasePay + sNetCommission) < sFixedSalary)
+    (sIsModeB && rawTechPayout === sFixedSalary && (sBasePay + sNetCommission) < sFixedSalary)
   );
 
   return (
@@ -738,6 +740,11 @@ export default function TechnicianDailySummary() {
                   <div className="text-emerald-300 font-bold text-sm">
                     {(isMarketer ? marketerTotalPayout : sEffectivePayout).toLocaleString()} FCFA
                   </div>
+                  {sTotalPenalties > 0 && (
+                    <div className="text-[10px] text-rose-300 font-medium">
+                      (-{sTotalPenalties.toLocaleString()} FCFA penalty deducted)
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1040,10 +1047,10 @@ export default function TechnicianDailySummary() {
           )}
 
           {/* Penalties Deduction Row if any */}
-          {salarySummary && sTotalPenalties > 0 && (
-            <div className="flex items-center justify-between text-sm text-rose-700">
-              <span className="font-medium flex items-center gap-1.5">
-                <ShieldAlert size={14} /> Disciplinary Deductions
+          {sTotalPenalties > 0 && (
+            <div className="flex items-center justify-between text-sm text-rose-700 bg-rose-50/70 p-2.5 rounded-[10px] border border-rose-200">
+              <span className="font-semibold flex items-center gap-1.5">
+                <ShieldAlert size={15} className="text-rose-600" /> Disciplinary Infractions & Penalties Deducted
               </span>
               <span className="font-bold font-mono">
                 -{sTotalPenalties.toLocaleString()} FCFA
@@ -1063,9 +1070,11 @@ export default function TechnicianDailySummary() {
               <span className="text-[11px] text-muted-gray">
                 {isMarketer
                   ? (isMarketerTargetMet
-                    ? `Target Met Base Pay (${(sBasePay || 2500).toLocaleString()} FCFA) + Guaranteed Commission (${(commissionEarned || sNetCommission || 0).toLocaleString()} FCFA)`
-                    : `Below Target Flat Salary (${sFixedSalary.toLocaleString()} FCFA) + Guaranteed Commission`)
-                  : (sFloorProtectionApplied
+                    ? `Target Met Base Pay (${(sBasePay || 2500).toLocaleString()} FCFA) + Guaranteed Commission (${(commissionEarned || 0).toLocaleString()} FCFA)${sTotalPenalties > 0 ? ` - Penalties (${sTotalPenalties.toLocaleString()} FCFA)` : ''}`
+                    : `Below Target Flat Salary (${(sFixedSalary || 2000).toLocaleString()} FCFA) + Guaranteed Commission (${(commissionEarned || 0).toLocaleString()} FCFA)${sTotalPenalties > 0 ? ` - Penalties (${sTotalPenalties.toLocaleString()} FCFA)` : ''}`)
+                  : (sTotalPenalties > 0
+                    ? `Gross Payout (${rawTechPayout.toLocaleString()} FCFA) - Penalties (${sTotalPenalties.toLocaleString()} FCFA)`
+                    : sFloorProtectionApplied
                     ? `Minimum fixed salary (${sFixedSalary.toLocaleString()} FCFA)`
                     : !sIsModeB
                     ? `Fixed Salary (Target not yet met)`
@@ -1267,7 +1276,7 @@ export default function TechnicianDailySummary() {
 
           <div className="bg-soft-cream/40 border border-border rounded-[12px] p-3.5 flex items-center text-xs text-muted-gray leading-relaxed">
             <span>
-              <strong>Policy Notice:</strong> Recorded penalties provide an audit trail for management review during manual payroll settlement. Raw service commissions are calculated independently.
+              <strong>Policy Notice:</strong> Recorded penalties are automatically deducted from the Projected Monthly Payout to maintain real-time net payroll accuracy.
             </span>
           </div>
         </div>
