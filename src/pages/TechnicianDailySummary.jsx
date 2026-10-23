@@ -346,6 +346,46 @@ export default function TechnicianDailySummary() {
       (c.introducedBy && c.introducedBy.toLowerCase().trim() === effectiveName.toLowerCase().trim())
   );
 
+  // Helper: Get actual cash collected after discount
+  const getInvoiceNetPaid = (inv) => {
+    if (inv.paidAmount != null && Number(inv.paidAmount) > 0) return Number(inv.paidAmount);
+    if (inv.finalTotal != null && Number(inv.finalTotal) > 0) return Number(inv.finalTotal);
+    const total = Number(inv.total || 0);
+    const discount = Number(inv.discount || 0);
+    return Math.max(0, total - discount);
+  };
+
+  // Invoices belonging to clients prospected by this marketer
+  const myProspectedInvoices = useMemo(() => {
+    const referredIds = new Set(myReferredClients.map((c) => String(c.id)));
+    const targetUserId = String(currentTech?.id);
+    return (invoices || []).filter(
+      (inv) =>
+        (referredIds.has(String(inv.clientId)) ||
+        (inv.introducedById && String(inv.introducedById) === targetUserId)) &&
+        (inv.status === 'PAID' || inv.status === 'COMPLETED')
+    );
+  }, [invoices, myReferredClients, currentTech?.id]);
+
+  // Aggregate actual net sales, commissions, and services from prospected paid invoices
+  const { prospectedNetSales, prospectedTotalCommission, prospectedCompletedServices } = useMemo(() => {
+    let sales = 0;
+    let comm = 0;
+    let svcCount = 0;
+    const rate = sCommissionRate > 0 ? sCommissionRate / 100 : 0.1;
+    (myProspectedInvoices || []).forEach((inv) => {
+      const net = getInvoiceNetPaid(inv);
+      sales += net;
+      comm += Math.round(net * rate);
+      svcCount += inv.items?.length || 1;
+    });
+    return {
+      prospectedNetSales: sales,
+      prospectedTotalCommission: comm,
+      prospectedCompletedServices: svcCount,
+    };
+  }, [myProspectedInvoices, sCommissionRate]);
+
   // Marketer target evaluation:
   // If targetAppointments is explicitly set (e.g. 10 or 20 bookings), track by bookings count.
   // Otherwise, track by monthly sales target in FCFA (sIsTargetMet).
@@ -365,27 +405,27 @@ export default function TechnicianDailySummary() {
   }, [myReferredClients, appointments]);
 
   const closedAppointmentsCount = marketerClosedAppointments.length;
+
+  const effectiveMtdSales = isMarketer
+    ? Math.max(sMtdSales, prospectedNetSales)
+    : sMtdSales;
+
+  const effectiveProgressPercent = sMonthlyTarget > 0
+    ? Math.min(100, Math.round((effectiveMtdSales / sMonthlyTarget) * 1000) / 10)
+    : 0;
+
+  const effectiveRemainingToTarget = Math.max(0, sMonthlyTarget - effectiveMtdSales);
+
   const isMarketerTargetMet = hasSpecificBookingTarget
     ? closedAppointmentsCount >= marketerTargetCount
-    : Boolean(sIsTargetMet || (sMonthlyTarget > 0 && sMtdSales >= sMonthlyTarget));
-
-  // Invoices belonging to clients prospected by this marketer
-  const myProspectedInvoices = useMemo(() => {
-    const referredIds = new Set(myReferredClients.map((c) => String(c.id)));
-    const targetUserId = String(currentTech?.id);
-    return (invoices || []).filter(
-      (inv) =>
-        (referredIds.has(String(inv.clientId)) ||
-        (inv.introducedById && String(inv.introducedById) === targetUserId)) &&
-        (inv.status === 'PAID' || inv.status === 'COMPLETED')
-    );
-  }, [invoices, myReferredClients, currentTech?.id]);
+    : Boolean(sIsTargetMet || (sMonthlyTarget > 0 && effectiveMtdSales >= sMonthlyTarget));
 
   // Active Mode: Mode B (Target Met) vs Mode A (Below Target)
-  const sIsModeB =
-    sIsTargetMet ||
-    sCalc.activeMode === 'BASE_PLUS_COMMISSION' ||
-    sCalc.mode === 'MODE_B_TARGET_MET';
+  const sIsModeB = isMarketer
+    ? isMarketerTargetMet
+    : (sIsTargetMet ||
+      sCalc.activeMode === 'BASE_PLUS_COMMISSION' ||
+      sCalc.mode === 'MODE_B_TARGET_MET');
 
   const sGrossCommission = Number(
     sCalc.grossCommissionAccumulated ?? sCalc.grossCommission ?? 0
@@ -400,7 +440,7 @@ export default function TechnicianDailySummary() {
   ) || 0;
 
   const commissionEarned = isMarketer
-    ? (sNetCommission || commSummary.commissionEarned || 0)
+    ? Math.max(sNetCommission, prospectedTotalCommission, commSummary.commissionEarned || 0)
     : (techReport?.commissionEarned ?? commSummary.commissionEarned);
 
   const sUnearnedLocked = Number(
@@ -418,8 +458,8 @@ export default function TechnicianDailySummary() {
     (sIsModeB ? Math.max(sFixedSalary, sBasePay + sNetCommission) : sFixedSalary)
   ) || 0;
 
-  const marketerBaseOrFixed = isMarketerTargetMet ? (sBasePay || sFixedSalary) : sFixedSalary;
-  const marketerTotalPayout = marketerBaseOrFixed + (commissionEarned || sNetCommission || 0);
+  const marketerBaseOrFixed = isMarketerTargetMet ? (sBasePay || 2500) : (sFixedSalary || 2000);
+  const marketerTotalPayout = marketerBaseOrFixed + (commissionEarned || 0);
 
   const sFloorProtectionApplied = Boolean(
     sCalc.floorProtectionApplied ||
@@ -631,7 +671,7 @@ export default function TechnicianDailySummary() {
               <div className="flex items-center justify-between text-xs sm:text-sm">
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                    {sMtdSales.toLocaleString()}
+                    {(isMarketer ? effectiveMtdSales : sMtdSales).toLocaleString()}
                   </span>
                   <span className="text-slate-400 font-medium text-xs sm:text-sm">
                     / {sMonthlyTarget.toLocaleString()} FCFA MTD
@@ -643,7 +683,7 @@ export default function TechnicianDailySummary() {
                       sIsModeB ? 'text-emerald-400' : 'text-amber-400'
                     }`}
                   >
-                    {sProgressPercent}%
+                    {(isMarketer ? effectiveProgressPercent : sProgressPercent)}%
                   </span>
                 </div>
               </div>
@@ -656,7 +696,7 @@ export default function TechnicianDailySummary() {
                       : 'bg-gradient-to-r from-amber-500 to-orange-400'
                   }`}
                   style={{
-                    width: `${Math.min(100, Math.max(3, sProgressPercent))}%`,
+                    width: `${Math.min(100, Math.max(3, (isMarketer ? effectiveProgressPercent : sProgressPercent)))}%`,
                   }}
                 />
               </div>
@@ -674,7 +714,7 @@ export default function TechnicianDailySummary() {
                   <div className="text-slate-200 font-bold">
                     {sIsModeB
                       ? 'Target Achieved 🎉'
-                      : `${sRemainingToTarget.toLocaleString()} FCFA remaining`}
+                      : `${(isMarketer ? effectiveRemainingToTarget : sRemainingToTarget).toLocaleString()} FCFA remaining`}
                   </div>
                 </div>
               </div>
@@ -759,7 +799,7 @@ export default function TechnicianDailySummary() {
                 Completed Referral Services
               </span>
               <span className="text-sm font-bold text-charcoal">
-                {commSummary.completedServices}
+                {prospectedCompletedServices || commSummary.completedServices || 0}
               </span>
             </div>
 
@@ -878,8 +918,8 @@ export default function TechnicianDailySummary() {
                     </>
                   ) : (
                     <>
-                      <span>Achieved this month: <strong>{sMtdSales.toLocaleString()} FCFA</strong></span>
-                      <span>{sProgressPercent}% complete</span>
+                      <span>Achieved this month: <strong>{(isMarketer ? effectiveMtdSales : sMtdSales).toLocaleString()} FCFA</strong></span>
+                      <span>{(isMarketer ? effectiveProgressPercent : sProgressPercent)}% complete</span>
                     </>
                   )}
                 </div>
@@ -1127,20 +1167,46 @@ export default function TechnicianDailySummary() {
                   </tr>
                 </thead>
                 <tbody>
-                  {myProspectedInvoices.map((inv) => (
-                    <tr key={inv.id} className="border-b border-border/30 last:border-b-0 hover:bg-soft-cream/20">
-                      <td className="py-2.5 px-3 font-mono font-bold text-charcoal">{inv.invoiceNumber}</td>
-                      <td className="py-2.5 px-3 font-semibold text-charcoal">{inv.clientName}</td>
-                      <td className="py-2.5 px-3 text-muted-gray">{inv.date}</td>
-                      <td className="py-2.5 px-3 font-bold text-charcoal">{(inv.total || 0).toLocaleString()} FCFA</td>
-                      <td className="py-2.5 px-3 font-bold text-[#6D28D9]">+{Math.round((inv.total || 0) * (sCommissionRate > 0 ? sCommissionRate / 100 : 0.1)).toLocaleString()} FCFA</td>
-                      <td className="py-2.5 px-3 text-right">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <Check size={10} /> Paid
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {myProspectedInvoices.map((inv) => {
+                    const grossTotal = Number(inv.total || 0);
+                    const netPaid = getInvoiceNetPaid(inv);
+                    const discountAmt = Number(inv.discount || 0) || Math.max(0, grossTotal - netPaid);
+                    const commRate = sCommissionRate > 0 ? sCommissionRate : 10;
+                    const commAmt = Math.round(netPaid * (commRate / 100));
+                    const hasDiscount = discountAmt > 0 && grossTotal > netPaid;
+
+                    return (
+                      <tr key={inv.id} className="border-b border-border/30 last:border-b-0 hover:bg-soft-cream/20">
+                        <td className="py-2.5 px-3 font-mono font-bold text-charcoal">{inv.invoiceNumber}</td>
+                        <td className="py-2.5 px-3 font-semibold text-charcoal">{inv.clientName}</td>
+                        <td className="py-2.5 px-3 text-muted-gray">{inv.date}</td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-bold text-charcoal">
+                            {netPaid.toLocaleString()} FCFA
+                          </div>
+                          {hasDiscount && (
+                            <div className="text-[10px] text-muted-gray flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className="line-through text-slate-400">{grossTotal.toLocaleString()} FCFA</span>
+                              <span className="text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                -{discountAmt.toLocaleString()} FCFA (10% discount)
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 font-bold text-[#6D28D9]">
+                          +{commAmt.toLocaleString()} FCFA
+                          <div className="text-[10px] text-muted-gray font-normal">
+                            ({commRate}% on {netPaid.toLocaleString()} FCFA)
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <Check size={10} /> Paid
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
