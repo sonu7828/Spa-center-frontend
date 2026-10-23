@@ -294,9 +294,6 @@ export default function TechnicianDailySummary() {
   // Real backend metrics prioritized
   const servicesToday = techReport?.servicesCompleted ?? fallbackServicesToday;
   const serviceProductivity = techReport?.revenueGenerated ?? fallbackProductivity;
-  const commissionEarned = isMarketer
-    ? (sNetCommission || commSummary.commissionEarned || 0)
-    : (techReport?.commissionEarned ?? commSummary.commissionEarned);
   const averageTicket = techReport?.averageTicket ?? (servicesToday > 0 ? Math.round(serviceProductivity / servicesToday) : 0);
 
   const today = new Date().toLocaleDateString('en-GB', {
@@ -396,6 +393,10 @@ export default function TechnicianDailySummary() {
     sCalc.netCommission ??
     Math.max(0, sGrossCommission - sReferralDeductions)
   ) || 0;
+
+  const commissionEarned = isMarketer
+    ? (sNetCommission || commSummary.commissionEarned || 0)
+    : (techReport?.commissionEarned ?? commSummary.commissionEarned);
 
   const sUnearnedLocked = Number(
     sCalc.unearnedCommissionLocked ?? (!sIsModeB ? sNetCommission : 0)
