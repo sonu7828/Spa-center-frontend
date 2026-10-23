@@ -45,6 +45,11 @@ import {
   FileText,
   Check,
   Loader2,
+  Scissors,
+  Megaphone,
+  Users,
+  Search,
+  X,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -78,6 +83,37 @@ export default function TechnicianDailySummary() {
   const dynamicTechnicians = allUsers.filter(
     (u) => (u.role === 'technician' || u.role === 'marketer' || isMarketerUser(u)) && u.active !== false
   );
+
+  const isUserAMarketer = useCallback((u) => {
+    if (!u) return false;
+    const r = String(u.role?.name || u.role || '').toLowerCase();
+    return r === 'marketer' || isMarketerUser(u);
+  }, []);
+
+  const techniciansList = useMemo(
+    () => dynamicTechnicians.filter((u) => !isUserAMarketer(u)),
+    [dynamicTechnicians, isUserAMarketer]
+  );
+
+  const marketersList = useMemo(
+    () => dynamicTechnicians.filter((u) => isUserAMarketer(u)),
+    [dynamicTechnicians, isUserAMarketer]
+  );
+
+  const [staffCategoryTab, setStaffCategoryTab] = useState('all'); // 'all' | 'technician' | 'marketer'
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
+
+  const filteredTechnicians = useMemo(() => {
+    if (!staffSearchQuery.trim()) return techniciansList;
+    const q = staffSearchQuery.toLowerCase().trim();
+    return techniciansList.filter((u) => u.name?.toLowerCase().includes(q));
+  }, [techniciansList, staffSearchQuery]);
+
+  const filteredMarketers = useMemo(() => {
+    if (!staffSearchQuery.trim()) return marketersList;
+    const q = staffSearchQuery.toLowerCase().trim();
+    return marketersList.filter((u) => u.name?.toLowerCase().includes(q));
+  }, [marketersList, staffSearchQuery]);
 
   const queryTechId = searchParams.get('technicianId') || searchParams.get('id');
   const queryTechName = searchParams.get('name') || searchParams.get('technician');
@@ -543,30 +579,242 @@ export default function TechnicianDailySummary() {
         }
       />
 
-      {/* Technician & Marketer Selector Tabs — visible to Manager */}
+      {/* ── Role-Separated Staff Selector (Manager & Reception) ── */}
       {!isTechnicianRole && !isUserMarketer && (
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-1.5 scrollbar-none">
-          {dynamicTechnicians.map((tech) => (
-            <button
-              key={tech.id}
-              onClick={() => {
-                if (selectedTechName !== tech.name) {
-                  setSalarySummary(null);
-                  setSalaryLoading(true);
-                  setSelectedTechName(tech.name);
-                  setSearchParams({ technicianId: tech.id });
-                }
-              }}
-              className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-[12px] text-xs sm:text-sm font-medium transition-all duration-150 cursor-pointer flex items-center gap-2 border whitespace-nowrap shrink-0 ${
-                selectedTechName === tech.name
-                  ? 'bg-sage text-charcoal font-semibold border-sage shadow-sm'
-                  : 'bg-white text-muted-gray border-border hover:bg-soft-cream hover:text-charcoal'
-              }`}
-            >
-              <User size={15} />
-              {tech.name} — {(tech.specialties || []).join(', ') || (tech.role === 'marketer' ? 'Marketer' : 'Technician')}
-            </button>
-          ))}
+        <div className="bg-white border border-border rounded-[18px] p-4 sm:p-5 mb-6 shadow-card transition-all">
+          {/* Top Bar: Tabs + Search Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
+            {/* Category Segmented Tabs */}
+            <div className="flex items-center gap-1.5 p-1 bg-soft-cream/80 border border-border/80 rounded-[12px] self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setStaffCategoryTab('all')}
+                className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  staffCategoryTab === 'all'
+                    ? 'bg-white text-charcoal shadow-xs border border-border/60'
+                    : 'text-muted-gray hover:text-charcoal'
+                }`}
+              >
+                <Users size={13} />
+                <span>All</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    staffCategoryTab === 'all'
+                      ? 'bg-sage-soft text-[#4F6748]'
+                      : 'bg-warm-ivory text-muted-gray'
+                  }`}
+                >
+                  {dynamicTechnicians.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStaffCategoryTab('technician');
+                  if (isMarketer && techniciansList.length > 0) {
+                    const first = techniciansList[0];
+                    if (selectedTechName !== first.name) {
+                      setSalarySummary(null);
+                      setSalaryLoading(true);
+                      setSelectedTechName(first.name);
+                      setSearchParams({ technicianId: first.id });
+                    }
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  staffCategoryTab === 'technician'
+                    ? 'bg-sage text-white shadow-xs'
+                    : 'text-muted-gray hover:text-charcoal'
+                }`}
+              >
+                <Scissors size={13} />
+                <span>Technicians</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    staffCategoryTab === 'technician'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-warm-ivory text-muted-gray'
+                  }`}
+                >
+                  {techniciansList.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStaffCategoryTab('marketer');
+                  if (!isMarketer && marketersList.length > 0) {
+                    const first = marketersList[0];
+                    if (selectedTechName !== first.name) {
+                      setSalarySummary(null);
+                      setSalaryLoading(true);
+                      setSelectedTechName(first.name);
+                      setSearchParams({ technicianId: first.id });
+                    }
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  staffCategoryTab === 'marketer'
+                    ? 'bg-[#6D28D9] text-white shadow-xs'
+                    : 'text-muted-gray hover:text-charcoal'
+                }`}
+              >
+                <Megaphone size={13} />
+                <span>Marketers</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    staffCategoryTab === 'marketer'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-warm-ivory text-muted-gray'
+                  }`}
+                >
+                  {marketersList.length}
+                </span>
+              </button>
+            </div>
+
+            {/* Quick Search Input */}
+            <div className="relative min-w-[190px] sm:min-w-[220px]">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-gray" />
+              <input
+                type="text"
+                value={staffSearchQuery}
+                onChange={(e) => setStaffSearchQuery(e.target.value)}
+                placeholder="Search staff name..."
+                className="w-full pl-8 pr-7 py-1.5 text-xs rounded-[10px] bg-soft-cream/60 border border-border text-charcoal placeholder-muted-gray focus:outline-none focus:border-sage transition-colors"
+              />
+              {staffSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setStaffSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-gray hover:text-charcoal cursor-pointer p-0.5"
+                  title="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Body: Groups with simple names */}
+          <div className="pt-3.5 space-y-4">
+            {/* 1. Technicians Section (shown if 'all' or 'technician') */}
+            {(staffCategoryTab === 'all' || staffCategoryTab === 'technician') && (
+              <div>
+                {staffCategoryTab === 'all' && (
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-muted-gray uppercase tracking-wider flex items-center gap-1.5">
+                      <Scissors size={12} className="text-sage" />
+                      Technicians ({filteredTechnicians.length})
+                    </span>
+                    <span className="text-[10px] text-muted-gray">Spa, Salon & Massage Specialists</span>
+                  </div>
+                )}
+                {filteredTechnicians.length === 0 ? (
+                  <p className="text-xs text-muted-gray italic py-1">No technicians found matching filter.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {filteredTechnicians.map((tech) => {
+                      const isSelected = selectedTechName === tech.name;
+                      return (
+                        <button
+                          key={tech.id}
+                          type="button"
+                          onClick={() => {
+                            if (selectedTechName !== tech.name) {
+                              setSalarySummary(null);
+                              setSalaryLoading(true);
+                              setSelectedTechName(tech.name);
+                              setSearchParams({ technicianId: tech.id });
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-[10px] text-xs font-semibold flex items-center gap-2 border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-sage text-white border-sage shadow-xs ring-2 ring-sage/30'
+                              : 'bg-soft-cream/70 hover:bg-white text-charcoal border-border'
+                          }`}
+                        >
+                          <span
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                              isSelected
+                                ? 'bg-white/20 text-white'
+                                : 'bg-white text-[#4F6748] border border-border/60'
+                            }`}
+                          >
+                            {tech.name.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span className="truncate">{tech.name}</span>
+                          {isSelected && <Check size={12} strokeWidth={2.5} className="ml-0.5 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Divider if showing both in 'all' view */}
+            {staffCategoryTab === 'all' && marketersList.length > 0 && (
+              <div className="border-t border-border/50" />
+            )}
+
+            {/* 2. Marketers Section (shown if 'all' or 'marketer') */}
+            {(staffCategoryTab === 'all' || staffCategoryTab === 'marketer') && (
+              <div>
+                {staffCategoryTab === 'all' && (
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-muted-gray uppercase tracking-wider flex items-center gap-1.5">
+                      <Megaphone size={12} className="text-[#6D28D9]" />
+                      Marketers ({filteredMarketers.length})
+                    </span>
+                    <span className="text-[10px] text-muted-gray">Client Introduction & Referral Commission</span>
+                  </div>
+                )}
+                {filteredMarketers.length === 0 ? (
+                  <p className="text-xs text-muted-gray italic py-1">No marketers found matching filter.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {filteredMarketers.map((mkt) => {
+                      const isSelected = selectedTechName === mkt.name;
+                      return (
+                        <button
+                          key={mkt.id}
+                          type="button"
+                          onClick={() => {
+                            if (selectedTechName !== mkt.name) {
+                              setSalarySummary(null);
+                              setSalaryLoading(true);
+                              setSelectedTechName(mkt.name);
+                              setSearchParams({ technicianId: mkt.id });
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-[10px] text-xs font-semibold flex items-center gap-2 border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#6D28D9] text-white border-[#6D28D9] shadow-xs ring-2 ring-[#6D28D9]/30'
+                              : 'bg-[#F5F3FF]/70 hover:bg-white text-charcoal border-[#DDD6FE]'
+                          }`}
+                        >
+                          <span
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                              isSelected
+                                ? 'bg-white/20 text-white'
+                                : 'bg-white text-[#6D28D9] border border-[#DDD6FE]'
+                            }`}
+                          >
+                            {mkt.name.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span className="truncate">{mkt.name}</span>
+                          {isSelected && <Check size={12} strokeWidth={2.5} className="ml-0.5 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
