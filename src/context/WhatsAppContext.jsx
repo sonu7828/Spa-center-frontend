@@ -126,7 +126,7 @@ export function WhatsAppProvider({ children }) {
       const res = await whatsappApi.getAutomations();
       const list = Array.isArray(res?.data) ? res.data : [];
 
-      // Ensure all 8 canonical types are represented
+      // Ensure all canonical types are represented
       const canonicalTypes = [
         'BIRTHDAY',
         'ANNIVERSARY',
@@ -136,12 +136,19 @@ export function WhatsAppProvider({ children }) {
         'PAYMENT_CONFIRMATION',
         'REBOOKING',
         'DAILY_CLOSE_BOSS',
+        'CLIENT_WELCOME',
       ];
 
+      const allTypes = [...new Set([...canonicalTypes, ...list.map((item) => item.type)])];
+
       // Normalize and enrich items with metadata
-      const enriched = canonicalTypes.map((type) => {
+      const enriched = allTypes.map((type) => {
         const found = list.find((item) => item.type === type);
         const meta = AUTOMATION_METADATA[type] || {};
+        const fallbackTemplate =
+          type === 'CLIENT_WELCOME'
+            ? "Hello {{1}}! 😊 We’d love to welcome you to Omega Spa.\n\nIt’s the perfect time to take a break and treat yourself to some relaxation. ✨ Contact us or book your appointment whenever you're ready.\n\nWe look forward to seeing you soon! 💚"
+            : '';
         return {
           id: found?.id || type.toLowerCase(),
           type,
@@ -149,7 +156,7 @@ export function WhatsAppProvider({ children }) {
           description: meta.description || '',
           category: meta.category || 'General',
           timing: found?.timing || meta.defaultTiming || '',
-          template: found?.template || '',
+          template: found?.template || fallbackTemplate,
           isActive: found ? Boolean(found.isActive) : true,
           enabled: found ? Boolean(found.isActive) : true,
           lastExecution: found?.updatedAt || found?.createdAt || null,
