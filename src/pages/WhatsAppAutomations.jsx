@@ -66,6 +66,7 @@ const AUTOMATION_ICONS = {
   PAYMENT_CONFIRMATION: CreditCard,
   REBOOKING: RefreshCw,
   DAILY_CLOSE_BOSS: TrendingUp,
+  CLIENT_WELCOME: Sparkles,
 };
 
 const AUTOMATION_COLORS = {
@@ -77,6 +78,7 @@ const AUTOMATION_COLORS = {
   PAYMENT_CONFIRMATION: { bg: 'bg-[#F3E5F5]', border: 'border-[#AB47BC]/30', text: 'text-[#6A1B9A]', dot: 'bg-[#AB47BC]' },
   REBOOKING: { bg: 'bg-[#EFEBE9]', border: 'border-[#8D6E63]/30', text: 'text-[#4E342E]', dot: 'bg-[#8D6E63]' },
   DAILY_CLOSE_BOSS: { bg: 'bg-sage-soft', border: 'border-sage/30', text: 'text-[#4F6748]', dot: 'bg-sage' },
+  CLIENT_WELCOME: { bg: 'bg-[#E0F7FA]', border: 'border-[#00ACC1]/30', text: 'text-[#00838F]', dot: 'bg-[#00ACC1]' },
 };
 
 export default function WhatsAppAutomations() {

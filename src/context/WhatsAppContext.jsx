@@ -72,6 +72,12 @@ export const AUTOMATION_METADATA = {
     category: 'Executive',
     defaultTiming: 'Daily close sign-off',
   },
+  CLIENT_WELCOME: {
+    title: 'New Client Welcome',
+    description: 'Instant welcoming message sent automatically when a new client is added to the system',
+    category: 'Welcome & Retention',
+    defaultTiming: 'Immediate on registration',
+  },
 };
 
 export function WhatsAppProvider({ children }) {

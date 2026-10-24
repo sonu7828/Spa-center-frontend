@@ -517,6 +517,11 @@ export const whatsappApi = {
       method: 'POST',
       body: JSON.stringify({ appointmentId }),
     }),
+  triggerClientWelcome: (clientId) =>
+    apiRequest('/whatsapp/triggers/client-welcome', {
+      method: 'POST',
+      body: JSON.stringify({ clientId }),
+    }),
   sendMessage: (data) =>
     apiRequest('/whatsapp/triggers/send', {
       method: 'POST',
