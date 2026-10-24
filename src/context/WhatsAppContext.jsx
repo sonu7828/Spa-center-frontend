@@ -126,7 +126,7 @@ export function WhatsAppProvider({ children }) {
       const res = await whatsappApi.getAutomations();
       const list = Array.isArray(res?.data) ? res.data : [];
 
-      // Ensure all canonical types are represented
+      // Ensure strictly the 9 active canonical automations are represented
       const canonicalTypes = [
         'BIRTHDAY',
         'ANNIVERSARY',
@@ -139,10 +139,8 @@ export function WhatsAppProvider({ children }) {
         'CLIENT_WELCOME',
       ];
 
-      const allTypes = [...new Set([...canonicalTypes, ...list.map((item) => item.type)])];
-
-      // Normalize and enrich items with metadata
-      const enriched = allTypes.map((type) => {
+      // Normalize and enrich strictly the 9 canonical items
+      const enriched = canonicalTypes.map((type) => {
         const found = list.find((item) => item.type === type);
         const meta = AUTOMATION_METADATA[type] || {};
         const fallbackTemplate =
