@@ -884,7 +884,7 @@ export function InvoiceProvider({ children }) {
         isWalkIn: !resolvedClientId,
       };
 
-      // Persist in localStorage
+      // Persist in localStorage as immediate fallback
       try {
         const raw = localStorage.getItem('omega_local_invoices');
         const list = raw ? JSON.parse(raw) : [];
@@ -892,10 +892,66 @@ export function InvoiceProvider({ children }) {
         localStorage.setItem('omega_local_invoices', JSON.stringify(list));
       } catch (_) {}
 
+      // Sync to central backend MySQL database so it is instantly available on all devices
+      try {
+        const rawMethod = String(paymentMethod || 'CASH').toUpperCase();
+        const backendMethod =
+          rawMethod.includes('MTN') || rawMethod.includes('MOMO')
+            ? 'MTN_MOMO'
+            : rawMethod.includes('ORANGE')
+            ? 'ORANGE_MONEY'
+            : 'CASH';
+
+        const backendPayload = {
+          clientId: isUUID(resolvedClientId) ? resolvedClientId : null,
+          clientName: resolvedClientName,
+          status: isPaid ? 'PAID' : 'PENDING_PAYMENT',
+          paymentMethod: isPaid ? backendMethod : undefined,
+          discount: discount || 0,
+          services: cleanServiceItems.map((s) => ({
+            serviceId: isUUID(s.serviceId) ? s.serviceId : null,
+            name: s.service || s.name,
+            price: s.price,
+            technicianId: isUUID(s.technicianId) ? s.technicianId : null,
+            quantity: 1,
+          })),
+          retailProducts: cleanRetailItems
+            .filter((r) => isUUID(r.productId))
+            .map((r) => ({
+              retailProductId: r.productId,
+              quantity: r.qty,
+            })),
+        };
+
+        invoicesApi
+          .create(backendPayload)
+          .then((res) => {
+            const createdBackend = res?.data?.invoice || res?.data;
+            if (createdBackend && createdBackend.id) {
+              const formatted = formatBackendInvoice(createdBackend, allUsers);
+              if (formatted) {
+                setInvoices((prev) => [
+                  formatted,
+                  ...prev.filter(
+                    (inv) =>
+                      String(inv.id) !== String(newInvoice.id) &&
+                      String(inv.id) !== String(formatted.id)
+                  ),
+                ]);
+              }
+            }
+          })
+          .catch((err) => {
+            console.warn('Backend walk-in invoice sync notice:', err?.message || err);
+          });
+      } catch (err) {
+        console.warn('Walk-in invoice sync error:', err);
+      }
+
       setInvoices((prev) => [newInvoice, ...prev.filter((inv) => String(inv.id) !== String(newInvoice.id))]);
       return newInvoice;
     },
-    []
+    [allUsers]
   );
 
   // Shared Work: Add a technician service line to an existing open visit by invoiceId
