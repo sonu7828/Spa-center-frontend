@@ -53,11 +53,39 @@ export default function DailyClose() {
   const [sendError, setSendError] = useState(null);
   const [bossPhone, setBossPhone] = useState(() => localStorage.getItem('omega_boss_phone') || '+237676761349');
 
+  // Load backend configured boss phone on mount
+  useEffect(() => {
+    let isMounted = true;
+    whatsappApi
+      .getBossPhone()
+      .then((res) => {
+        if (isMounted && res?.data?.bossPhone) {
+          setBossPhone(res.data.bossPhone);
+          try {
+            localStorage.setItem('omega_boss_phone', res.data.bossPhone);
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleBossPhoneChange = (val) => {
     setBossPhone(val);
     try {
       localStorage.setItem('omega_boss_phone', val);
     } catch (e) {}
+  };
+
+  const handleBossPhoneBlur = async () => {
+    if (!bossPhone || !bossPhone.trim()) return;
+    try {
+      await whatsappApi.updateBossPhone(bossPhone.trim());
+    } catch (e) {
+      console.warn('Could not sync boss phone to backend:', e.message);
+    }
   };
 
   // Live Backend Reports State
@@ -254,6 +282,7 @@ export default function DailyClose() {
     setSending(true);
     setSendError(null);
     try {
+      await whatsappApi.updateBossPhone(bossPhone.trim()).catch(() => {});
       await whatsappApi.triggerDailyClose({
         businessDate: new Date().toISOString().split('T')[0],
         recipientPhone: bossPhone.trim(),
@@ -299,6 +328,7 @@ export default function DailyClose() {
                 placeholder="+2376XXXXXXXX or +91..."
                 value={bossPhone}
                 onChange={(e) => handleBossPhoneChange(e.target.value)}
+                onBlur={handleBossPhoneBlur}
                 className="h-11 px-3.5 bg-soft-cream/40 border border-border rounded-[10px] text-xs font-mono font-semibold text-charcoal focus:border-sage outline-none min-w-[210px]"
               />
             </div>

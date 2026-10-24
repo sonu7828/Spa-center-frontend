@@ -480,6 +480,13 @@ export const whatsappApi = {
       body: JSON.stringify({ days }),
       silent: true,
     }),
+  getBossPhone: () => apiRequest('/whatsapp/settings/boss-phone', { silent: true }),
+  updateBossPhone: (bossPhone) =>
+    apiRequest('/whatsapp/settings/boss-phone', {
+      method: 'POST',
+      body: JSON.stringify({ bossPhone }),
+      silent: true,
+    }),
   processReminders: (data = {}) =>
     apiRequest('/whatsapp/triggers/process-reminders', {
       method: 'POST',
