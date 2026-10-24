@@ -262,30 +262,37 @@ export function WhatsAppProvider({ children }) {
     }
   }, [hasAccess, fetchAutomations, fetchLogs]);
 
-  // 3. Update automation configuration (Manager only)
+  // 3. Update automation configuration (Manager only) with Optimistic UI
   const updateAutomation = useCallback(
     async (type, data) => {
+      let previousState = null;
+
+      // 1. Optimistic instant update so user sees zero delay
+      setAutomations((prev) => {
+        previousState = prev;
+        return prev.map((a) =>
+          a.type === type
+            ? {
+                ...a,
+                ...data,
+                isActive: data.isActive !== undefined ? data.isActive : a.isActive,
+                enabled: data.isActive !== undefined ? data.isActive : a.enabled,
+                template: data.template !== undefined ? data.template : a.template,
+                timing: data.timing !== undefined ? data.timing : a.timing,
+                lastExecution: new Date().toISOString(),
+              }
+            : a
+        );
+      });
+
       try {
         const res = await whatsappApi.updateAutomation(type, data);
-        if (res?.success) {
-          setAutomations((prev) =>
-            prev.map((a) =>
-              a.type === type
-                ? {
-                    ...a,
-                    ...data,
-                    isActive: data.isActive !== undefined ? data.isActive : a.isActive,
-                    enabled: data.isActive !== undefined ? data.isActive : a.enabled,
-                    template: data.template !== undefined ? data.template : a.template,
-                    timing: data.timing !== undefined ? data.timing : a.timing,
-                    lastExecution: new Date().toISOString(),
-                  }
-                : a
-            )
-          );
-        }
         return res;
       } catch (err) {
+        // Rollback on failure
+        if (previousState) {
+          setAutomations(previousState);
+        }
         console.warn('Failed to update automation:', err.message);
         throw err;
       }
@@ -293,17 +300,13 @@ export function WhatsAppProvider({ children }) {
     []
   );
 
-  // Toggle automation ON/OFF
+  // Toggle automation ON/OFF (returns Promise for caller to handle loading state)
   const toggleAutomation = useCallback(
     async (type) => {
       const current = automations.find((a) => a.type === type || a.id === type);
       if (!current) return;
       const nextActive = !current.isActive;
-      try {
-        await updateAutomation(current.type, { isActive: nextActive });
-      } catch (err) {
-        console.warn('Error toggling automation:', err.message);
-      }
+      return updateAutomation(current.type, { isActive: nextActive });
     },
     [automations, updateAutomation]
   );
