@@ -388,7 +388,7 @@ export default function PendingInvoices() {
   const isMarketer = role === 'marketer' || isMarketerUser(user);
   const canCollectPayment = (role === 'manager' || role === 'reception') && !isMarketer;
   const canSellRetail = (role === 'manager' || role === 'reception') && !isMarketer;
-  const canCreateInvoice = role === 'manager' || role === 'reception' || isMarketer;
+  const canCreateInvoice = role === 'manager' || role === 'reception' || isMarketer || isTechnician;
 
   const {
     invoices,
@@ -1015,8 +1015,8 @@ export default function PendingInvoices() {
         id: Date.now(),
         serviceId: '',
         serviceName: '',
-        technicianId: '',
-        technicianName: '',
+        technicianId: isTechnician ? String(user?.id) : '',
+        technicianName: isTechnician ? (user?.name || '') : '',
         price: '',
         product: '',
       },
@@ -1157,8 +1157,8 @@ export default function PendingInvoices() {
     if (isSubmittingServiceInvoice) return;
     setNewServiceError('');
 
-    // Safety guard: Marketer cannot collect payment
-    if (isMarketer) {
+    // Safety guard: Marketer & Technician cannot collect payment directly
+    if (isMarketer || isTechnician) {
       collectNow = false;
     }
 
@@ -4149,15 +4149,15 @@ export default function PendingInvoices() {
 
               {/* 5. Payment Selection (for instant checkout) */}
               <div className="p-4 rounded-[14px] bg-warm-ivory/60 border border-border/80 space-y-3">
-                {isMarketer ? (
+                {isMarketer || isTechnician ? (
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-xs font-bold text-[#6D28D9]">
+                    <div className="flex items-center gap-2 text-xs font-bold text-[#4F6748]">
                       <Sparkles size={15} className="shrink-0" />
                       <span>Pending Invoice Mode (Payment at Reception)</span>
                     </div>
                     <p className="text-[11px] text-muted-gray leading-relaxed">
-                      This invoice will be registered as <strong>PENDING</strong> for your client with your selected technician.
-                      Payment collection is handled at the Reception counter when your client completes their service.
+                      This invoice will be registered as <strong>PENDING</strong> for your client with the assigned technician.
+                      Payment collection is handled at the Reception counter when your client pays.
                     </p>
                   </div>
                 ) : (
@@ -4251,7 +4251,7 @@ export default function PendingInvoices() {
                   Cancel
                 </Button>
 
-                {newServiceActionChoice === 'pay_now' && !isMarketer ? (
+                {newServiceActionChoice === 'pay_now' && !isMarketer && !isTechnician ? (
                   <Button
                     className="flex-1 sm:flex-none min-w-[210px]"
                     disabled={isSubmittingServiceInvoice || newServiceGrandTotal <= 0}
@@ -4284,7 +4284,7 @@ export default function PendingInvoices() {
                     ) : (
                       <>
                         <Plus size={16} strokeWidth={2.5} className="shrink-0" />
-                        <span>Create as Pending</span>
+                        <span>{isTechnician ? 'Queue for Reception Payment' : 'Create as Pending'}</span>
                       </>
                     )}
                   </Button>
