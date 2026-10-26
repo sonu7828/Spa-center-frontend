@@ -17,7 +17,8 @@ const RetailContext = createContext();
 
 export function RetailProvider({ children }) {
   const { isAuthenticated, user } = useAuth();
-  const hasAccess = user?.role === 'manager' || user?.role === 'reception' || user?.role === 'MANAGER' || user?.role === 'RECEPTION';
+  const roleUpper = String(user?.role || '').toUpperCase();
+  const hasAccess = ['MANAGER', 'RECEPTION', 'TECHNICIAN', 'MARKETER'].includes(roleUpper) || Boolean(isAuthenticated);
 
   const [retailProducts, setRetailProducts] = useState([]);
   const [loading, setLoading] = useState(true);
