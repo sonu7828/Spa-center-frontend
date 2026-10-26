@@ -87,6 +87,12 @@ export function formatBackendInvoice(inv, allUsers = []) {
   const paidNum = Number(inv.paidAmount ?? (inv.status === 'PAID' ? totalNum : 0));
   const remainingNum = Number(inv.remainingAmount ?? (inv.status === 'PAID' ? 0 : totalNum));
 
+  const firstServiceTech = mappedItems.find(
+    (it) => it.type !== 'drink' && it.type !== 'cosmetic' && (it.technicianId || (it.technician && it.technician !== 'Staff' && it.technician !== 'Reception'))
+  );
+  const derivedTechId = inv.appointment?.mainTechnicianId || firstServiceTech?.technicianId || null;
+  const derivedTechName = mainTechName || firstServiceTech?.technician || null;
+
   return {
     id: inv.id,
     invoiceNumber: inv.invoiceNumber || formatInvoiceNumber(inv.id),
@@ -101,8 +107,11 @@ export function formatBackendInvoice(inv, allUsers = []) {
     clientPhone: inv.client?.phone || '',
     status: inv.status || 'PENDING_PAYMENT',
     date: dateStr,
-    mainTechnicianName: mainTechName || null,
-    mainTechnicianId: inv.appointment?.mainTechnicianId || null,
+    technicianId: derivedTechId,
+    technicianName: derivedTechName,
+    mainTechnicianName: derivedTechName,
+    mainTechnicianId: derivedTechId,
+    technician: derivedTechName,
     items:
       mappedItems.length > 0
         ? mappedItems
@@ -856,6 +865,12 @@ export function InvoiceProvider({ children }) {
       const resolvedClientId = client?.id || clientId || null;
       const resolvedPhone = client?.phone || clientPhone || '';
 
+      const firstTechItem = cleanServiceItems.find(
+        (s) => s.technicianId || (s.technician && s.technician !== 'Staff' && s.technician !== 'Reception')
+      );
+      const invoiceTechId = firstTechItem?.technicianId || (userRole === 'technician' ? user?.id : null);
+      const invoiceTechName = firstTechItem?.technician || (userRole === 'technician' ? (user?.name || '') : 'Staff');
+
       const newInvoice = {
         id: generatedId,
         invoiceNumber: invNumber,
@@ -864,6 +879,13 @@ export function InvoiceProvider({ children }) {
         clientPhone: resolvedPhone,
         status: isPaid ? 'PAID' : 'PENDING_PAYMENT',
         date: today,
+        technicianId: invoiceTechId,
+        technicianName: invoiceTechName,
+        mainTechnicianName: invoiceTechName,
+        mainTechnicianId: invoiceTechId,
+        technician: invoiceTechName,
+        createdById: user?.id || null,
+        createdByName: user?.name || null,
         items: allItems,
         total,
         discount: discount || 0,
@@ -892,6 +914,8 @@ export function InvoiceProvider({ children }) {
         localStorage.setItem('omega_local_invoices', JSON.stringify(list));
       } catch (_) {}
 
+      let finalInvoice = newInvoice;
+
       // Sync to central backend MySQL database so it is instantly available on all devices
       try {
         const rawMethod = String(paymentMethod || 'CASH').toUpperCase();
@@ -908,13 +932,20 @@ export function InvoiceProvider({ children }) {
           status: isPaid ? 'PAID' : 'PENDING_PAYMENT',
           paymentMethod: isPaid ? backendMethod : undefined,
           discount: discount || 0,
-          services: cleanServiceItems.map((s) => ({
-            serviceId: isUUID(s.serviceId) ? s.serviceId : null,
-            name: s.service || s.name,
-            price: s.price,
-            technicianId: isUUID(s.technicianId) ? s.technicianId : null,
-            quantity: 1,
-          })),
+          services: cleanServiceItems.map((s) => {
+            const lineTechId = isUUID(s.technicianId)
+              ? s.technicianId
+              : isUUID(user?.id) && userRole === 'technician'
+              ? user.id
+              : null;
+            return {
+              serviceId: isUUID(s.serviceId) ? s.serviceId : null,
+              name: s.service || s.name,
+              price: s.price,
+              technicianId: lineTechId,
+              quantity: 1,
+            };
+          }),
           retailProducts: cleanRetailItems
             .filter((r) => isUUID(r.productId))
             .map((r) => ({
@@ -923,35 +954,52 @@ export function InvoiceProvider({ children }) {
             })),
         };
 
-        invoicesApi
-          .create(backendPayload)
-          .then((res) => {
-            const createdBackend = res?.data?.invoice || res?.data;
-            if (createdBackend && createdBackend.id) {
-              const formatted = formatBackendInvoice(createdBackend, allUsers);
-              if (formatted) {
-                setInvoices((prev) => [
-                  formatted,
-                  ...prev.filter(
-                    (inv) =>
-                      String(inv.id) !== String(newInvoice.id) &&
-                      String(inv.id) !== String(formatted.id)
-                  ),
-                ]);
+        const res = await invoicesApi.create(backendPayload);
+        const createdBackend = res?.data?.invoice || res?.data || res;
+        if (createdBackend && createdBackend.id) {
+          const formatted = formatBackendInvoice(createdBackend, allUsers);
+          if (formatted) {
+            finalInvoice = {
+              ...formatted,
+              technicianId: formatted.technicianId || invoiceTechId,
+              technicianName: formatted.technicianName || invoiceTechName,
+              mainTechnicianName: formatted.mainTechnicianName || invoiceTechName,
+              mainTechnicianId: formatted.mainTechnicianId || invoiceTechId,
+              technician: formatted.technician || invoiceTechName,
+              createdById: user?.id || null,
+              createdByName: user?.name || null,
+            };
+
+            // Remove local fallback copy now that backend invoice is confirmed
+            try {
+              const raw = localStorage.getItem('omega_local_invoices');
+              if (raw) {
+                const list = JSON.parse(raw).filter(
+                  (inv) =>
+                    String(inv.id) !== String(newInvoice.id) &&
+                    String(inv.id) !== String(finalInvoice.id) &&
+                    inv.invoiceNumber !== finalInvoice.invoiceNumber
+                );
+                localStorage.setItem('omega_local_invoices', JSON.stringify(list));
               }
-            }
-          })
-          .catch((err) => {
-            console.warn('Backend walk-in invoice sync notice:', err?.message || err);
-          });
+            } catch (_) {}
+          }
+        }
       } catch (err) {
-        console.warn('Walk-in invoice sync error:', err);
+        console.warn('Backend walk-in invoice sync notice (using instant local entry):', err?.message || err);
       }
 
-      setInvoices((prev) => [newInvoice, ...prev.filter((inv) => String(inv.id) !== String(newInvoice.id))]);
-      return newInvoice;
+      setInvoices((prev) => [
+        finalInvoice,
+        ...prev.filter(
+          (inv) =>
+            String(inv.id) !== String(newInvoice.id) &&
+            String(inv.id) !== String(finalInvoice.id)
+        ),
+      ]);
+      return finalInvoice;
     },
-    [allUsers]
+    [allUsers, user, userRole]
   );
 
   // Shared Work: Add a technician service line to an existing open visit by invoiceId

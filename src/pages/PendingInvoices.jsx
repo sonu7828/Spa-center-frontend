@@ -617,15 +617,25 @@ export default function PendingInvoices() {
   const myUserName = (user?.name || '').trim().toLowerCase();
 
   const filterForUserRole = useCallback((list) => {
+    const matchName = (name) => {
+      if (!name || !myUserName) return false;
+      const str = String(name).trim().toLowerCase();
+      return str === myUserName || str.includes(myUserName) || myUserName.includes(str);
+    };
+
     if (isTechnician) {
       return (list || []).filter((inv) => {
         if (inv.technicianId && String(inv.technicianId) === String(myUserId)) return true;
         if (inv.mainTechnicianId && String(inv.mainTechnicianId) === String(myUserId)) return true;
+        if (inv.createdById && String(inv.createdById) === String(myUserId)) return true;
+        if (inv.technician && matchName(inv.technician)) return true;
+        if (inv.technicianName && matchName(inv.technicianName)) return true;
+        if (inv.mainTechnicianName && matchName(inv.mainTechnicianName)) return true;
         if (Array.isArray(inv.items)) {
           return inv.items.some(
             (it) =>
               (it.technicianId && String(it.technicianId) === String(myUserId)) ||
-              (it.technician && String(it.technician).trim().toLowerCase() === myUserName)
+              (it.technician && matchName(it.technician))
           );
         }
         return false;
@@ -638,7 +648,7 @@ export default function PendingInvoices() {
         (clients || [])
           .filter((c) =>
             (c.introducedById && String(c.introducedById) === String(myUserId)) ||
-            (c.introducedBy && c.introducedBy.trim().toLowerCase() === myUserName)
+            (c.introducedBy && matchName(c.introducedBy))
           )
           .map((c) => String(c.id))
       );
@@ -648,12 +658,12 @@ export default function PendingInvoices() {
         if (inv.createdById && String(inv.createdById) === String(myUserId)) return true;
         // 2. Direct introducedBy attribute on invoice
         if (inv.introducedById && String(inv.introducedById) === String(myUserId)) return true;
-        if (inv.introducedBy && inv.introducedBy.trim().toLowerCase() === myUserName) return true;
+        if (inv.introducedBy && matchName(inv.introducedBy)) return true;
         // 3. Client belongs to this marketer
         if (inv.clientId && myClientIds.has(String(inv.clientId))) return true;
         if (inv.client && (
           (inv.client.introducedByEmployeeId && String(inv.client.introducedByEmployeeId) === String(myUserId)) ||
-          (inv.client.introducedBy && inv.client.introducedBy.trim().toLowerCase() === myUserName)
+          (inv.client.introducedBy && matchName(inv.client.introducedBy))
         )) return true;
         return false;
       });
@@ -1246,20 +1256,24 @@ export default function PendingInvoices() {
         minute: '2-digit',
       });
 
-      const formattedServices = newServiceLines.map((line) => ({
-        serviceId: line.serviceId,
-        service: line.serviceName,
-        name: line.serviceName,
-        technician: line.technicianName,
-        technicianId: line.technicianId,
-        price:
-          typeof line.price === 'number'
-            ? line.price
-            : parseInt(String(line.price).replace(/[^0-9]/g, ''), 10) || 0,
-        product: line.product || null,
-        category: 'SERVICES',
-        type: 'service',
-      }));
+      const formattedServices = newServiceLines.map((line) => {
+        const lineTechId = line.technicianId || (isTechnician ? String(user?.id) : '');
+        const lineTechName = line.technicianName || (isTechnician ? (user?.name || '') : '');
+        return {
+          serviceId: line.serviceId,
+          service: line.serviceName,
+          name: line.serviceName,
+          technician: lineTechName,
+          technicianId: lineTechId,
+          price:
+            typeof line.price === 'number'
+              ? line.price
+              : parseInt(String(line.price).replace(/[^0-9]/g, ''), 10) || 0,
+          product: line.product || null,
+          category: 'SERVICES',
+          type: 'service',
+        };
+      });
 
       // Create invoice via InvoiceContext
       const invoice = await createWalkInServiceInvoice({
@@ -1274,6 +1288,8 @@ export default function PendingInvoices() {
         notes: newServiceNotes,
         introducedBy: refStaff ? refStaff.name : null,
         introducedById: refStaff ? refStaff.id : null,
+        createdById: user?.id || null,
+        createdByName: user?.name || null,
         discount: 0,
       });
 
