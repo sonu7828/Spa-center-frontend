@@ -149,6 +149,10 @@ export function OperationsProvider({ children }) {
   // Stock audit log for Refill, Adjustment, Stock Check
   const [stockAuditLog, setStockAuditLog] = useState([]);
 
+  // Daily stock live photo audits (Technicians end-of-day photo proof + remarks)
+  const [dailyStockAudits, setDailyStockAudits] = useState([]);
+  const [isLoadingAudits, setIsLoadingAudits] = useState(false);
+
   // Financial & completed service state
   const [dailyTotals, setDailyTotals] = useState(initialDailyTotals);
   const [techRevenue, setTechRevenue] = useState(initialTechRevenue);
@@ -228,6 +232,72 @@ export function OperationsProvider({ children }) {
       setStockAuditLog([]);
     }
   }, [canAccessStock, refreshStock]);
+
+  // Load daily stock photo audits from backend
+  const refreshDailyAudits = useCallback(
+    async (filterParams = {}) => {
+      if (!canAccessStock) {
+        setDailyStockAudits([]);
+        return;
+      }
+      try {
+        setIsLoadingAudits(true);
+        const res = await stockApi.getDailyAudits({ limit: 100, ...filterParams });
+        const items = res?.data?.audits || [];
+        setDailyStockAudits(items);
+      } catch (err) {
+        console.warn('Failed to load daily stock photo audits:', err);
+      } finally {
+        setIsLoadingAudits(false);
+      }
+    },
+    [canAccessStock]
+  );
+
+  useEffect(() => {
+    if (canAccessStock) {
+      refreshDailyAudits();
+    } else {
+      setDailyStockAudits([]);
+    }
+  }, [canAccessStock, refreshDailyAudits]);
+
+  // Submit live stock photo audit
+  const submitDailyStockAudit = useCallback(
+    async (auditData) => {
+      const res = await stockApi.submitDailyAudit(auditData);
+      const created = res?.data;
+      if (created) {
+        setDailyStockAudits((prev) => [created, ...prev]);
+      }
+      return created;
+    },
+    []
+  );
+
+  // Review daily stock audit (Manager / Reception)
+  const reviewDailyStockAudit = useCallback(
+    async (auditId, reviewData) => {
+      const res = await stockApi.reviewDailyAudit(auditId, reviewData);
+      const updated = res?.data;
+      if (updated) {
+        setDailyStockAudits((prev) =>
+          prev.map((a) => (a.id === auditId ? { ...a, ...updated } : a))
+        );
+      }
+      return updated;
+    },
+    []
+  );
+
+  // Delete daily stock audit
+  const deleteDailyStockAudit = useCallback(
+    async (auditId) => {
+      await stockApi.deleteDailyAudit(auditId);
+      setDailyStockAudits((prev) => prev.filter((a) => a.id !== auditId));
+    },
+    []
+  );
 
   // Check if an appointment was already closed
   const isAppointmentClosed = useCallback(
@@ -893,6 +963,12 @@ export function OperationsProvider({ children }) {
         deleteProduct,
         toggleProductActive,
         saveServiceConsumptionRules,
+        dailyStockAudits,
+        isLoadingAudits,
+        refreshDailyAudits,
+        submitDailyStockAudit,
+        reviewDailyStockAudit,
+        deleteDailyStockAudit,
       }}
     >
       {children}

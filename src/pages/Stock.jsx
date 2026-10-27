@@ -28,12 +28,16 @@ import {
   Sliders,
   Scissors,
   History,
+  Camera,
+  RefreshCw,
 } from 'lucide-react';
 
 import Button from '../components/Button';
 import { useOperations } from '../context/OperationsContext';
 import { useAuth } from '../context/AuthContext';
 import { useServices } from '../context/ServicesContext';
+import RecordStockPhotoModal from '../components/RecordStockPhotoModal';
+import StockPhotoDetailModal from '../components/StockPhotoDetailModal';
 
 export default function Stock() {
   const { user } = useAuth();
@@ -57,10 +61,42 @@ export default function Stock() {
     deleteProduct,
     toggleProductActive,
     saveServiceConsumptionRules,
+    dailyStockAudits = [],
+    isLoadingAudits,
+    refreshDailyAudits,
   } = useOperations();
+
+  // Main Tab state: 'inventory' | 'audits'
+  const [activeMainTab, setActiveMainTab] = useState('inventory');
 
   // Modals state: 'stock_check' | 'consumption_rules' | 'add_stock' | 'adjust_stock' | 'audit_log' | 'new_product' | 'edit_product' | null
   const [activeModal, setActiveModal] = useState(null);
+
+  // Daily Stock Audit Modals & Filter State
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [selectedAuditForDetail, setSelectedAuditForDetail] = useState(null);
+  const [auditDateFilter, setAuditDateFilter] = useState('all');
+  const [auditStatusFilter, setAuditStatusFilter] = useState('ALL');
+  const [auditSearchQuery, setAuditSearchQuery] = useState('');
+
+  const pendingAuditCount = dailyStockAudits.filter((a) => a.status === 'PENDING').length;
+
+  const filteredAudits = dailyStockAudits.filter((audit) => {
+    if (auditStatusFilter !== 'ALL' && audit.status !== auditStatusFilter) return false;
+    if (auditDateFilter === 'today') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const auditDateStr = audit.date ? new Date(audit.date).toISOString().split('T')[0] : '';
+      if (auditDateStr !== todayStr) return false;
+    }
+    if (auditSearchQuery.trim()) {
+      const q = auditSearchQuery.toLowerCase();
+      const matchProd = audit.productName?.toLowerCase().includes(q);
+      const matchTech = audit.technicianName?.toLowerCase().includes(q);
+      const matchRemark = audit.remarks?.toLowerCase().includes(q);
+      if (!matchProd && !matchTech && !matchRemark) return false;
+    }
+    return true;
+  });
 
   // Success toast
   const [successMsg, setSuccessMsg] = useState('');
@@ -329,78 +365,123 @@ export default function Stock() {
           </p>
         </div>
 
-        {isManager && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 xl:flex xl:flex-wrap xl:items-center gap-2 w-full xl:w-auto">
-            <Button
-              variant="secondary"
-              onClick={openStockCheckModal}
-              className="w-full xl:w-auto h-11 px-2.5 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
-            >
-              <ClipboardCheck size={15} className="text-sage shrink-0" />
-              <span className="truncate">Stock Check</span>
-            </Button>
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+          {/* Live Photo Audit Button — accessible to Technicians, Receptionists & Managers */}
+          <Button
+            onClick={() => setIsRecordModalOpen(true)}
+            className="w-full sm:w-auto h-11 px-3.5 text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm bg-sage hover:bg-sage/90 text-white cursor-pointer"
+          >
+            <Camera size={16} className="shrink-0" />
+            <span className="truncate">Take Live Stock Photo</span>
+          </Button>
 
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setAdjustProduct(serviceStock[0]?.name || 'Massage Oil');
-                setAdjustQuantity('');
-                setAdjustReason('Wastage');
-                setAdjustNote('');
-                setAdjustError('');
-                setActiveModal('adjust_stock');
-              }}
-              className="w-full xl:w-auto h-11 px-2.5 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
-            >
-              <Scissors size={15} className="text-warning shrink-0" />
-              <span className="truncate">Adjust</span>
-            </Button>
+          {isManager && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 xl:flex xl:flex-wrap xl:items-center gap-2 w-full xl:w-auto">
+              <Button
+                variant="secondary"
+                onClick={openStockCheckModal}
+                className="w-full xl:w-auto h-11 px-2.5 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
+              >
+                <ClipboardCheck size={15} className="text-sage shrink-0" />
+                <span className="truncate">Stock Check</span>
+              </Button>
 
-            <Button
-              variant="secondary"
-              onClick={openConsumptionRulesModal}
-              className="w-full xl:w-auto h-11 px-2 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
-            >
-              <Sliders size={15} className="text-sage shrink-0" />
-              <span className="truncate">Consumption Rules</span>
-            </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setAdjustProduct(serviceStock[0]?.name || 'Massage Oil');
+                  setAdjustQuantity('');
+                  setAdjustReason('Wastage');
+                  setAdjustNote('');
+                  setAdjustError('');
+                  setActiveModal('adjust_stock');
+                }}
+                className="w-full xl:w-auto h-11 px-2.5 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
+              >
+                <Scissors size={15} className="text-warning shrink-0" />
+                <span className="truncate">Adjust</span>
+              </Button>
 
-            <Button
-              variant="secondary"
-              onClick={() => setActiveModal('audit_log')}
-              className="w-full xl:w-auto h-11 px-2.5 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
-            >
-              <History size={15} className="text-charcoal shrink-0" />
-              <span className="truncate">History</span>
-            </Button>
+              <Button
+                variant="secondary"
+                onClick={openConsumptionRulesModal}
+                className="w-full xl:w-auto h-11 px-2 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
+              >
+                <Sliders size={15} className="text-sage shrink-0" />
+                <span className="truncate">Consumption Rules</span>
+              </Button>
 
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setNewProdName('');
-                setNewProdQty('');
-                setNewProdUnit('ml');
-                setActiveModal('new_product');
-              }}
-              className="w-full xl:w-auto h-11 px-2.5 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
-            >
-              <Sparkles size={15} className="text-sage shrink-0" />
-              <span className="truncate">New Product</span>
-            </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setActiveModal('audit_log')}
+                className="w-full xl:w-auto h-11 px-2.5 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
+              >
+                <History size={15} className="text-charcoal shrink-0" />
+                <span className="truncate">History</span>
+              </Button>
 
-            <Button
-              onClick={() => {
-                setRefillQuantity('');
-                setRefillProduct(serviceStock[0]?.name || 'Massage Oil');
-                setActiveModal('add_stock');
-              }}
-              className="w-full xl:w-auto h-11 px-2.5 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
-            >
-              <Plus size={16} strokeWidth={2} className="shrink-0" />
-              <span className="truncate">Add Stock</span>
-            </Button>
-          </div>
-        )}
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setNewProdName('');
+                  setNewProdQty('');
+                  setNewProdUnit('ml');
+                  setActiveModal('new_product');
+                }}
+                className="w-full xl:w-auto h-11 px-2.5 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
+              >
+                <Sparkles size={15} className="text-sage shrink-0" />
+                <span className="truncate">New Product</span>
+              </Button>
+
+              <Button
+                onClick={() => {
+                  setRefillQuantity('');
+                  setRefillProduct(serviceStock[0]?.name || 'Massage Oil');
+                  setActiveModal('add_stock');
+                }}
+                className="w-full xl:w-auto h-11 px-2.5 sm:px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
+              >
+                <Plus size={16} strokeWidth={2} className="shrink-0" />
+                <span className="truncate">Add Stock</span>
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Tabs Navigation */}
+      <div className="flex items-center gap-2 border-b border-border pb-1 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('inventory')}
+          className={`px-4 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+            activeMainTab === 'inventory'
+              ? 'bg-sage text-white shadow-sm'
+              : 'text-charcoal hover:bg-soft-cream/60'
+          }`}
+        >
+          <Package size={16} />
+          <span>Service Inventory ({serviceStock.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('audits')}
+          className={`px-4 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+            activeMainTab === 'audits'
+              ? 'bg-sage text-white shadow-sm'
+              : 'text-charcoal hover:bg-soft-cream/60'
+          }`}
+        >
+          <Camera size={16} />
+          <span>Live Stock Audits & Remarks ({dailyStockAudits.length})</span>
+          {pendingAuditCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-amber-400 text-charcoal">
+              {pendingAuditCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Success Notification */}
@@ -412,6 +493,8 @@ export default function Stock() {
       )}
 
       {/* Low Stock Alert Threshold Controls & Latest Reconciliation Banner */}
+      {activeMainTab === 'inventory' && (
+      <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {/* Threshold setting */}
         <div className="bg-white border border-border rounded-[14px] p-4 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -918,6 +1001,287 @@ export default function Stock() {
           )}
         </div>
       </div>
+      </div>
+      )}
+
+      {/* ============================================================
+          AUDITS TAB VIEW: LIVE STOCK PHOTO AUDITS & REMARKS
+          ============================================================ */}
+      {activeMainTab === 'audits' && (
+        <div className="space-y-4">
+          {/* Top Audits Info & Actions Bar */}
+          <div className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Camera size={18} className="text-sage" />
+                <h2 className="text-base font-bold text-charcoal">
+                  End-of-Day Live Stock Photo Audits
+                </h2>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-soft-cream text-charcoal">
+                  {dailyStockAudits.length}
+                </span>
+              </div>
+              <p className="text-xs text-muted-gray mt-0.5">
+                Technicians submit live product photos and written remarks at end-of-day for Manager & Receptionist follow-up.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="secondary"
+                onClick={() => refreshDailyAudits()}
+                disabled={isLoadingAudits}
+                className="h-10 px-3 text-xs font-semibold flex items-center gap-1.5"
+              >
+                <RefreshCw size={14} className={isLoadingAudits ? 'animate-spin' : ''} />
+                <span>Refresh</span>
+              </Button>
+
+              <Button
+                variant="primary"
+                onClick={() => setIsRecordModalOpen(true)}
+                className="h-10 px-4 text-xs font-bold flex items-center gap-1.5 bg-sage hover:bg-sage/90 text-white cursor-pointer"
+              >
+                <Camera size={14} />
+                <span>+ Take Live Stock Photo</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Metric / Status Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white border border-border rounded-[14px] p-3.5 shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">
+                Total Audits
+              </span>
+              <span className="text-xl font-extrabold text-charcoal mt-1 block">
+                {dailyStockAudits.length}
+              </span>
+            </div>
+
+            <div className="bg-white border border-border rounded-[14px] p-3.5 shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 block">
+                Pending Follow-up
+              </span>
+              <span className="text-xl font-extrabold text-blue-700 mt-1 block">
+                {dailyStockAudits.filter((a) => a.status === 'PENDING').length}
+              </span>
+            </div>
+
+            <div className="bg-white border border-border rounded-[14px] p-3.5 shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">
+                Reviewed & Verified
+              </span>
+              <span className="text-xl font-extrabold text-emerald-700 mt-1 block">
+                {dailyStockAudits.filter((a) => a.status === 'REVIEWED').length}
+              </span>
+            </div>
+
+            <div className="bg-white border border-border rounded-[14px] p-3.5 shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 block">
+                Flagged Restock
+              </span>
+              <span className="text-xl font-extrabold text-amber-700 mt-1 block">
+                {dailyStockAudits.filter((a) => a.status === 'FLAGGED').length}
+              </span>
+            </div>
+          </div>
+
+          {/* Filter Toolbar */}
+          <div className="bg-white border border-border rounded-[14px] p-3 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Status Filters */}
+              <div className="flex items-center bg-soft-cream/60 p-0.5 rounded-[10px] border border-border">
+                {['ALL', 'PENDING', 'REVIEWED', 'FLAGGED'].map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setAuditStatusFilter(st)}
+                    className={`px-2.5 py-1 rounded-[8px] text-[11px] font-bold transition-all cursor-pointer ${
+                      auditStatusFilter === st
+                        ? 'bg-charcoal text-white shadow-2xs'
+                        : 'text-muted-gray hover:text-charcoal'
+                    }`}
+                  >
+                    {st === 'ALL'
+                      ? 'All'
+                      : st === 'PENDING'
+                      ? 'Pending'
+                      : st === 'REVIEWED'
+                      ? 'Reviewed'
+                      : 'Flagged'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Date Filter */}
+              <div className="flex items-center bg-soft-cream/60 p-0.5 rounded-[10px] border border-border">
+                <button
+                  type="button"
+                  onClick={() => setAuditDateFilter('all')}
+                  className={`px-2.5 py-1 rounded-[8px] text-[11px] font-bold transition-all cursor-pointer ${
+                    auditDateFilter === 'all'
+                      ? 'bg-sage text-white shadow-2xs'
+                      : 'text-muted-gray hover:text-charcoal'
+                  }`}
+                >
+                  All Dates
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuditDateFilter('today')}
+                  className={`px-2.5 py-1 rounded-[8px] text-[11px] font-bold transition-all cursor-pointer ${
+                    auditDateFilter === 'today'
+                      ? 'bg-sage text-white shadow-2xs'
+                      : 'text-muted-gray hover:text-charcoal'
+                  }`}
+                >
+                  Today Only
+                </button>
+              </div>
+            </div>
+
+            {/* Search Input */}
+            <div className="w-full sm:w-64">
+              <input
+                type="text"
+                placeholder="Search product, tech, remark..."
+                value={auditSearchQuery}
+                onChange={(e) => setAuditSearchQuery(e.target.value)}
+                className="w-full h-9 px-3 bg-soft-cream/40 border border-border rounded-[10px] text-xs text-charcoal focus:border-sage outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Gallery Grid */}
+          {filteredAudits.length === 0 ? (
+            <div className="bg-white border border-border rounded-[16px] p-10 text-center space-y-3 shadow-card">
+              <div className="w-14 h-14 rounded-full bg-soft-cream flex items-center justify-center mx-auto text-sage">
+                <Camera size={26} />
+              </div>
+              <h4 className="font-bold text-sm text-charcoal">No Stock Audits Found</h4>
+              <p className="text-xs text-muted-gray max-w-md mx-auto">
+                {dailyStockAudits.length === 0
+                  ? 'Technicians take live photos of products and written remarks at end-of-day. Click below to record the first live picture.'
+                  : 'No stock photo audits match the current filters.'}
+              </p>
+              <Button
+                variant="primary"
+                onClick={() => setIsRecordModalOpen(true)}
+                className="h-10 px-5 text-xs font-bold inline-flex items-center gap-1.5 bg-sage hover:bg-sage/90 text-white mt-2 cursor-pointer"
+              >
+                <Camera size={14} />
+                <span>Take Live Stock Photo Now</span>
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredAudits.map((item) => {
+                const itemDate = item.date
+                  ? new Date(item.date).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                    })
+                  : 'Today';
+                const itemTime = item.createdAt
+                  ? new Date(item.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : '';
+
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => setSelectedAuditForDetail(item)}
+                    className="bg-white border border-border rounded-[16px] overflow-hidden shadow-card hover:shadow-md transition-all cursor-pointer flex flex-col group"
+                  >
+                    {/* Photo Preview with Badges */}
+                    <div className="relative w-full aspect-16/10 bg-charcoal overflow-hidden flex items-center justify-center">
+                      <img
+                        src={item.photoUrl}
+                        alt={item.productName}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute top-2.5 left-2.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] text-white font-medium">
+                        {itemDate} {itemTime}
+                      </div>
+
+                      <div className="absolute top-2.5 right-2.5">
+                        {item.status === 'REVIEWED' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white shadow-sm flex items-center gap-1">
+                            <CheckCircle2 size={10} />
+                            Reviewed
+                          </span>
+                        )}
+                        {item.status === 'FLAGGED' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white shadow-sm flex items-center gap-1">
+                            <AlertTriangle size={10} />
+                            Flagged
+                          </span>
+                        )}
+                        {item.status === 'PENDING' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500 text-white shadow-sm">
+                            Pending
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Card Body */}
+                    <div className="p-4 space-y-2.5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-bold text-sm text-charcoal line-clamp-1 group-hover:text-sage transition-colors">
+                            {item.productName}
+                          </h4>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-[11px] text-muted-gray mt-1">
+                          <span className="font-medium text-charcoal/80">
+                            By {item.technicianName || 'Technician'}
+                          </span>
+                          {item.estimatedRemaining && (
+                            <>
+                              <span>•</span>
+                              <span className="text-sage font-semibold">
+                                ~{item.estimatedRemaining} left
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Written Remarks snippet */}
+                        {item.remarks ? (
+                          <div className="mt-2 p-2.5 bg-soft-cream/60 rounded-xl border border-border/60 text-xs text-charcoal/90 italic line-clamp-2">
+                            "{item.remarks}"
+                          </div>
+                        ) : (
+                          <div className="mt-2 text-[11px] text-muted-gray italic">
+                            No written remarks provided.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs">
+                        <span className="text-[11px] text-sage font-bold group-hover:underline flex items-center gap-1">
+                          <span>Inspect Photo & Details</span>
+                          <span>→</span>
+                        </span>
+                        {item.reviewedByName && (
+                          <span className="text-[10px] text-emerald-700 font-medium">
+                            ✓ Checked by {item.reviewedByName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ============================================================
           1. MODAL: ACTUAL STOCK COUNT & RECONCILIATION
@@ -2032,6 +2396,28 @@ export default function Stock() {
           </div>
         </div>
       )}
+
+      {/* ============================================================
+          9. LIVE PHOTO AUDIT MODALS
+          ============================================================ */}
+      <RecordStockPhotoModal
+        isOpen={isRecordModalOpen}
+        onClose={() => setIsRecordModalOpen(false)}
+        onSuccess={() => {
+          refreshDailyAudits();
+          showToast('Live stock photo and remarks recorded!');
+        }}
+      />
+
+      <StockPhotoDetailModal
+        isOpen={!!selectedAuditForDetail}
+        audit={selectedAuditForDetail}
+        onClose={() => setSelectedAuditForDetail(null)}
+        onReviewed={() => {
+          refreshDailyAudits();
+          showToast('Stock audit review status updated!');
+        }}
+      />
     </div>
   );
 }

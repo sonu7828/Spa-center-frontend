@@ -21,7 +21,7 @@
  * Source: Employee Attendance UI spec — Section 4, 5 + Manual Entry & Override
  */
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, Fragment } from 'react';
 import {
   Clock,
   Users,
@@ -728,6 +728,69 @@ export default function AttendanceManager() {
                                     <span>In Photo</span>
                                   </button>
                                 )}
+                                {/* Active Break Departure Photo */}
+                                {rec.isOnBreak && rec.currentBreakStartPhoto && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setViewingPhoto({
+                                        photo: rec.currentBreakStartPhoto,
+                                        name: rec.employeeName || emp.name,
+                                        role: rec.employeeRole || emp.role,
+                                        date: todayFormatted,
+                                        timeLabel: `On Break Now`,
+                                        typeLabel: 'Break Departure Photo (Active)',
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-amber-50 hover:bg-amber-100 text-[10px] font-semibold text-amber-800 border border-amber-300 transition-colors cursor-pointer shadow-2xs"
+                                  >
+                                    <Coffee size={10} className="text-amber-600" />
+                                    <span>Brk Out</span>
+                                  </button>
+                                )}
+                                {/* Completed Breaks Departure & Return Photos */}
+                                {rec.breaks?.map((b, bIdx) => (
+                                  <Fragment key={b.id || bIdx}>
+                                    {b.startPhoto && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setViewingPhoto({
+                                            photo: b.startPhoto,
+                                            name: rec.employeeName || emp.name,
+                                            role: rec.employeeRole || emp.role,
+                                            date: todayFormatted,
+                                            timeLabel: `Break #${bIdx + 1} Out: ${b.startTime ? new Date(b.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}`,
+                                            typeLabel: `Break #${bIdx + 1} Departure Photo`,
+                                          })
+                                        }
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[6px] bg-white hover:bg-amber-50 text-[9px] font-semibold text-amber-800 border border-amber-200 transition-colors cursor-pointer shadow-2xs"
+                                      >
+                                        <Coffee size={9} />
+                                        <span>B#{bIdx + 1} Out</span>
+                                      </button>
+                                    )}
+                                    {b.endPhoto && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setViewingPhoto({
+                                            photo: b.endPhoto,
+                                            name: rec.employeeName || emp.name,
+                                            role: rec.employeeRole || emp.role,
+                                            date: todayFormatted,
+                                            timeLabel: `Break #${bIdx + 1} In: ${b.endTime ? new Date(b.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}`,
+                                            typeLabel: `Break #${bIdx + 1} Return Photo (${b.durationMinutes}m)`,
+                                          })
+                                        }
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[6px] bg-white hover:bg-emerald-50 text-[9px] font-semibold text-emerald-800 border border-emerald-200 transition-colors cursor-pointer shadow-2xs"
+                                      >
+                                        <CheckCircle size={9} />
+                                        <span>B#{bIdx + 1} In</span>
+                                      </button>
+                                    )}
+                                  </Fragment>
+                                ))}
                                 {rec.clockOutPhoto && (
                                   <button
                                     type="button"
@@ -747,7 +810,7 @@ export default function AttendanceManager() {
                                     <span>Out Photo</span>
                                   </button>
                                 )}
-                                {!rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (
+                                {!rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (!rec.breaks || !rec.breaks.some((b) => b.startPhoto || b.endPhoto)) && (
                                   <span className="text-xs text-muted-gray/60">—</span>
                                 )}
                               </div>
@@ -995,7 +1058,26 @@ export default function AttendanceManager() {
                                     <LogOut size={11} className="text-error" /> Out
                                   </button>
                                 )}
-                                {!rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (
+                                {rec.breaks?.map((b, bIdx) => (
+                                  (b.startPhoto || b.endPhoto) ? (
+                                    <button
+                                      key={b.id || bIdx}
+                                      onClick={() => setViewingPhoto({
+                                        photo: b.endPhoto || b.startPhoto,
+                                        name: rec.employeeName,
+                                        role: rec.employeeRole,
+                                        date: formatDateDisplay(rec.date),
+                                        timeLabel: `Break #${bIdx + 1} (${b.durationMinutes}m)`,
+                                        typeLabel: b.endPhoto && b.startPhoto ? `Break #${bIdx + 1} Return & Departure Photos` : `Break #${bIdx + 1} Photo`,
+                                      })}
+                                      className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 hover:text-amber-900 cursor-pointer transition-colors"
+                                      title="View break photos"
+                                    >
+                                      <Coffee size={10} className="text-amber-600" /> B#{bIdx + 1}
+                                    </button>
+                                  ) : null
+                                ))}
+                                {!rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (!rec.breaks || !rec.breaks.some((b) => b.startPhoto || b.endPhoto)) && (
                                   rec.isManualEntry ? (
                                     <button
                                       onClick={() => setSelectedManualDetails(rec)}

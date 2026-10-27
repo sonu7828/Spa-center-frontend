@@ -50,11 +50,14 @@ import {
   Users,
   Search,
   X,
+  Camera,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import RecordPenaltyModal from '../components/RecordPenaltyModal';
 import EditSalaryContractModal from '../components/EditSalaryContractModal';
+import RecordStockPhotoModal from '../components/RecordStockPhotoModal';
+import StockPhotoDetailModal from '../components/StockPhotoDetailModal';
 import { useOperations } from '../context/OperationsContext';
 import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useClients } from '../context/ClientsContext';
@@ -68,7 +71,7 @@ export default function TechnicianDailySummary() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, allUsers } = useAuth();
-  const { completedServices, techRevenue } = useOperations();
+  const { completedServices, techRevenue, dailyStockAudits = [], refreshDailyAudits } = useOperations();
   const { clients } = useClients();
   const { appointments } = useAppointments();
   const { invoices } = useInvoices();
@@ -131,6 +134,10 @@ export default function TechnicianDailySummary() {
     ? user?.name || 'Staff'
     : matchedQueryTech?.name || dynamicTechnicians[0]?.name || 'Amina';
   const [selectedTechName, setSelectedTechName] = useState(initialName);
+
+  // Stock Photo Audit State
+  const [showStockPhotoModal, setShowStockPhotoModal] = useState(false);
+  const [selectedStockAudit, setSelectedStockAudit] = useState(null);
 
   // Sync selectedTechName whenever dynamicTechnicians or query parameters change
   useEffect(() => {
@@ -341,6 +348,17 @@ export default function TechnicianDailySummary() {
     month: 'short',
     year: 'numeric',
   });
+
+  // Filter stock photo audits logged today for the active technician
+  const todayTechAudits = useMemo(() => {
+    const targetId = (isTechnicianRole || isUserMarketer) ? user?.id : currentTech?.id;
+    const todayStr = new Date().toISOString().split('T')[0];
+    return dailyStockAudits.filter((a) => {
+      if (targetId && a.technicianId !== targetId) return false;
+      const aDate = a.date ? new Date(a.date).toISOString().split('T')[0] : '';
+      return aDate === todayStr || !a.date;
+    });
+  }, [dailyStockAudits, isTechnicianRole, isUserMarketer, user?.id, currentTech?.id]);
 
   // -------------------------------------------------------------------------
   // Resilient Normalization for Target Salary Performance (Zero-NaN Guarantee)
@@ -1617,6 +1635,118 @@ export default function TechnicianDailySummary() {
             fetchSalarySummary();
           }}
           staff={currentTech}
+        />
+      )}
+
+      {/* ── End-of-Day Service Stock Live Photo Audit Card ── */}
+      <div className="bg-white border border-border rounded-[18px] p-5 sm:p-6 shadow-card space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/70">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-sage/15 text-sage flex items-center justify-center font-bold">
+              <Camera size={20} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-charcoal flex items-center gap-2">
+                <span>End-of-Day Service Stock Live Photo Audits</span>
+                {todayTechAudits.length > 0 && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                    {todayTechAudits.length} photo{todayTechAudits.length !== 1 ? 's' : ''} logged today
+                  </span>
+                )}
+              </h3>
+              <p className="text-xs text-muted-gray">
+                Take live photos of remaining products with remarks so Manager & Reception can verify stock levels.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            variant="primary"
+            onClick={() => setShowStockPhotoModal(true)}
+            className="h-10 px-4 text-xs font-bold flex items-center justify-center gap-1.5 bg-sage hover:bg-sage/90 text-white cursor-pointer shrink-0"
+          >
+            <Camera size={14} />
+            <span>+ Take Live Stock Photo</span>
+          </Button>
+        </div>
+
+        {/* Gallery / List of photos submitted today for this technician */}
+        {todayTechAudits.length === 0 ? (
+          <div className="p-6 bg-soft-cream/40 rounded-2xl border border-dashed border-border text-center space-y-2">
+            <p className="text-xs font-semibold text-charcoal">
+              No stock photo audits logged yet for {isTechnicianRole ? 'you' : currentTech?.name || 'this technician'} today.
+            </p>
+            <p className="text-[11px] text-muted-gray max-w-md mx-auto">
+              Before leaving at the end of the day, please take a live picture of any opened massage oils, lotions, polishes, or supplies with written remarks.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+            {todayTechAudits.map((audit) => (
+              <div
+                key={audit.id}
+                onClick={() => setSelectedStockAudit(audit)}
+                className="p-3 bg-soft-cream/30 hover:bg-soft-cream/60 rounded-xl border border-border flex items-center gap-3 cursor-pointer transition-colors group"
+              >
+                <div className="w-16 h-16 rounded-lg bg-charcoal overflow-hidden shrink-0 border border-border">
+                  <img
+                    src={audit.photoUrl}
+                    alt={audit.productName}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <h5 className="font-bold text-xs text-charcoal truncate">
+                      {audit.productName}
+                    </h5>
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                        audit.status === 'REVIEWED'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : audit.status === 'FLAGGED'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {audit.status}
+                    </span>
+                  </div>
+                  {audit.remarks && (
+                    <p className="text-[11px] text-muted-gray truncate italic">
+                      "{audit.remarks}"
+                    </p>
+                  )}
+                  <p className="text-[10px] text-sage font-semibold">
+                    {audit.estimatedRemaining ? `~${audit.estimatedRemaining} left` : 'Tap to view proof'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Record Stock Photo Modal */}
+      {showStockPhotoModal && (
+        <RecordStockPhotoModal
+          isOpen={showStockPhotoModal}
+          onClose={() => setShowStockPhotoModal(false)}
+          onSuccess={() => {
+            refreshDailyAudits();
+          }}
+        />
+      )}
+
+      {/* Stock Photo Detail Modal */}
+      {selectedStockAudit && (
+        <StockPhotoDetailModal
+          isOpen={!!selectedStockAudit}
+          audit={selectedStockAudit}
+          onClose={() => setSelectedStockAudit(null)}
+          onReviewed={() => {
+            refreshDailyAudits();
+          }}
         />
       )}
     </div>

@@ -27,14 +27,24 @@ function persistStoredBreaks(data) {
   try {
     localStorage.setItem(BREAKS_STORAGE_KEY, JSON.stringify(data));
   } catch (err) {
-    console.error('[AttendanceContext] Failed to persist breaks to localStorage:', err);
+    console.warn('[AttendanceContext] LocalStorage write failed, pruning older records...', err);
+    try {
+      // Keep only recent 25 keys
+      const entries = Object.entries(data);
+      if (entries.length > 25) {
+        const pruned = Object.fromEntries(entries.slice(-25));
+        localStorage.setItem(BREAKS_STORAGE_KEY, JSON.stringify(pruned));
+      }
+    } catch (e) {
+      console.error('[AttendanceContext] Failed to persist breaks to localStorage:', e);
+    }
   }
 }
 
 /**
  * Calculates Net Work Hours: Gross Shift Duration - Accumulated Break Minutes
  */
-export function calculateNetHours(record, totalBreakMinutes = 0) {
+function calculateNetHours(record, totalBreakMinutes = 0) {
   if (!record) return null;
 
   let grossMinutes = null;
@@ -112,10 +122,11 @@ export function AttendanceProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // One-click start break
-  const startBreak = useCallback((employeeId, targetDate) => {
+  // Start break with photo verification (Going out on break)
+  const startBreak = useCallback((employeeId, photoOrDate, targetDate) => {
     if (!employeeId) return { success: false, error: 'Employee ID required' };
-    const dateStr = targetDate || getDoualaTodayStr();
+    const photo = typeof photoOrDate === 'string' && (photoOrDate.startsWith('data:') || photoOrDate.startsWith('http') || photoOrDate.length > 50) ? photoOrDate : null;
+    const dateStr = (!photo && typeof photoOrDate === 'string') ? photoOrDate : (targetDate || getDoualaTodayStr());
     const key = `${employeeId}_${dateStr}`;
 
     let result = { success: true };
@@ -126,6 +137,7 @@ export function AttendanceProvider({ children }) {
         totalBreakMinutes: 0,
         isOnBreak: false,
         currentBreakStart: null,
+        currentBreakStartPhoto: null,
       };
 
       if (existing.isOnBreak) {
@@ -140,6 +152,7 @@ export function AttendanceProvider({ children }) {
           ...existing,
           isOnBreak: true,
           currentBreakStart: nowIso,
+          currentBreakStartPhoto: photo || null,
         },
       };
       persistStoredBreaks(updated);
@@ -149,10 +162,11 @@ export function AttendanceProvider({ children }) {
     return result;
   }, []);
 
-  // One-click end break
-  const endBreak = useCallback((employeeId, targetDate) => {
+  // End break with photo verification (Coming back from break)
+  const endBreak = useCallback((employeeId, photoOrDate, targetDate) => {
     if (!employeeId) return { success: false, error: 'Employee ID required' };
-    const dateStr = targetDate || getDoualaTodayStr();
+    const photo = typeof photoOrDate === 'string' && (photoOrDate.startsWith('data:') || photoOrDate.startsWith('http') || photoOrDate.length > 50) ? photoOrDate : null;
+    const dateStr = (!photo && typeof photoOrDate === 'string') ? photoOrDate : (targetDate || getDoualaTodayStr());
     const key = `${employeeId}_${dateStr}`;
 
     let result = { success: false, error: 'Employee is not on break' };
@@ -173,6 +187,8 @@ export function AttendanceProvider({ children }) {
         startTime: startIso,
         endTime: endIso,
         durationMinutes,
+        startPhoto: existing.currentBreakStartPhoto || null, // Going out photo
+        endPhoto: photo || null,                             // Coming back photo
       };
 
       const newBreaks = [...(existing.breaks || []), newBreak];
@@ -185,6 +201,7 @@ export function AttendanceProvider({ children }) {
           totalBreakMinutes,
           isOnBreak: false,
           currentBreakStart: null,
+          currentBreakStartPhoto: null,
         },
       };
       persistStoredBreaks(updated);
@@ -199,7 +216,7 @@ export function AttendanceProvider({ children }) {
   const getBreakState = useCallback(
     (employeeId, targetDate) => {
       if (!employeeId) {
-        return { breaks: [], breakCount: 0, totalBreakMinutes: 0, isOnBreak: false, currentBreakStart: null };
+        return { breaks: [], breakCount: 0, totalBreakMinutes: 0, isOnBreak: false, currentBreakStart: null, currentBreakStartPhoto: null };
       }
       const dateStr = targetDate || getDoualaTodayStr();
       const key = `${employeeId}_${dateStr}`;
@@ -211,6 +228,7 @@ export function AttendanceProvider({ children }) {
         totalBreakMinutes: info.totalBreakMinutes || 0,
         isOnBreak: Boolean(info.isOnBreak),
         currentBreakStart: info.currentBreakStart || null,
+        currentBreakStartPhoto: info.currentBreakStartPhoto || null,
       };
     },
     [breakStore]
@@ -452,6 +470,7 @@ export function AttendanceProvider({ children }) {
       const totalBreakMinutes = bInfo.totalBreakMinutes || 0;
       const isOnBreak = Boolean(bInfo.isOnBreak);
       const currentBreakStart = bInfo.currentBreakStart || null;
+      const currentBreakStartPhoto = bInfo.currentBreakStartPhoto || null;
 
       return {
         ...r,
@@ -460,6 +479,7 @@ export function AttendanceProvider({ children }) {
         totalBreakMinutes,
         isOnBreak,
         currentBreakStart,
+        currentBreakStartPhoto,
         grossWorkingHours: r.workingHours,
         netWorkingHours: calculateNetHours(r, totalBreakMinutes),
       };

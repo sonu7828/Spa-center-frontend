@@ -354,6 +354,24 @@ export const stockApi = {
     apiRequest(`/stock/retail/${id}`, {
       method: 'DELETE',
     }),
+  submitDailyAudit: (data) =>
+    apiRequest('/stock/daily-audit', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getDailyAudits: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest('/stock/daily-audit' + (query ? '?' + query : ''));
+  },
+  reviewDailyAudit: (id, reviewData) =>
+    apiRequest(`/stock/daily-audit/${id}/review`, {
+      method: 'PATCH',
+      body: JSON.stringify(reviewData),
+    }),
+  deleteDailyAudit: (id) =>
+    apiRequest(`/stock/daily-audit/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 export const commissionsApi = {

@@ -14,7 +14,7 @@
  * Source: Employee Attendance UI spec
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, Fragment } from 'react';
 import {
   Clock,
   LogIn,
@@ -47,7 +47,14 @@ export default function Attendance() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [breakTick, setBreakTick] = useState(0);
 
-  // Camera state
+  // Break Camera Modal state: null | 'start' | 'end'
+  const [breakCameraAction, setBreakCameraAction] = useState(null);
+  const [breakCapturedPhoto, setBreakCapturedPhoto] = useState(null);
+  const [breakCameraError, setBreakCameraError] = useState(null);
+  const [breakIsSubmitting, setBreakIsSubmitting] = useState(false);
+  const breakVideoRef = useRef(null);
+  const breakCanvasRef = useRef(null);
+  const breakStreamRef = useRef(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [photoConfirmed, setPhotoConfirmed] = useState(false);
@@ -220,30 +227,102 @@ export default function Attendance() {
     return `${m}m ${String(s).padStart(2, '0')}s`;
   };
 
-  const handleStartBreak = () => {
-    if (!user?.id) return;
-    const res = startBreak(user.id);
-    if (res.success) {
-      setFeedback({ type: 'success', message: 'Break started. Enjoy your break!' });
-    } else {
-      setFeedback({ type: 'error', message: res.error || 'Failed to start break' });
+  // Stop break camera stream helper
+  const stopBreakCamera = useCallback(() => {
+    if (breakStreamRef.current) {
+      breakStreamRef.current.getTracks().forEach((track) => track.stop());
+      breakStreamRef.current = null;
     }
-    setTimeout(() => setFeedback(null), 3500);
+  }, []);
+
+  // Cleanup break camera on unmount
+  useEffect(() => {
+    return () => stopBreakCamera();
+  }, [stopBreakCamera]);
+
+  // Open break camera modal for live photo verification
+  const handleOpenBreakCamera = async (action) => {
+    setBreakCameraError(null);
+    setBreakCapturedPhoto(null);
+    setBreakCameraAction(action);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      breakStreamRef.current = stream;
+      setTimeout(() => {
+        if (breakVideoRef.current) {
+          breakVideoRef.current.srcObject = stream;
+          breakVideoRef.current.play().catch(() => { });
+        }
+      }, 100);
+    } catch (err) {
+      setBreakCameraError('Camera access denied or not available.');
+      setBreakCameraAction(null);
+      setFeedback({ type: 'error', message: 'Could not access camera for break verification.' });
+      setTimeout(() => setFeedback(null), 4000);
+    }
   };
 
-  const handleEndBreak = () => {
-    if (!user?.id) return;
-    const res = endBreak(user.id);
-    if (res.success) {
-      const dur = res.breakItem?.durationMinutes || 0;
-      setFeedback({
-        type: 'success',
-        message: `Break ended (${dur} min recorded). Welcome back!`,
-      });
-    } else {
-      setFeedback({ type: 'error', message: res.error || 'Failed to end break' });
+  const handleCaptureBreakPhoto = () => {
+    if (!breakVideoRef.current || !breakCanvasRef.current) return;
+    const video = breakVideoRef.current;
+    const canvas = breakCanvasRef.current;
+    canvas.width = 480;
+    canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, 480, 360);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    setBreakCapturedPhoto(dataUrl);
+    stopBreakCamera();
+  };
+
+  const handleRetakeBreakPhoto = () => {
+    setBreakCapturedPhoto(null);
+    handleOpenBreakCamera(breakCameraAction);
+  };
+
+  const handleCloseBreakCamera = () => {
+    stopBreakCamera();
+    setBreakCameraAction(null);
+    setBreakCapturedPhoto(null);
+    setBreakCameraError(null);
+  };
+
+  const handleConfirmBreakAction = async () => {
+    if (!user?.id || !breakCapturedPhoto || breakIsSubmitting) return;
+    setBreakIsSubmitting(true);
+
+    try {
+      if (breakCameraAction === 'start') {
+        const res = startBreak(user.id, breakCapturedPhoto);
+        if (res.success) {
+          setFeedback({ type: 'success', message: '✓ Going on break photo verified. Enjoy your break!' });
+          handleCloseBreakCamera();
+        } else {
+          setFeedback({ type: 'error', message: res.error || 'Failed to start break' });
+        }
+      } else if (breakCameraAction === 'end') {
+        const res = endBreak(user.id, breakCapturedPhoto);
+        if (res.success) {
+          const dur = res.breakItem?.durationMinutes || 0;
+          setFeedback({
+            type: 'success',
+            message: `✓ Return photo verified — Break ended (${dur} min recorded). Welcome back!`,
+          });
+          handleCloseBreakCamera();
+        } else {
+          setFeedback({ type: 'error', message: res.error || 'Failed to end break' });
+        }
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: err?.message || 'Break action failed' });
+    } finally {
+      setBreakIsSubmitting(false);
+      setTimeout(() => setFeedback(null), 4000);
     }
-    setTimeout(() => setFeedback(null), 3500);
   };
 
   // Clock Out — requires departure verification photo (and automatically closes any active break)
@@ -401,11 +480,11 @@ export default function Attendance() {
                   </div>
                 </div>
 
-                {/* One-Click Break Tracking (Active Shift) */}
+                {/* Break Tracking with Mandatory Live Photo Verification */}
                 {status === 'working' && (
                   <div className={`rounded-[12px] p-3 border transition-all ${
                     todayRecord?.isOnBreak
-                      ? 'bg-amber-50/90 border-amber-300 shadow-xs'
+                      ? 'bg-amber-50/95 border-amber-300 shadow-xs'
                       : 'bg-warm-ivory border-border/60'
                   }`}>
                     <div className="flex items-center justify-between gap-2.5">
@@ -430,7 +509,7 @@ export default function Attendance() {
                                 Active break: {getLiveBreakElapsed(todayRecord.currentBreakStart)}
                               </span>
                             ) : (
-                              'Single-click Start & End (no photo needed)'
+                              'Live photo required to go out & return'
                             )}
                           </p>
                         </div>
@@ -439,25 +518,65 @@ export default function Attendance() {
                       {todayRecord?.isOnBreak ? (
                         <button
                           type="button"
-                          onClick={handleEndBreak}
+                          onClick={() => handleOpenBreakCamera('end')}
                           className="flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer active:scale-[0.98] shrink-0"
                         >
-                          <Play size={14} strokeWidth={2.4} />
-                          <span>End Break</span>
+                          <Camera size={14} strokeWidth={2.2} />
+                          <span>End Break (Take Photo)</span>
                         </button>
                       ) : (
                         <button
                           type="button"
-                          onClick={handleStartBreak}
+                          onClick={() => handleOpenBreakCamera('start')}
                           className="flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer active:scale-[0.98] shrink-0"
                         >
-                          <Coffee size={14} strokeWidth={2.4} />
-                          <span>Start Break</span>
+                          <Camera size={14} strokeWidth={2.2} />
+                          <span>Start Break (Take Photo)</span>
                         </button>
                       )}
                     </div>
 
-                    {/* Today's break chips breakdown */}
+                    {/* Active Break: Preview of Departure photo */}
+                    {todayRecord?.isOnBreak && todayRecord.currentBreakStartPhoto && (
+                      <div className="mt-2.5 pt-2 border-t border-amber-200/80 flex items-center justify-between gap-2 bg-amber-100/40 rounded-[8px] p-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-10 h-10 rounded-[8px] overflow-hidden border border-amber-400 shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => setViewingPhoto({
+                              photo: todayRecord.currentBreakStartPhoto,
+                              name: user?.name,
+                              date: todayFormatted,
+                              timeLabel: 'Break Departure Photo',
+                              typeLabel: 'Active Break — Going Out Photo',
+                            })}
+                            title="Click to view departure photo"
+                          >
+                            <img src={todayRecord.currentBreakStartPhoto} alt="Departure" className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                              <Camera size={11} /> Going Out Photo
+                            </p>
+                            <p className="text-[9px] text-amber-700">Verified before break</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setViewingPhoto({
+                            photo: todayRecord.currentBreakStartPhoto,
+                            name: user?.name,
+                            date: todayFormatted,
+                            timeLabel: 'Break Departure Photo',
+                            typeLabel: 'Active Break — Going Out Photo',
+                          })}
+                          className="text-[10px] font-semibold text-amber-800 hover:underline cursor-pointer"
+                        >
+                          View
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Today's break chips breakdown with photo indicators */}
                     {todayRecord?.breaks && todayRecord.breaks.length > 0 && (
                       <div className="mt-2.5 pt-2 border-t border-border/50 flex items-center gap-1.5 flex-wrap">
                         <span className="text-[10px] font-semibold text-muted-gray">Breaks today:</span>
@@ -468,6 +587,22 @@ export default function Attendance() {
                           >
                             <span className="text-muted-gray">#{idx + 1}</span>
                             <span className="font-bold text-amber-800">{b.durationMinutes}m</span>
+                            {(b.startPhoto || b.endPhoto) && (
+                              <button
+                                type="button"
+                                onClick={() => setViewingPhoto({
+                                  photo: b.endPhoto || b.startPhoto,
+                                  name: user?.name,
+                                  date: todayFormatted,
+                                  timeLabel: `Break #${idx + 1} (${b.durationMinutes}m)`,
+                                  typeLabel: b.endPhoto ? `Break #${idx + 1} Return Photo` : `Break #${idx + 1} Departure Photo`,
+                                })}
+                                className="text-amber-700 hover:text-amber-900 ml-0.5 cursor-pointer"
+                                title="Click to view verified break photo"
+                              >
+                                <Camera size={10} />
+                              </button>
+                            )}
                           </span>
                         ))}
                       </div>
@@ -504,12 +639,13 @@ export default function Attendance() {
               </div>
 
               {/* Verified Attendance Photos (when photos exist) */}
-              {(todayRecord?.photo || todayRecord?.clockInPhoto || todayRecord?.clockOutPhoto) && (
+              {(todayRecord?.photo || todayRecord?.clockInPhoto || todayRecord?.clockOutPhoto || todayRecord?.currentBreakStartPhoto || (todayRecord?.breaks && todayRecord.breaks.some((b) => b.startPhoto || b.endPhoto))) && (
                 <div className="space-y-2 pt-2 border-t border-border/60">
                   <p className="text-[10px] font-semibold text-muted-gray uppercase tracking-wider">
                     Verified Attendance Photos
                   </p>
                   <div className="grid grid-cols-2 gap-2">
+                    {/* Clock In Photo */}
                     {(todayRecord.clockInPhoto || todayRecord.photo) && (
                       <div className="bg-warm-ivory rounded-[10px] border border-border/60 p-2 flex items-center gap-2">
                         <div
@@ -533,6 +669,81 @@ export default function Attendance() {
                       </div>
                     )}
 
+                    {/* Active Break Departure Photo */}
+                    {todayRecord?.isOnBreak && todayRecord.currentBreakStartPhoto && (
+                      <div className="bg-amber-50 rounded-[10px] border border-amber-300/80 p-2 flex items-center gap-2">
+                        <div
+                          className="w-12 h-12 rounded-[8px] overflow-hidden border border-amber-400 shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => setViewingPhoto({
+                            photo: todayRecord.currentBreakStartPhoto,
+                            name: user?.name,
+                            date: todayFormatted,
+                            timeLabel: 'Break Departure Photo',
+                            typeLabel: 'Active Break — Going Out Photo',
+                          })}
+                        >
+                          <img src={todayRecord.currentBreakStartPhoto} alt="Break Out" className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold text-amber-800 flex items-center gap-1">
+                            <Coffee size={11} /> Break Out
+                          </p>
+                          <p className="text-[9px] text-amber-700 truncate mt-0.5">Active</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Completed Break Departure & Return Photos */}
+                    {todayRecord?.breaks?.map((b, idx) => (
+                      <Fragment key={b.id || idx}>
+                        {b.startPhoto && (
+                          <div className="bg-warm-ivory rounded-[10px] border border-border/60 p-2 flex items-center gap-2">
+                            <div
+                              className="w-12 h-12 rounded-[8px] overflow-hidden border border-amber-300 shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => setViewingPhoto({
+                                photo: b.startPhoto,
+                                name: user?.name,
+                                date: todayFormatted,
+                                timeLabel: `Break #${idx + 1} Out`,
+                                typeLabel: `Break #${idx + 1} Departure Photo (Going Out)`,
+                              })}
+                            >
+                              <img src={b.startPhoto} alt={`Break ${idx + 1} Out`} className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-semibold text-amber-800 flex items-center gap-1">
+                                <Coffee size={11} /> Brk #{idx + 1} Out
+                              </p>
+                              <p className="text-[9px] text-muted-gray truncate mt-0.5">{b.durationMinutes}m total</p>
+                            </div>
+                          </div>
+                        )}
+                        {b.endPhoto && (
+                          <div className="bg-warm-ivory rounded-[10px] border border-border/60 p-2 flex items-center gap-2">
+                            <div
+                              className="w-12 h-12 rounded-[8px] overflow-hidden border border-emerald-300 shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => setViewingPhoto({
+                                photo: b.endPhoto,
+                                name: user?.name,
+                                date: todayFormatted,
+                                timeLabel: `Break #${idx + 1} In`,
+                                typeLabel: `Break #${idx + 1} Return Photo (Coming Back)`,
+                              })}
+                            >
+                              <img src={b.endPhoto} alt={`Break ${idx + 1} In`} className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
+                                <CheckCircle size={11} /> Brk #{idx + 1} In
+                              </p>
+                              <p className="text-[9px] text-muted-gray truncate mt-0.5">Returned</p>
+                            </div>
+                          </div>
+                        )}
+                      </Fragment>
+                    ))}
+
+                    {/* Clock Out Photo */}
                     {todayRecord.clockOutPhoto && (
                       <div className="bg-warm-ivory rounded-[10px] border border-border/60 p-2 flex items-center gap-2">
                         <div
@@ -860,7 +1071,25 @@ export default function Attendance() {
                                   <LogOut size={11} className="text-error" /> Out
                                 </button>
                               )}
-                              {!rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (
+                              {rec.breaks?.map((b, bIdx) => (
+                                (b.startPhoto || b.endPhoto) ? (
+                                  <button
+                                    key={b.id || bIdx}
+                                    onClick={() => setViewingPhoto({
+                                      photo: b.endPhoto || b.startPhoto,
+                                      name: user?.name,
+                                      date: formatDateDisplay(rec.date),
+                                      timeLabel: `Break #${bIdx + 1} (${b.durationMinutes}m)`,
+                                      typeLabel: b.endPhoto && b.startPhoto ? `Break #${bIdx + 1} Return & Out Photos Available` : `Break #${bIdx + 1} Photo`,
+                                    })}
+                                    className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 hover:text-amber-900 cursor-pointer transition-colors"
+                                    title="View verified break photo"
+                                  >
+                                    <Coffee size={11} className="text-amber-600" /> Brk#{bIdx + 1}
+                                  </button>
+                                ) : null
+                              ))}
+                              {!rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (!rec.breaks || !rec.breaks.some(b => b.startPhoto || b.endPhoto)) && (
                                 rec.isManualEntry ? (
                                   <button
                                     onClick={() => setSelectedManualDetails(rec)}
@@ -958,6 +1187,23 @@ export default function Attendance() {
                               className="inline-flex items-center gap-1 text-[10px] font-medium text-dusty-rose hover:text-[#D4A399] cursor-pointer"
                             >
                               <LogOut size={11} className="text-error" /> Out Photo
+                            </button>
+                          )}
+                          {rec.breaks?.some(b => b.startPhoto || b.endPhoto) && (
+                            <button
+                              onClick={() => {
+                                const firstWithPhoto = rec.breaks.find(b => b.endPhoto || b.startPhoto);
+                                setViewingPhoto({
+                                  photo: firstWithPhoto.endPhoto || firstWithPhoto.startPhoto,
+                                  name: user?.name,
+                                  date: formatDateDisplay(rec.date),
+                                  timeLabel: `Breaks: ${rec.breakCount} total`,
+                                  typeLabel: 'Verified Break Photo',
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 hover:text-amber-900 cursor-pointer"
+                            >
+                              <Coffee size={11} /> Break Photo
                             </button>
                           )}
                         </div>
@@ -1136,6 +1382,128 @@ export default function Attendance() {
                   {viewingPhoto.typeLabel || 'Attendance Verification Photo'}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== BREAK LIVE CAMERA MODAL ===================== */}
+      {breakCameraAction && (
+        <div className="fixed inset-0 bg-charcoal/50 z-[70] flex items-center justify-center p-4">
+          <div
+            className="bg-soft-cream rounded-[16px] border border-border shadow-card max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-border bg-warm-ivory">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-[9px] flex items-center justify-center ${
+                  breakCameraAction === 'start' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                }`}>
+                  <Camera size={16} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-charcoal">
+                    {breakCameraAction === 'start' ? 'Going on Break — Departure Photo' : 'Returning from Break — Return Photo'}
+                  </h4>
+                  <p className="text-[10px] text-muted-gray">
+                    {breakCameraAction === 'start'
+                      ? 'Take a live photo before leaving for your break'
+                      : 'Take a live photo as you resume your shift'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleCloseBreakCamera}
+                className="w-8 h-8 rounded-full bg-soft-cream hover:bg-border flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={15} className="text-muted-gray" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-3">
+              {/* Error message */}
+              {breakCameraError && (
+                <p className="text-xs text-error font-medium flex items-center gap-1">
+                  <AlertCircle size={12} /> {breakCameraError}
+                </p>
+              )}
+
+              {/* Live Stream View */}
+              {!breakCapturedPhoto && (
+                <div className="space-y-3">
+                  <div className="relative rounded-[12px] overflow-hidden border border-border bg-charcoal aspect-video max-h-[260px] w-full flex items-center justify-center shadow-inner">
+                    <video
+                      ref={breakVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                      style={{ transform: 'scaleX(-1)' }}
+                    />
+                    <div className="absolute bottom-2 left-2 bg-charcoal/70 px-2 py-0.5 rounded-[6px] text-[10px] text-white flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                      Live Camera
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCaptureBreakPhoto}
+                    className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-[10px] text-white text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer shadow-sm active:scale-[0.98] ${
+                      breakCameraAction === 'start' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}
+                  >
+                    <Camera size={15} strokeWidth={2.2} />
+                    <span>Capture Photo</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Captured Photo Preview */}
+              {breakCapturedPhoto && (
+                <div className="space-y-3">
+                  <div className="relative rounded-[12px] overflow-hidden border border-border aspect-video max-h-[260px] w-full flex items-center justify-center bg-black">
+                    <img
+                      src={breakCapturedPhoto}
+                      alt="Break Preview"
+                      className="w-full h-full object-cover"
+                      style={{ transform: 'scaleX(-1)' }}
+                    />
+                    <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-emerald-600 text-white text-[10px] font-bold shadow-xs">
+                      <CheckCircle size={11} /> Photo Captured
+                    </span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRetakeBreakPhoto}
+                      disabled={breakIsSubmitting}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-[10px] bg-white border border-border text-charcoal text-xs font-semibold hover:bg-warm-ivory transition-colors cursor-pointer"
+                    >
+                      <RotateCcw size={13} />
+                      <span>Retake</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmBreakAction}
+                      disabled={breakIsSubmitting}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-[10px] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer active:scale-[0.98] ${
+                        breakCameraAction === 'start'
+                          ? 'bg-amber-500 hover:bg-amber-600'
+                          : 'bg-emerald-600 hover:bg-emerald-700'
+                      } ${breakIsSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    >
+                      <CheckCircle size={14} strokeWidth={2.2} />
+                      <span>{breakIsSubmitting ? 'Saving...' : breakCameraAction === 'start' ? 'Confirm & Start Break' : 'Confirm & End Break'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <canvas ref={breakCanvasRef} className="hidden" />
             </div>
           </div>
         </div>

@@ -48,7 +48,7 @@ const RECEPTION_ROUTES = [
 const TECHNICIAN_ROUTES = [
   '/', '/dashboard', '/appointments', '/appointments/:id', '/appointments/:id/close',
   '/clients', '/clients/new', '/clients/:id', '/services', '/invoices',
-  '/technicians/daily', '/summary', '/shared-work', '/attendance',
+  '/technicians/daily', '/summary', '/shared-work', '/attendance', '/stock',
 ];
 
 export const MARKETER_ROUTES = [

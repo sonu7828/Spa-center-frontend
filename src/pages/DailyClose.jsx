@@ -15,7 +15,7 @@
  * Source: WIREFRAME.md Screen 16, FLOW.md §40-44
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   MessageCircle,
@@ -31,6 +31,7 @@ import {
   ShieldAlert,
   Sparkles,
   Phone,
+  Camera,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -44,7 +45,7 @@ import { reportsApi, whatsappApi } from '../services/api';
 export default function DailyClose() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { completedServices, latestReconciliation, retailSales = [] } = useOperations();
+  const { completedServices, latestReconciliation, retailSales = [], dailyStockAudits = [] } = useOperations();
   const { clients } = useClients();
   const { appointments } = useAppointments();
   const { todayExpensesTotal = 0 } = useExpenses();
@@ -228,28 +229,41 @@ export default function DailyClose() {
     dashboardSummary?.cards?.completedServices ??
     new Set(todayCompletedServices.map((s) => s.clientName).filter(Boolean)).size;
 
-  // Technician Breakdown: Real backend technicians performance
-  const techBreakdown =
-    techniciansPerformance.length > 0
-      ? techniciansPerformance.map((t) => ({
-          name: t.technicianName,
-          total: t.revenueGenerated,
-          count: t.servicesCompleted,
-        }))
-      : (() => {
-          const map = {};
-          todayCompletedServices.forEach((s) => {
-            const tech = s.technician || 'Other';
-            if (!map[tech]) map[tech] = { total: 0, count: 0 };
-            map[tech].total += s.price || 0;
-            map[tech].count += 1;
-          });
-          return Object.entries(map).map(([name, data]) => ({
+  // Technician Breakdown: Real backend technicians performance (grouped by technician to eliminate duplicates)
+  const techBreakdown = useMemo(() => {
+    if (techniciansPerformance && techniciansPerformance.length > 0) {
+      const map = {};
+      techniciansPerformance.forEach((t, idx) => {
+        const name = t.technicianName || 'Other';
+        const key = t.technicianId || name;
+        if (!map[key]) {
+          map[key] = {
+            id: key || `tech-${idx}`,
             name,
-            total: data.total,
-            count: data.count,
-          }));
-        })();
+            total: 0,
+            count: 0,
+          };
+        }
+        map[key].total += Number(t.revenueGenerated || 0);
+        map[key].count += Number(t.servicesCompleted || 0);
+      });
+      return Object.values(map);
+    }
+
+    const map = {};
+    todayCompletedServices.forEach((s) => {
+      const tech = s.technician || 'Other';
+      if (!map[tech]) map[tech] = { total: 0, count: 0 };
+      map[tech].total += s.price || 0;
+      map[tech].count += 1;
+    });
+    return Object.entries(map).map(([name, data], idx) => ({
+      id: `fallback-${name}-${idx}`,
+      name,
+      total: data.total,
+      count: data.count,
+    }));
+  }, [techniciansPerformance, todayCompletedServices]);
 
   // Referrals today
   const referralsToday = clients.filter(
@@ -454,9 +468,9 @@ export default function DailyClose() {
                 No technician revenue recorded today.
               </p>
             ) : (
-              techBreakdown.map((t) => (
+              techBreakdown.map((t, idx) => (
                 <div
-                  key={t.name}
+                  key={t.id || `${t.name}-${idx}`}
                   className="flex items-center justify-between py-1.5 px-2 rounded-[6px] hover:bg-soft-cream/40 text-xs"
                 >
                   <span className="font-medium text-charcoal">
@@ -510,6 +524,26 @@ export default function DailyClose() {
               <span className="font-bold text-charcoal">
                 {consumedStockCount} units
               </span>
+            </div>
+
+            {/* Daily Stock Live Photo Audits Proof Row */}
+            <div className="flex items-center justify-between py-2 border-b border-border/60">
+              <div className="flex items-center gap-2 text-muted-gray">
+                <Camera size={16} className="text-sage" />
+                <span>End-of-Day Stock Photo Proofs</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-charcoal">
+                  {dailyStockAudits.length} photo{dailyStockAudits.length !== 1 ? 's' : ''} ({dailyStockAudits.filter((a) => a.status === 'REVIEWED').length} reviewed)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/stock')}
+                  className="text-[11px] font-bold text-sage hover:underline cursor-pointer"
+                >
+                  View
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center justify-between py-2 border-b border-border/60">
