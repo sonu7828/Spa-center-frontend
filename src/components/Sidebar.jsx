@@ -55,6 +55,7 @@ const navSections = [
       { to: '/shared-work',      label: 'Shared Work',     icon: Users,          roles: ['manager', 'reception', 'technician'] },
       { to: '/services',         label: 'Services',        icon: Sparkles,       roles: ['manager', 'reception', 'technician'] },
       { to: '/stock',            label: 'Service Stock',   icon: Package,        roles: ['manager', 'reception'] },
+      { to: '/stock-photos',     label: 'Daily Stock Photos', icon: Camera,        roles: ['technician', 'manager', 'reception'] },
       { to: '/products',         label: 'Retail Products', icon: ShoppingBag,    roles: ['manager', 'reception'] },
       { to: '/technicians/daily', label: 'Tech Summary',    icon: ClipboardList,  roles: ['manager', 'reception', 'technician'] },
       { to: '/cleaning-records', label: 'Cleaning',        icon: ClipboardCheck, roles: ['manager', 'reception'] },

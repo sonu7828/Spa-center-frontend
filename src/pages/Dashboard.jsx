@@ -39,6 +39,7 @@ import {
   Unlock,
   Zap,
   Calculator,
+  Camera,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -58,7 +59,14 @@ import { getDoualaTodayStr } from '../utils/timezone';
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, allUsers } = useAuth();
-  const { dailyTotals, serviceStock, getProductMetrics, lowStockThresholdDays } = useOperations();
+  const {
+    dailyTotals,
+    serviceStock,
+    getProductMetrics,
+    lowStockThresholdDays,
+    dailyStockAudits = [],
+    refreshDailyAudits,
+  } = useOperations();
   const { clients } = useClients();
   const { appointments } = useAppointments();
   const { commissionRate, getEmployeeCommissionSummary } = useCommission();
@@ -228,10 +236,15 @@ export default function Dashboard() {
     return daysSince > 14;
   }).length;
 
+  const pendingStockAuditsCount = dailyStockAudits.filter((a) => a.status === 'PENDING').length;
+
   const attentionItems = [
     { id: 1, label: 'Clients to Rebook', count: clientsToRebookCount, type: 'warning' },
     { id: 2, label: 'Deposit Required Clients', count: depositRequiredCount, type: 'error' },
     { id: 3, label: 'Stock Alerts', count: lowStockCount, type: 'warning' },
+    ...(pendingStockAuditsCount > 0
+      ? [{ id: 4, label: 'Stock Audits Pending Review', count: pendingStockAuditsCount, type: 'warning' }]
+      : []),
   ].filter((item) => item.count > 0);
 
   const handleAcquisitionSuccess = (data) => {
@@ -544,6 +557,14 @@ export default function Dashboard() {
     const clientsReferredCount = myPerformance?.clientsReferred ?? myCommissionSummary?.clientsReferred ?? myIntroducedClients.length ?? 0;
     const completedServicesCount = myPerformance?.servicesCompleted ?? myCommissionSummary?.completedServices ?? 0;
     const commissionEarnedAmount = myPerformance?.commissionEarned ?? myCommissionSummary?.commissionEarned ?? 0;
+
+    const myTodayAudits = dailyStockAudits.filter((audit) => {
+      const isMe =
+        String(audit.technicianId) === String(user?.id) ||
+        audit.technicianName?.toLowerCase() === user?.name?.toLowerCase();
+      const isToday = audit.date ? audit.date.startsWith(todayStr) : true;
+      return isMe && isToday;
+    });
 
     return (
       <div className="space-y-4 sm:space-y-5 pb-8">

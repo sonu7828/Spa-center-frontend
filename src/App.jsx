@@ -57,6 +57,7 @@ import LateClient from './pages/LateClient';
 import NoShowFlow from './pages/NoShowFlow';
 import CloseService from './pages/CloseService';
 import Stock from './pages/Stock';
+import StockPhotos from './pages/StockPhotos';
 import TechnicianDailySummary from './pages/TechnicianDailySummary';
 import Referrals from './pages/Referrals';
 import Rebooking from './pages/Rebooking';
@@ -163,6 +164,7 @@ export default function App() {
                             <Route path="appointments/:id/no-show" element={<NoShowFlow />} />
                             <Route path="appointments/:id/close" element={<CloseService />} />
                             <Route path="stock" element={<Stock />} />
+                            <Route path="stock-photos" element={<StockPhotos />} />
                             <Route path="technicians/daily" element={<TechnicianDailySummary />} />
                             <Route path="summary" element={<Navigate to="/technicians/daily" replace />} />
                             <Route path="referrals" element={<Referrals />} />

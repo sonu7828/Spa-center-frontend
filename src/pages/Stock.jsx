@@ -42,6 +42,7 @@ import StockPhotoDetailModal from '../components/StockPhotoDetailModal';
 export default function Stock() {
   const { user } = useAuth();
   const isManager = user?.role === 'manager';
+  const isTechnician = (user?.role || '').toLowerCase() === 'technician';
   const { getActiveServices } = useServices();
   const activeServices = getActiveServices();
 
@@ -366,14 +367,16 @@ export default function Stock() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
-          {/* Live Photo Audit Button — accessible to Technicians, Receptionists & Managers */}
-          <Button
-            onClick={() => setIsRecordModalOpen(true)}
-            className="w-full sm:w-auto h-11 px-3.5 text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm bg-sage hover:bg-sage/90 text-white cursor-pointer"
-          >
-            <Camera size={16} className="shrink-0" />
-            <span className="truncate">Take Live Stock Photo</span>
-          </Button>
+          {/* Live Photo Audit Button — strictly only for Technicians (hidden for Manager & Reception) */}
+          {isTechnician && (
+            <Button
+              onClick={() => setIsRecordModalOpen(true)}
+              className="w-full sm:w-auto h-11 px-3.5 text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm bg-sage hover:bg-sage/90 text-white cursor-pointer"
+            >
+              <Camera size={16} className="shrink-0" />
+              <span className="truncate">Take Live Stock Photo</span>
+            </Button>
+          )}
 
           {isManager && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 xl:flex xl:flex-wrap xl:items-center gap-2 w-full xl:w-auto">
