@@ -359,9 +359,12 @@ export const stockApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  getDailyAudits: (params = {}) => {
+  getDailyAudits: (params = {}, options = {}) => {
     const query = new URLSearchParams(params).toString();
-    return apiRequest('/stock/daily-audit' + (query ? '?' + query : ''));
+    return apiRequest('/stock/daily-audit' + (query ? '?' + query : ''), {
+      silent: true,
+      ...options,
+    });
   },
   reviewDailyAudit: (id, reviewData) =>
     apiRequest(`/stock/daily-audit/${id}/review`, {

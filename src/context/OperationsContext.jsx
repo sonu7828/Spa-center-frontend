@@ -246,7 +246,7 @@ export function OperationsProvider({ children }) {
         const items = res?.data?.audits || [];
         setDailyStockAudits(items);
       } catch (err) {
-        console.warn('Failed to load daily stock photo audits:', err);
+        setDailyStockAudits([]);
       } finally {
         setIsLoadingAudits(false);
       }
