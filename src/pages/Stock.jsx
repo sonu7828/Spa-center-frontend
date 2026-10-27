@@ -1037,14 +1037,16 @@ export default function Stock() {
                 <span>Refresh</span>
               </Button>
 
-              <Button
-                variant="primary"
-                onClick={() => setIsRecordModalOpen(true)}
-                className="h-10 px-4 text-xs font-bold flex items-center gap-1.5 bg-sage hover:bg-sage/90 text-white cursor-pointer"
-              >
-                <Camera size={14} />
-                <span>+ Take Live Stock Photo</span>
-              </Button>
+              {user?.role === 'technician' && (
+                <Button
+                  variant="primary"
+                  onClick={() => setIsRecordModalOpen(true)}
+                  className="h-10 px-4 text-xs font-bold flex items-center gap-1.5 bg-sage hover:bg-sage/90 text-white cursor-pointer"
+                >
+                  <Camera size={14} />
+                  <span>+ Take Live Stock Photo</span>
+                </Button>
+              )}
             </div>
           </div>
 
@@ -1162,17 +1164,19 @@ export default function Stock() {
               <h4 className="font-bold text-sm text-charcoal">No Stock Audits Found</h4>
               <p className="text-xs text-muted-gray max-w-md mx-auto">
                 {dailyStockAudits.length === 0
-                  ? 'Technicians take live photos of products and written remarks at end-of-day. Click below to record the first live picture.'
+                  ? 'Technicians submit live photos of products and written remarks at end-of-day. Once submitted, proofs will appear here for review and follow-up.'
                   : 'No stock photo audits match the current filters.'}
               </p>
-              <Button
-                variant="primary"
-                onClick={() => setIsRecordModalOpen(true)}
-                className="h-10 px-5 text-xs font-bold inline-flex items-center gap-1.5 bg-sage hover:bg-sage/90 text-white mt-2 cursor-pointer"
-              >
-                <Camera size={14} />
-                <span>Take Live Stock Photo Now</span>
-              </Button>
+              {user?.role === 'technician' && (
+                <Button
+                  variant="primary"
+                  onClick={() => setIsRecordModalOpen(true)}
+                  className="h-10 px-5 text-xs font-bold inline-flex items-center gap-1.5 bg-sage hover:bg-sage/90 text-white mt-2 cursor-pointer"
+                >
+                  <Camera size={14} />
+                  <span>Take Live Stock Photo Now</span>
+                </Button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

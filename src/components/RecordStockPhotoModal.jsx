@@ -5,13 +5,9 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Package,
   FileText,
-  Upload,
-  Sparkles,
   Check,
   SwitchCamera,
-  Layers,
 } from 'lucide-react';
 import Button from './Button';
 import { useOperations } from '../context/OperationsContext';
@@ -21,18 +17,12 @@ export default function RecordStockPhotoModal({
   isOpen,
   onClose,
   onSuccess,
-  defaultProductName = '',
 }) {
-  const { serviceStock, submitDailyStockAudit } = useOperations();
+  const { submitDailyStockAudit } = useOperations();
 
-  const [selectedStockId, setSelectedStockId] = useState('');
-  const [productName, setProductName] = useState(defaultProductName || '');
-  const [isCustomProduct, setIsCustomProduct] = useState(false);
   const [remarks, setRemarks] = useState('');
-  const [estimatedRemaining, setEstimatedRemaining] = useState('');
   
-  // Camera & Image state
-  const [cameraMode, setCameraMode] = useState('camera'); // 'camera' | 'upload'
+  // Camera state (strictly live camera, no file upload)
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' (back) | 'user' (front)
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
@@ -46,7 +36,6 @@ export default function RecordStockPhotoModal({
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   // Stop camera helper
   const stopCamera = () => {
@@ -84,7 +73,7 @@ export default function RecordStockPhotoModal({
       }, 100);
     } catch (err) {
       console.warn('Camera access failed:', err);
-      setCameraError('Camera access not granted or not available on this device.');
+      setCameraError('Camera access not granted or not available. Please allow camera permissions.');
       setIsCameraActive(false);
     }
   };
@@ -107,62 +96,20 @@ export default function RecordStockPhotoModal({
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    // Set initial product
-    if (defaultProductName) {
-      const match = serviceStock.find(
-        (p) => p.name.toLowerCase() === defaultProductName.toLowerCase()
-      );
-      if (match) {
-        setSelectedStockId(match.id);
-        setProductName(match.name);
-        setIsCustomProduct(false);
-      } else {
-        setSelectedStockId('custom');
-        setProductName(defaultProductName);
-        setIsCustomProduct(true);
-      }
-    } else if (serviceStock.length > 0) {
-      setSelectedStockId(serviceStock[0].id);
-      setProductName(serviceStock[0].name);
-      setIsCustomProduct(false);
-    } else {
-      setSelectedStockId('custom');
-      setProductName('');
-      setIsCustomProduct(true);
-    }
-
     setRemarks('');
-    setEstimatedRemaining('');
     setCapturedPhoto(null);
     setCameraError('');
     setErrorMsg('');
     setSuccessMsg('');
-    setCameraMode('camera');
 
-    // Auto-start camera
+    // Auto-start live camera
     startCamera('environment');
 
     return () => {
       document.body.style.overflow = originalOverflow;
       stopCamera();
     };
-  }, [isOpen, defaultProductName, serviceStock]);
-
-  // Handle Product Selection Change
-  const handleProductSelect = (e) => {
-    const val = e.target.value;
-    setSelectedStockId(val);
-    if (val === 'custom') {
-      setIsCustomProduct(true);
-      setProductName('');
-    } else {
-      setIsCustomProduct(false);
-      const match = serviceStock.find((p) => p.id === val);
-      if (match) {
-        setProductName(match.name);
-      }
-    }
-  };
+  }, [isOpen]);
 
   // Snap photo from video element
   const handleCapturePhoto = () => {
@@ -184,36 +131,18 @@ export default function RecordStockPhotoModal({
     startCamera(facingMode);
   };
 
-  // File upload fallback handler
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setErrorMsg('Please select a valid image file');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setCapturedPhoto(event.target.result);
-      stopCamera();
-    };
-    reader.readAsDataURL(file);
-  };
-
   // Submit audit
   const handleSubmit = async (e) => {
     e?.preventDefault();
     setErrorMsg('');
 
-    if (!productName.trim()) {
-      setErrorMsg('Please select or enter the product name');
+    if (!capturedPhoto) {
+      setErrorMsg('Please take a live photo of the remaining stock');
       return;
     }
 
-    if (!capturedPhoto) {
-      setErrorMsg('Please take or upload a live photo of the stock');
+    if (!remarks.trim()) {
+      setErrorMsg('Please write your remarks/details about the remaining stock');
       return;
     }
 
@@ -234,18 +163,22 @@ export default function RecordStockPhotoModal({
       }
 
       // 2. Submit Daily Audit record
+      // Extract first few words of remarks for productName to satisfy backend requirement cleanly
+      const firstLine = remarks.trim().split('\n')[0].trim();
+      const productTitle = firstLine.length > 40 ? firstLine.substring(0, 37) + '...' : firstLine;
+
       const payload = {
-        serviceStockId: selectedStockId === 'custom' ? null : selectedStockId || null,
-        productName: productName.trim(),
+        serviceStockId: null,
+        productName: productTitle || 'End-of-Day Stock Proof',
         photoUrl: uploadedUrl,
         publicId,
-        remarks: remarks.trim() || null,
-        estimatedRemaining: estimatedRemaining.trim() || null,
+        remarks: remarks.trim(),
+        estimatedRemaining: null,
       };
 
       const result = await submitDailyStockAudit(payload);
 
-      setSuccessMsg('Stock photo and remarks successfully recorded!');
+      setSuccessMsg('Live stock photo and remarks successfully submitted!');
       setTimeout(() => {
         if (onSuccess) onSuccess(result);
         onClose();
@@ -266,7 +199,7 @@ export default function RecordStockPhotoModal({
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-charcoal/60 backdrop-blur-sm animate-fade-in"
     >
-      <div className="relative w-full max-w-xl max-h-[92vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-border flex flex-col">
+      <div className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-border flex flex-col">
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-white/95 backdrop-blur border-b border-border">
           <div className="flex items-center gap-2.5">
@@ -275,10 +208,10 @@ export default function RecordStockPhotoModal({
             </div>
             <div>
               <h3 className="text-base font-bold text-charcoal">
-                End-of-Day Live Stock Photo
+                End-of-Day Stock Photo
               </h3>
               <p className="text-xs text-muted-gray">
-                Take live photo of remaining stock with technician remarks
+                Take live picture of remaining products with remarks
               </p>
             </div>
           </div>
@@ -307,78 +240,24 @@ export default function RecordStockPhotoModal({
             </div>
           )}
 
-          {/* Product Selector */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1.5 flex items-center gap-1.5">
-              <Package size={14} className="text-sage" />
-              Service Stock Product <span className="text-error">*</span>
-            </label>
-            <select
-              value={selectedStockId}
-              onChange={handleProductSelect}
-              className="w-full h-10 px-3.5 bg-soft-cream/40 border border-border rounded-xl text-xs sm:text-sm text-charcoal font-medium focus:border-sage focus:ring-1 focus:ring-sage outline-none"
-            >
-              {serviceStock.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.quantity} {p.unit} remaining)
-                </option>
-              ))}
-              <option value="custom">✏️ Other / Unlisted Product...</option>
-            </select>
-          </div>
-
-          {/* Custom Product Name Input if selected */}
-          {isCustomProduct && (
-            <div className="animate-fade-in">
-              <label className="block text-xs font-semibold text-charcoal mb-1">
-                Custom Product Name <span className="text-error">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Lavender Aromatherapy Oil, Towel Pack..."
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                className="w-full h-10 px-3.5 bg-white border border-border rounded-xl text-xs sm:text-sm text-charcoal focus:border-sage outline-none"
-              />
-            </div>
-          )}
-
-          {/* Live Camera / Capture Section */}
+          {/* Live Camera Viewfinder (Strictly Live Photo Only) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold uppercase tracking-wider text-charcoal flex items-center gap-1.5">
                 <Camera size={14} className="text-sage" />
-                Live Stock Picture <span className="text-error">*</span>
+                Live Camera Proof <span className="text-error">*</span>
               </label>
 
-              {/* Mode switch (Camera vs File) */}
-              <div className="flex items-center gap-2">
-                {isCameraActive && (
-                  <button
-                    type="button"
-                    onClick={toggleFacingMode}
-                    className="flex items-center gap-1 text-[11px] text-sage hover:text-charcoal font-medium px-2 py-0.5 rounded-lg hover:bg-soft-cream/60 transition-colors cursor-pointer"
-                  >
-                    <SwitchCamera size={13} />
-                    <span>Flip</span>
-                  </button>
-                )}
+              {isCameraActive && (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (cameraMode === 'camera') {
-                      stopCamera();
-                      setCameraMode('upload');
-                    } else {
-                      setCameraMode('camera');
-                      startCamera(facingMode);
-                    }
-                  }}
-                  className="text-[11px] text-muted-gray hover:text-charcoal underline"
+                  onClick={toggleFacingMode}
+                  className="flex items-center gap-1 text-[11px] text-sage hover:text-charcoal font-semibold px-2 py-0.5 rounded-lg hover:bg-soft-cream/60 transition-colors cursor-pointer"
                 >
-                  {cameraMode === 'camera' ? 'Choose File instead' : 'Use Live Camera'}
+                  <SwitchCamera size={13} />
+                  <span>Flip Camera</span>
                 </button>
-              </div>
+              )}
             </div>
 
             {/* Viewfinder or Captured Image */}
@@ -393,7 +272,7 @@ export default function RecordStockPhotoModal({
                   />
                   <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
                     <Check size={13} />
-                    <span>Photo Ready</span>
+                    <span>Live Photo Captured</span>
                   </div>
                   <button
                     type="button"
@@ -404,7 +283,7 @@ export default function RecordStockPhotoModal({
                     <span>Retake</span>
                   </button>
                 </div>
-              ) : cameraMode === 'camera' ? (
+              ) : (
                 /* Live Camera Stream */
                 <div className="relative w-full h-full flex items-center justify-center bg-black">
                   {cameraError ? (
@@ -413,10 +292,10 @@ export default function RecordStockPhotoModal({
                       <p className="text-xs text-amber-200">{cameraError}</p>
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => startCamera(facingMode)}
                         className="mt-2 px-3.5 py-1.5 bg-sage hover:bg-sage/90 text-white rounded-xl text-xs font-bold"
                       >
-                        Upload Photo from Device
+                        Try Camera Again
                       </button>
                     </div>
                   ) : (
@@ -430,8 +309,8 @@ export default function RecordStockPhotoModal({
                       />
                       {/* Aim overlay guideline */}
                       <div className="absolute inset-8 border border-white/40 border-dashed rounded-xl pointer-events-none flex items-end justify-center pb-2">
-                        <span className="text-[10px] text-white/80 bg-black/40 px-2 py-0.5 rounded-full">
-                          Frame product & liquid level
+                        <span className="text-[10px] text-white/80 bg-black/40 px-2.5 py-0.5 rounded-full">
+                          Frame remaining stock & bottles
                         </span>
                       </div>
                       {/* Snap trigger button */}
@@ -439,72 +318,34 @@ export default function RecordStockPhotoModal({
                         type="button"
                         onClick={handleCapturePhoto}
                         className="absolute bottom-4 w-14 h-14 rounded-full border-4 border-white bg-sage/90 hover:bg-sage text-white flex items-center justify-center shadow-lg transition-transform active:scale-95 cursor-pointer"
-                        title="Take Photo"
+                        title="Take Live Photo"
                       >
                         <Camera size={24} />
                       </button>
                     </>
                   )}
                 </div>
-              ) : (
-                /* File Upload Area */
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-full p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-white/5 transition-colors"
-                >
-                  <Upload size={32} className="text-sage mb-2" />
-                  <p className="text-xs font-semibold text-white">
-                    Click to browse or take photo
-                  </p>
-                  <p className="text-[11px] text-white/60 mt-0.5">
-                    Supports JPG, PNG, WEBP (Camera capture supported)
-                  </p>
-                </div>
               )}
             </div>
 
-            {/* Hidden file input & canvas */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileChange}
-              className="hidden"
-            />
             <canvas ref={canvasRef} className="hidden" />
           </div>
 
-          {/* Estimated Quantity Input */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1 flex items-center gap-1.5">
-              <Layers size={14} className="text-sage" />
-              Estimated Stock Left (Optional)
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. ~150 ml, 2.5 bottles, half tub..."
-              value={estimatedRemaining}
-              onChange={(e) => setEstimatedRemaining(e.target.value)}
-              className="w-full h-10 px-3.5 bg-soft-cream/40 border border-border rounded-xl text-xs sm:text-sm text-charcoal focus:border-sage outline-none"
-            />
-          </div>
-
-          {/* Written Remarks Input */}
+          {/* Written Remarks Input (Where technician writes all details) */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1 flex items-center gap-1.5">
               <FileText size={14} className="text-sage" />
-              Technician Remarks / Observations
+              Remarks & Details of Remaining Stock <span className="text-error">*</span>
             </label>
             <textarea
-              rows={3}
-              placeholder="e.g. Used for 3 massages today. Bottle #1 is almost empty, please prepare refill for tomorrow. No spills."
+              rows={4}
+              placeholder="e.g. Essential oil 1 bottle left (~200ml), massage cream low, towels stocked. Prepared for tomorrow."
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              className="w-full p-3 bg-soft-cream/40 border border-border rounded-xl text-xs sm:text-sm text-charcoal focus:border-sage outline-none resize-none"
+              className="w-full p-3.5 bg-soft-cream/40 border border-border rounded-xl text-xs sm:text-sm text-charcoal focus:border-sage outline-none resize-none font-medium leading-relaxed"
             />
             <p className="text-[11px] text-muted-gray mt-1">
-              Managers and receptionists will see this remark to follow up on replenishment.
+              The manager and receptionist will read these remarks to follow up on what stock is left.
             </p>
           </div>
         </div>
@@ -525,13 +366,13 @@ export default function RecordStockPhotoModal({
             type="button"
             variant="primary"
             onClick={handleSubmit}
-            disabled={isSubmitting || !capturedPhoto || !productName.trim()}
-            className="text-xs font-bold px-5 h-10 flex items-center gap-1.5"
+            disabled={isSubmitting || !capturedPhoto || !remarks.trim()}
+            className="text-xs font-bold px-5 h-10 flex items-center gap-1.5 bg-sage hover:bg-sage/90 text-white cursor-pointer disabled:opacity-50"
           >
             {isSubmitting ? (
               <>
                 <RefreshCw size={14} className="animate-spin" />
-                <span>Saving Stock Audit...</span>
+                <span>Submitting Proof...</span>
               </>
             ) : (
               <>

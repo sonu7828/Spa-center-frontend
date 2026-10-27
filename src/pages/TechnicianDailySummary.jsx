@@ -1660,14 +1660,16 @@ export default function TechnicianDailySummary() {
             </div>
           </div>
 
-          <Button
-            variant="primary"
-            onClick={() => setShowStockPhotoModal(true)}
-            className="h-10 px-4 text-xs font-bold flex items-center justify-center gap-1.5 bg-sage hover:bg-sage/90 text-white cursor-pointer shrink-0"
-          >
-            <Camera size={14} />
-            <span>+ Take Live Stock Photo</span>
-          </Button>
+          {isTechnicianRole && (
+            <Button
+              variant="primary"
+              onClick={() => setShowStockPhotoModal(true)}
+              className="h-10 px-4 text-xs font-bold flex items-center justify-center gap-1.5 bg-sage hover:bg-sage/90 text-white cursor-pointer shrink-0"
+            >
+              <Camera size={14} />
+              <span>+ Take Live Stock Photo</span>
+            </Button>
+          )}
         </div>
 
         {/* Gallery / List of photos submitted today for this technician */}

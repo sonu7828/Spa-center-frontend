@@ -170,11 +170,11 @@ export default function StockPhotoDetailModal({
 
             <div className="p-3 bg-soft-cream/40 rounded-xl border border-border">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray flex items-center gap-1">
-                <Layers size={12} className="text-sage" />
-                Estimated Remaining
+                <Clock size={12} className="text-sage" />
+                Submitted At
               </span>
               <p className="text-xs sm:text-sm font-semibold text-charcoal mt-0.5">
-                {audit.estimatedRemaining || 'Not specified (see photo)'}
+                {formattedDate} {formattedTime ? `• ${formattedTime}` : ''}
               </p>
             </div>
           </div>
