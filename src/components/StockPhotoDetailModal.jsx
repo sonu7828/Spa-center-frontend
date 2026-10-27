@@ -28,7 +28,7 @@ export default function StockPhotoDetailModal({
 
   const userRole = (user?.role || '').toLowerCase();
   const canReview = userRole === 'manager' || userRole === 'reception';
-  const canDelete = userRole === 'manager' || audit?.technicianId === user?.id;
+  const canDelete = userRole === 'manager' || userRole === 'admin';
 
   const [reviewNotes, setReviewNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
