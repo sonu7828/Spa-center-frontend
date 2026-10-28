@@ -10,7 +10,7 @@
  *   - Printable receipt modal integration
  */
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { invoicesApi, paymentsApi } from '../services/api';
 import { useAuth } from './AuthContext';
 import { isUUID } from '../utils/uuid';
@@ -150,22 +150,18 @@ export function InvoiceProvider({ children }) {
   const userRole = (user?.role || '').toLowerCase();
   const hasAccess = userRole === 'manager' || userRole === 'reception' || userRole === 'technician' || userRole === 'marketer';
 
-  const getCachedInvoices = () => {
-    try {
-      const raw = localStorage.getItem('omega_local_invoices');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (_) {}
-    return [];
-  };
-
-  const [invoices, setInvoices] = useState(() => getCachedInvoices());
+  const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch real invoices from backend on mount and preserve local invoices (Manager, Reception & Technician)
+  // Permanently clear any legacy local storage cache on mount
+  useEffect(() => {
+    try {
+      localStorage.removeItem('omega_local_invoices');
+    } catch (_) {}
+  }, []);
+
+  // Fetch real invoices from backend MySQL database (Single source of truth)
   const refreshInvoices = useCallback(async () => {
     if (!isAuthenticated || !hasAccess) {
       setLoading(false);
@@ -179,27 +175,7 @@ export function InvoiceProvider({ children }) {
       const apiList = res?.data?.invoices || res?.data || [];
       if (Array.isArray(apiList)) {
         const formattedList = apiList.map((inv) => formatBackendInvoice(inv, allUsers)).filter(Boolean);
-
-        // Read local invoices
-        let localInvoices = [];
-        try {
-          const raw = localStorage.getItem('omega_local_invoices');
-          if (raw) localInvoices = JSON.parse(raw);
-        } catch (_) {}
-
-        const backendIds = new Set(formattedList.map((inv) => String(inv.id)));
-        const backendNumbers = new Set(formattedList.map((inv) => inv.invoiceNumber));
-
-        // Retain local invoices that aren't yet in backend
-        const remainingLocal = localInvoices.filter(
-          (loc) => !backendIds.has(String(loc.id)) && !backendNumbers.has(loc.invoiceNumber)
-        );
-
-        try {
-          localStorage.setItem('omega_local_invoices', JSON.stringify(remainingLocal));
-        } catch (_) {}
-
-        setInvoices([...remainingLocal, ...formattedList]);
+        setInvoices(formattedList);
       }
     } catch (err) {
       console.warn('Backend invoices fetch error:', err.message);
@@ -207,7 +183,7 @@ export function InvoiceProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, hasAccess]);
+  }, [isAuthenticated, hasAccess, allUsers]);
 
   useEffect(() => {
     if (isAuthenticated && hasAccess) {
@@ -416,18 +392,6 @@ export function InvoiceProvider({ children }) {
               pointsEarned: paymentDetails.pointsEarned || 0,
               pointsRedeemed: paymentDetails.pointsRedeemed || 0,
             };
-
-            // Update in local cache if present
-            try {
-              const raw = localStorage.getItem('omega_local_invoices');
-              if (raw) {
-                const list = JSON.parse(raw);
-                const updatedList = list.map((loc) =>
-                  String(loc.id) === String(inv.id) ? paidInvoice : loc
-                );
-                localStorage.setItem('omega_local_invoices', JSON.stringify(updatedList));
-              }
-            } catch (_) {}
 
             return paidInvoice;
           }
@@ -776,16 +740,6 @@ export function InvoiceProvider({ children }) {
         isRetailOnly: true,
       };
 
-      // If local fallback, save to persistent localStorage
-      if (!backendInvoice) {
-        try {
-          const raw = localStorage.getItem('omega_local_invoices');
-          const list = raw ? JSON.parse(raw) : [];
-          list.unshift(newInvoice);
-          localStorage.setItem('omega_local_invoices', JSON.stringify(list));
-        } catch (_) {}
-      }
-
       setInvoices((prev) => [newInvoice, ...prev.filter((inv) => String(inv.id) !== String(newInvoice.id))]);
       return newInvoice;
     },
@@ -906,100 +860,69 @@ export function InvoiceProvider({ children }) {
         isWalkIn: !resolvedClientId,
       };
 
-      // Persist in localStorage as immediate fallback
-      try {
-        const raw = localStorage.getItem('omega_local_invoices');
-        const list = raw ? JSON.parse(raw) : [];
-        list.unshift(newInvoice);
-        localStorage.setItem('omega_local_invoices', JSON.stringify(list));
-      } catch (_) {}
+      // Directly create invoice in central backend MySQL database
+      const rawMethod = String(paymentMethod || 'CASH').toUpperCase();
+      const backendMethod =
+        rawMethod.includes('MTN') || rawMethod.includes('MOMO')
+          ? 'MTN_MOMO'
+          : rawMethod.includes('ORANGE')
+          ? 'ORANGE_MONEY'
+          : 'CASH';
 
-      let finalInvoice = newInvoice;
+      const backendPayload = {
+        clientId: isUUID(resolvedClientId) ? resolvedClientId : null,
+        clientName: resolvedClientName,
+        status: isPaid ? 'PAID' : 'PENDING_PAYMENT',
+        paymentMethod: isPaid ? backendMethod : undefined,
+        discount: discount || 0,
+        services: cleanServiceItems.map((s) => {
+          const lineTechId = isUUID(s.technicianId)
+            ? s.technicianId
+            : isUUID(user?.id) && userRole === 'technician'
+            ? user.id
+            : null;
+          return {
+            serviceId: isUUID(s.serviceId) ? s.serviceId : null,
+            name: s.service || s.name,
+            price: s.price,
+            technicianId: lineTechId,
+            quantity: 1,
+          };
+        }),
+        retailProducts: cleanRetailItems
+          .filter((r) => isUUID(r.productId))
+          .map((r) => ({
+            retailProductId: r.productId,
+            quantity: r.qty,
+          })),
+      };
 
-      // Sync to central backend MySQL database so it is instantly available on all devices
-      try {
-        const rawMethod = String(paymentMethod || 'CASH').toUpperCase();
-        const backendMethod =
-          rawMethod.includes('MTN') || rawMethod.includes('MOMO')
-            ? 'MTN_MOMO'
-            : rawMethod.includes('ORANGE')
-            ? 'ORANGE_MONEY'
-            : 'CASH';
-
-        const backendPayload = {
-          clientId: isUUID(resolvedClientId) ? resolvedClientId : null,
-          clientName: resolvedClientName,
-          status: isPaid ? 'PAID' : 'PENDING_PAYMENT',
-          paymentMethod: isPaid ? backendMethod : undefined,
-          discount: discount || 0,
-          services: cleanServiceItems.map((s) => {
-            const lineTechId = isUUID(s.technicianId)
-              ? s.technicianId
-              : isUUID(user?.id) && userRole === 'technician'
-              ? user.id
-              : null;
-            return {
-              serviceId: isUUID(s.serviceId) ? s.serviceId : null,
-              name: s.service || s.name,
-              price: s.price,
-              technicianId: lineTechId,
-              quantity: 1,
-            };
-          }),
-          retailProducts: cleanRetailItems
-            .filter((r) => isUUID(r.productId))
-            .map((r) => ({
-              retailProductId: r.productId,
-              quantity: r.qty,
-            })),
-        };
-
-        const res = await invoicesApi.create(backendPayload);
-        const createdBackend = res?.data?.invoice || res?.data || res;
-        if (createdBackend && createdBackend.id) {
-          const formatted = formatBackendInvoice(createdBackend, allUsers);
-          if (formatted) {
-            finalInvoice = {
-              ...formatted,
-              technicianId: formatted.technicianId || invoiceTechId,
-              technicianName: formatted.technicianName || invoiceTechName,
-              mainTechnicianName: formatted.mainTechnicianName || invoiceTechName,
-              mainTechnicianId: formatted.mainTechnicianId || invoiceTechId,
-              technician: formatted.technician || invoiceTechName,
-              createdById: user?.id || null,
-              createdByName: user?.name || null,
-            };
-
-            // Remove local fallback copy now that backend invoice is confirmed
-            try {
-              const raw = localStorage.getItem('omega_local_invoices');
-              if (raw) {
-                const list = JSON.parse(raw).filter(
-                  (inv) =>
-                    String(inv.id) !== String(newInvoice.id) &&
-                    String(inv.id) !== String(finalInvoice.id) &&
-                    inv.invoiceNumber !== finalInvoice.invoiceNumber
-                );
-                localStorage.setItem('omega_local_invoices', JSON.stringify(list));
-              }
-            } catch (_) {}
-          }
-        }
-      } catch (err) {
-        console.warn('Backend walk-in invoice sync notice (using instant local entry):', err?.message || err);
+      const res = await invoicesApi.create(backendPayload);
+      const createdBackend = res?.data?.invoice || res?.data || res;
+      if (!createdBackend || !createdBackend.id) {
+        throw new Error('Failed to create invoice in database');
       }
+
+      const formatted = formatBackendInvoice(createdBackend, allUsers);
+      const finalInvoice = {
+        ...formatted,
+        technicianId: formatted.technicianId || invoiceTechId,
+        technicianName: formatted.technicianName || invoiceTechName,
+        mainTechnicianName: formatted.mainTechnicianName || invoiceTechName,
+        mainTechnicianId: formatted.mainTechnicianId || invoiceTechId,
+        technician: formatted.technician || invoiceTechName,
+        createdById: user?.id || null,
+        createdByName: user?.name || null,
+      };
 
       setInvoices((prev) => [
         finalInvoice,
-        ...prev.filter(
-          (inv) =>
-            String(inv.id) !== String(newInvoice.id) &&
-            String(inv.id) !== String(finalInvoice.id)
-        ),
+        ...prev.filter((inv) => String(inv.id) !== String(finalInvoice.id)),
       ]);
+      await refreshInvoices();
       return finalInvoice;
     },
-    [allUsers, user, userRole]
+    [allUsers, user, userRole, refreshInvoices]
   );
 
   // Shared Work: Add a technician service line to an existing open visit by invoiceId

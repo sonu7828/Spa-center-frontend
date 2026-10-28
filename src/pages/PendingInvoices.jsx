@@ -735,25 +735,31 @@ export default function PendingInvoices() {
 
         if (!invDateStr) return false;
 
-        const todayObj = new Date();
-        const todayIso = todayObj.toISOString().slice(0, 10);
+        const formatLocalDate = (d) => {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+        };
+
+        const todayIso = formatLocalDate(new Date());
 
         if (historyDateFilter === 'TODAY') {
           if (invDateStr !== todayIso) return false;
         } else if (historyDateFilter === 'YESTERDAY') {
           const yestObj = new Date();
           yestObj.setDate(yestObj.getDate() - 1);
-          const yestIso = yestObj.toISOString().slice(0, 10);
+          const yestIso = formatLocalDate(yestObj);
           if (invDateStr !== yestIso) return false;
         } else if (historyDateFilter === 'WEEK') {
           const weekAgo = new Date();
           weekAgo.setDate(weekAgo.getDate() - 7);
-          const weekAgoIso = weekAgo.toISOString().slice(0, 10);
+          const weekAgoIso = formatLocalDate(weekAgo);
           if (invDateStr < weekAgoIso) return false;
         } else if (historyDateFilter === 'MONTH') {
           const monthAgo = new Date();
           monthAgo.setDate(monthAgo.getDate() - 30);
-          const monthAgoIso = monthAgo.toISOString().slice(0, 10);
+          const monthAgoIso = formatLocalDate(monthAgo);
           if (invDateStr < monthAgoIso) return false;
         } else if (historyDateFilter === 'CUSTOM' && historyCustomDate) {
           if (invDateStr !== historyCustomDate) return false;
