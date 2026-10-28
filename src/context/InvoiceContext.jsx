@@ -102,7 +102,7 @@ export function formatBackendInvoice(inv, allUsers = []) {
       ? 'Client'
       : 'Walk in';
 
-  const resolvedPhone = inv.client?.phone || inv.clientPhone || '';
+  const resolvedPhone = inv.client?.phone || inv.client?.whatsapp || inv.clientPhone || inv.phone || '';
 
   return {
     id: inv.id,
@@ -913,6 +913,8 @@ export function InvoiceProvider({ children }) {
       const backendPayload = {
         clientId: isUUID(resolvedClientId) ? resolvedClientId : null,
         clientName: resolvedClientName,
+        clientPhone: resolvedPhone || undefined,
+        phone: resolvedPhone || undefined,
         date: today,
         status: isPaid ? 'PAID' : 'PENDING_PAYMENT',
         paymentMethod: isPaid ? backendMethod : undefined,
@@ -930,6 +932,7 @@ export function InvoiceProvider({ children }) {
       const formatted = formatBackendInvoice(createdBackend, allUsers);
       const finalInvoice = {
         ...formatted,
+        clientPhone: formatted.clientPhone || resolvedPhone || '',
         technicianId: formatted.technicianId || invoiceTechId,
         technicianName: formatted.technicianName || invoiceTechName,
         mainTechnicianName: formatted.mainTechnicianName || invoiceTechName,

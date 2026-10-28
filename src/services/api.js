@@ -258,6 +258,8 @@ export const invoicesApi = {
       payload = {
         ...(data.clientId ? { clientId: data.clientId } : {}),
         ...(data.clientName ? { clientName: data.clientName } : {}),
+        ...(data.clientPhone ? { clientPhone: data.clientPhone } : {}),
+        ...(data.phone ? { phone: data.phone } : {}),
         ...(data.date ? { date: data.date } : {}),
         ...(data.invoiceNumber ? { invoiceNumber: data.invoiceNumber } : {}),
         discount: typeof data.discount === 'number' ? data.discount : 0,

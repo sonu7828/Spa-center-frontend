@@ -1684,17 +1684,26 @@ export default function PendingInvoices() {
   const handleSendWhatsAppReceipt = async (invoice, forceResend = false) => {
     if (!invoice) return;
     const client = getClient(invoice.clientId);
-    const phone = client?.whatsapp || client?.phone || invoice.clientPhone || invoice.phone;
+    let phone = client?.whatsapp || client?.phone || invoice.clientPhone || invoice.phone;
 
     if (!phone) {
-      setWhatsAppFeedback((prev) => ({
-        ...prev,
-        [invoice.id]: `Cannot send: No phone number on file for ${invoice.clientName || 'this client'}.`,
-      }));
-      setTimeout(() => {
-        setWhatsAppFeedback((prev) => ({ ...prev, [invoice.id]: null }));
-      }, 5000);
-      return;
+      const enteredPhone = window.prompt(
+        `No phone number on file for ${invoice.clientName || 'this walk-in client'}.\nPlease enter WhatsApp number (e.g. +2376XXXXXXXX):`,
+        '+237 '
+      );
+      if (!enteredPhone || !enteredPhone.trim() || enteredPhone.trim() === '+237' || enteredPhone.trim() === '+237 ') {
+        setWhatsAppFeedback((prev) => ({
+          ...prev,
+          [invoice.id]: `Cannot send: No phone number entered for ${invoice.clientName || 'this client'}.`,
+        }));
+        setTimeout(() => {
+          setWhatsAppFeedback((prev) => ({ ...prev, [invoice.id]: null }));
+        }, 5000);
+        return;
+      }
+      phone = enteredPhone.trim();
+      invoice.clientPhone = phone;
+      invoice.phone = phone;
     }
 
     // If already sent once, warn user and require confirmation click
