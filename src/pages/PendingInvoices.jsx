@@ -1684,7 +1684,7 @@ export default function PendingInvoices() {
   const handleSendWhatsAppReceipt = async (invoice, forceResend = false) => {
     if (!invoice) return;
     const client = getClient(invoice.clientId);
-    let phone = client?.whatsapp || client?.phone || invoice.clientPhone || invoice.phone;
+    let phone = invoice.clientPhone || invoice.phone || client?.whatsapp || client?.phone;
 
     if (!phone) {
       const enteredPhone = window.prompt(
