@@ -66,10 +66,10 @@ export default function DailyClose() {
           setBossPhone(res.data.bossPhone);
           try {
             localStorage.setItem('omega_boss_phone', res.data.bossPhone);
-          } catch (e) {}
+          } catch (e) { }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       isMounted = false;
     };
@@ -79,7 +79,7 @@ export default function DailyClose() {
     setBossPhone(val);
     try {
       localStorage.setItem('omega_boss_phone', val);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handleBossPhoneBlur = async () => {
@@ -348,24 +348,32 @@ export default function DailyClose() {
     }).length;
 
   const handleSend = async () => {
-    if (!bossPhone.trim()) {
-      setSendError('Please enter Boss WhatsApp phone number.');
-      setTimeout(() => setSendError(null), 5000);
+    const cleanPhone = (bossPhone || '').trim();
+    if (!cleanPhone || cleanPhone.replace(/[^\d]/g, '').length < 8) {
+      setSendError('Please enter a valid Boss WhatsApp phone number (e.g. +918319399018 or +2376XXXXXXXX).');
+      setTimeout(() => setSendError(null), 6000);
       return;
     }
     setSending(true);
     setSendError(null);
     try {
-      await whatsappApi.updateBossPhone(bossPhone.trim()).catch(() => {});
-      await whatsappApi.triggerDailyClose({
+      await whatsappApi.updateBossPhone(cleanPhone).catch(() => {});
+      const res = await whatsappApi.triggerDailyClose({
         businessDate: new Date().toISOString().split('T')[0],
-        recipientPhone: bossPhone.trim(),
+        recipientPhone: cleanPhone,
       });
+
+      const resData = res?.data?.data || res?.data || res;
+      if (resData?.log?.status === 'FAILED') {
+        throw new Error(resData?.log?.failureReason || 'WhatsApp delivery failed at provider');
+      }
+
       setSent(true);
-      setTimeout(() => setSent(false), 5000);
+      setTimeout(() => setSent(false), 6000);
     } catch (err) {
+      console.error('Daily close send error:', err);
       setSendError(err.message || 'Failed to send daily close summary');
-      setTimeout(() => setSendError(null), 5000);
+      setTimeout(() => setSendError(null), 8000);
     } finally {
       setSending(false);
     }
