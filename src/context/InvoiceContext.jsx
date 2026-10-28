@@ -93,18 +93,24 @@ export function formatBackendInvoice(inv, allUsers = []) {
   const derivedTechId = inv.appointment?.mainTechnicianId || firstServiceTech?.technicianId || null;
   const derivedTechName = mainTechName || firstServiceTech?.technician || null;
 
+  const resolvedClientName =
+    inv.client?.name && inv.client.name.trim() && inv.client.name.trim().toLowerCase() !== 'client'
+      ? inv.client.name.trim()
+      : inv.clientName && inv.clientName.trim() && inv.clientName.trim().toLowerCase() !== 'client'
+      ? inv.clientName.trim()
+      : inv.clientId
+      ? 'Client'
+      : 'Walk in';
+
+  const resolvedPhone = inv.client?.phone || inv.clientPhone || '';
+
   return {
     id: inv.id,
     invoiceNumber: inv.invoiceNumber || formatInvoiceNumber(inv.id),
     appointmentId: inv.appointmentId || null,
     clientId: inv.clientId || inv.client?.id || null,
-    clientName:
-      inv.client?.name && inv.client.name.trim() && inv.client.name.trim().toLowerCase() !== 'client'
-        ? inv.client.name.trim()
-        : inv.clientId
-        ? 'Client'
-        : 'Walk in',
-    clientPhone: inv.client?.phone || '',
+    clientName: resolvedClientName,
+    clientPhone: resolvedPhone,
     status: inv.status || 'PENDING_PAYMENT',
     date: dateStr,
     technicianId: derivedTechId,
@@ -132,7 +138,7 @@ export function formatBackendInvoice(inv, allUsers = []) {
     paidAmount: paidNum,
     remainingAmount: remainingNum,
     paymentMethod: paymentMethodDisplay,
-    paidAt: firstPayment?.paidAt || null,
+    paidAt: firstPayment?.paidAt || inv.paidAt || inv.createdAt || null,
     paidTime: paidTime,
     payments: inv.payments || [],
     pointsEarned: inv.pointsEarned || 0,
@@ -869,32 +875,50 @@ export function InvoiceProvider({ children }) {
           ? 'ORANGE_MONEY'
           : 'CASH';
 
+      const mappedServices = cleanServiceItems.map((s) => {
+        const lineTechId = isUUID(s.technicianId)
+          ? s.technicianId
+          : isUUID(user?.id) && userRole === 'technician'
+          ? user.id
+          : null;
+        return {
+          serviceId: isUUID(s.serviceId) ? s.serviceId : null,
+          name: String(s.service || s.name || 'Spa Service').trim(),
+          price: Math.max(0, Number(s.price) || 0),
+          technicianId: lineTechId,
+          quantity: 1,
+        };
+      });
+
+      const validRetailProducts = cleanRetailItems
+        .filter((r) => isUUID(r.productId))
+        .map((r) => ({
+          retailProductId: r.productId,
+          quantity: Math.max(1, parseInt(r.qty, 10) || 1),
+        }));
+
+      // Fallback for non-UUID retail items: convert to services lines so backend can bill them without UUID validation error
+      const nonUuidRetailAsServices = cleanRetailItems
+        .filter((r) => !isUUID(r.productId))
+        .map((r) => ({
+          serviceId: null,
+          name: String(r.name || r.service || 'Retail Item').trim(),
+          price: Math.max(0, Number(r.unitPrice || r.price) || 0),
+          technicianId: null,
+          quantity: Math.max(1, parseInt(r.qty, 10) || 1),
+        }));
+
+      const finalServicesPayload = [...mappedServices, ...nonUuidRetailAsServices];
+
       const backendPayload = {
         clientId: isUUID(resolvedClientId) ? resolvedClientId : null,
         clientName: resolvedClientName,
+        date: today,
         status: isPaid ? 'PAID' : 'PENDING_PAYMENT',
         paymentMethod: isPaid ? backendMethod : undefined,
         discount: discount || 0,
-        services: cleanServiceItems.map((s) => {
-          const lineTechId = isUUID(s.technicianId)
-            ? s.technicianId
-            : isUUID(user?.id) && userRole === 'technician'
-            ? user.id
-            : null;
-          return {
-            serviceId: isUUID(s.serviceId) ? s.serviceId : null,
-            name: s.service || s.name,
-            price: s.price,
-            technicianId: lineTechId,
-            quantity: 1,
-          };
-        }),
-        retailProducts: cleanRetailItems
-          .filter((r) => isUUID(r.productId))
-          .map((r) => ({
-            retailProductId: r.productId,
-            quantity: r.qty,
-          })),
+        ...(finalServicesPayload.length > 0 ? { services: finalServicesPayload } : {}),
+        ...(validRetailProducts.length > 0 ? { retailProducts: validRetailProducts } : {}),
       };
 
       const res = await invoicesApi.create(backendPayload);

@@ -1262,8 +1262,10 @@ export default function PendingInvoices() {
         minute: '2-digit',
       });
 
-      const formattedServices = newServiceLines.map((line) => {
-        const lineTechId = line.technicianId || (isTechnician ? String(user?.id) : '');
+      const formattedServices = newServiceLines
+        .filter((line) => line.serviceName || line.serviceId || Number(line.price) > 0)
+        .map((line) => {
+          const lineTechId = line.technicianId || (isTechnician ? String(user?.id) : '');
         const lineTechName = line.technicianName || (isTechnician ? (user?.name || '') : '');
         return {
           serviceId: line.serviceId,

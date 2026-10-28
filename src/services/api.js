@@ -248,19 +248,28 @@ export const invoicesApi = {
     if (typeof data === 'string') {
       payload = { appointmentId: data };
     } else if (data && typeof data === 'object') {
-      const rawAptId = data.appointmentId !== undefined ? data.appointmentId : data.id;
+      const isAppointmentObj = Boolean(data.appointmentDate || data.serviceSummary || data.appointmentServices);
+      const rawAptId = data.appointmentId !== undefined ? data.appointmentId : (isAppointmentObj ? data.id : null);
       const aptId =
         rawAptId && typeof rawAptId === 'object'
           ? rawAptId.appointmentId || rawAptId.id || String(rawAptId)
           : rawAptId;
 
       payload = {
-        ...(aptId ? { appointmentId: aptId } : {}),
         ...(data.clientId ? { clientId: data.clientId } : {}),
+        ...(data.clientName ? { clientName: data.clientName } : {}),
+        ...(data.date ? { date: data.date } : {}),
+        ...(data.invoiceNumber ? { invoiceNumber: data.invoiceNumber } : {}),
         discount: typeof data.discount === 'number' ? data.discount : 0,
         status: data.status || 'PENDING_PAYMENT',
+        ...(aptId ? { appointmentId: aptId } : {}),
         ...(data.paymentMethod ? { paymentMethod: data.paymentMethod } : {}),
-        ...(data.retailProducts ? { retailProducts: data.retailProducts } : {}),
+        ...(Array.isArray(data.retailProducts) && data.retailProducts.length > 0
+          ? { retailProducts: data.retailProducts }
+          : {}),
+        ...(Array.isArray(data.services) && data.services.length > 0
+          ? { services: data.services }
+          : {}),
       };
     } else {
       payload = data;
