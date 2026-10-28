@@ -280,8 +280,16 @@ function SearchableSelect({
   const filteredOptions = options.filter((opt) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
-    const matchLabel = opt.label ? String(opt.label).toLowerCase().includes(term) : false;
-    const matchSublabel = opt.sublabel ? String(opt.sublabel).toLowerCase().includes(term) : false;
+    const cleanTerm = term.replace(/[^a-z0-9]/gi, '');
+    const cleanSublabel = String(opt.sublabel || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const cleanLabel = String(opt.label || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+    const matchLabel = opt.label
+      ? String(opt.label).toLowerCase().includes(term) || (cleanTerm.length >= 2 && cleanLabel.includes(cleanTerm))
+      : false;
+    const matchSublabel = opt.sublabel
+      ? String(opt.sublabel).toLowerCase().includes(term) || (cleanTerm.length >= 2 && cleanSublabel.includes(cleanTerm))
+      : false;
     const matchBadge = opt.badge ? String(opt.badge).toLowerCase().includes(term) : false;
     return matchLabel || matchSublabel || matchBadge;
   });
@@ -299,7 +307,14 @@ function SearchableSelect({
       >
         <div className="truncate pr-2">
           {selectedOption ? (
-            <span className="font-semibold text-charcoal">{selectedOption.label}</span>
+            <span className="font-semibold text-charcoal">
+              {selectedOption.label}
+              {selectedOption.sublabel && selectedOption.value !== '' && (
+                <span className="text-[11px] font-normal text-muted-gray ml-1.5">
+                  ({selectedOption.sublabel})
+                </span>
+              )}
+            </span>
           ) : (
             <span className="text-muted-gray">{placeholder}</span>
           )}
@@ -317,7 +332,7 @@ function SearchableSelect({
             }`}
           style={{ minWidth: '100%' }}
         >
-          {options.length > 5 && (
+          {options.length > 1 && (
             <div className="p-2 border-b border-border/60 bg-soft-cream/40">
               <div className="relative">
                 <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-gray" />
@@ -326,10 +341,22 @@ function SearchableSelect({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder={searchPlaceholder}
-                  className="w-full h-7 pl-7 pr-2 text-xs bg-white border border-border rounded-[7px] outline-none focus:border-sage text-charcoal"
+                  className="w-full h-7 pl-7 pr-7 text-xs bg-white border border-border rounded-[7px] outline-none focus:border-sage text-charcoal"
                   onClick={(e) => e.stopPropagation()}
                   autoFocus
                 />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearchTerm('');
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-gray hover:text-charcoal cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -3435,26 +3462,48 @@ export default function PendingInvoices() {
             {/* Scrollable Content */}
             <div className="overflow-y-auto p-4 sm:p-6 space-y-4 flex-1 text-xs">
               {/* 1. Client (Optional) */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray mb-1.5">
-                  Client (Optional)
-                </label>
-                <select
+              <div className="relative z-30">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray">
+                    Client (Optional)
+                  </label>
+                  {newSaleClientId && (
+                    <button
+                      type="button"
+                      onClick={() => setNewSaleClientId('')}
+                      className="text-[10px] text-sage hover:text-[#2d4027] font-semibold underline cursor-pointer"
+                    >
+                      Reset to Walk-in
+                    </button>
+                  )}
+                </div>
+                <SearchableSelect
                   value={newSaleClientId}
-                  onChange={(e) => setNewSaleClientId(e.target.value)}
-                  className="w-full h-[42px] px-3 bg-white border border-border rounded-[10px] text-xs text-charcoal font-medium outline-none focus:border-sage"
-                >
-                  <option value="">Walk in (No client profile)</option>
-                  {clients
-                    .filter((c) => c.status !== 'INACTIVE' && c.isActive !== false)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.phone ? `(${c.phone})` : ''}
-                      </option>
-                    ))}
-                </select>
+                  onChange={(val) => setNewSaleClientId(val)}
+                  placeholder="Walk in (No client profile)"
+                  searchPlaceholder="Search client by name or phone..."
+                  heightClass="h-[42px]"
+                  options={[
+                    {
+                      value: '',
+                      label: 'Walk in (No client profile)',
+                      sublabel: 'Direct walk-in customer without registered profile',
+                    },
+                    ...clients
+                      .filter((c) => c.status !== 'INACTIVE' && c.isActive !== false)
+                      .map((c) => {
+                        const loyalty = getClientLoyalty(c.id);
+                        return {
+                          value: String(c.id),
+                          label: c.name,
+                          sublabel: c.phone || 'No phone',
+                          badge: loyalty?.balance ? `${loyalty.balance} pts` : '',
+                        };
+                      }),
+                  ]}
+                />
                 <p className="text-[11px] text-muted-gray mt-1">
-                  Optional for walk-in retail customers.
+                  Type to search client by name or phone number, or select Walk in.
                 </p>
               </div>
 
