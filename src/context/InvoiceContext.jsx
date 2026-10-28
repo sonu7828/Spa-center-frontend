@@ -354,7 +354,15 @@ export function InvoiceProvider({ children }) {
 
       const amountToPay = Number(paymentDetails.finalTotal || paymentDetails.amount || 0);
 
-      // Backend payment if invoiceId is UUID
+      let targetInv = null;
+      setInvoices((prev) => {
+        targetInv = prev.find((inv) => String(inv.id) === String(invoiceId));
+        return prev;
+      });
+
+      let backendInvoiceId = invoiceId;
+
+      // 1. If invoiceId is a UUID in the backend, record the payment row
       if (isUUID(invoiceId)) {
         try {
           if (paymentDetails.discount !== undefined && Number(paymentDetails.discount) > 0) {
@@ -367,26 +375,84 @@ export function InvoiceProvider({ children }) {
         }
 
         try {
+          const effectiveAmount = amountToPay > 0 ? amountToPay : Number(targetInv?.finalTotal || targetInv?.total || 1000);
           await paymentsApi.create({
             invoiceId,
-            amount: amountToPay > 0 ? amountToPay : 1000,
+            amount: effectiveAmount,
             paymentMethod: backendMethod,
             notes: paymentDetails.notes || 'Payment recorded from POS',
           });
         } catch (err) {
           console.warn('Backend payment record error:', err.message);
         }
+      } else if (targetInv) {
+        // 2. If invoiceId is local (not UUID), sync and create it in backend database with status PAID!
+        try {
+          const cleanServices = (targetInv.items || [])
+            .filter((it) => it.type !== 'drink' && it.type !== 'cosmetic')
+            .map((s) => ({
+              serviceId: isUUID(s.serviceId) ? s.serviceId : null,
+              name: String(s.service || s.name || 'Spa Service').trim(),
+              price: Math.max(0, Number(s.price) || 0),
+              technicianId: isUUID(s.technicianId) ? s.technicianId : null,
+              quantity: Math.max(1, parseInt(s.quantity || s.qty, 10) || 1),
+            }));
+
+          const cleanRetail = (targetInv.items || [])
+            .filter((it) => it.type === 'drink' || it.type === 'cosmetic')
+            .map((r) => ({
+              retailProductId: isUUID(r.productId || r.id) ? (r.productId || r.id) : null,
+              name: String(r.name || r.service || 'Retail Item').trim(),
+              price: Math.max(0, Number(r.price || r.unitPrice) || 0),
+              quantity: Math.max(1, parseInt(r.qty || r.quantity, 10) || 1),
+            }));
+
+          const nonUuidRetailAsServices = cleanRetail
+            .filter((r) => !r.retailProductId)
+            .map((r) => ({
+              serviceId: null,
+              name: r.name,
+              price: r.price,
+              technicianId: null,
+              quantity: r.quantity,
+            }));
+
+          const validRetailProducts = cleanRetail.filter((r) => r.retailProductId);
+          const finalServicesPayload = [...cleanServices, ...nonUuidRetailAsServices];
+
+          const todayIso = new Date().toISOString().slice(0, 10);
+          const res = await invoicesApi.create({
+            clientId: isUUID(targetInv.clientId) ? targetInv.clientId : null,
+            clientName: targetInv.clientName || 'Walk in',
+            clientPhone: targetInv.clientPhone || targetInv.phone || undefined,
+            phone: targetInv.clientPhone || targetInv.phone || undefined,
+            date: targetInv.date || todayIso,
+            status: 'PAID',
+            paymentMethod: backendMethod,
+            discount: Number(paymentDetails.discount || targetInv.discount || 0),
+            ...(finalServicesPayload.length > 0 ? { services: finalServicesPayload } : {}),
+            ...(validRetailProducts.length > 0 ? { retailProducts: validRetailProducts } : {}),
+          });
+
+          const createdBackend = res?.data?.invoice || res?.data || res;
+          if (createdBackend && createdBackend.id) {
+            backendInvoiceId = createdBackend.id;
+          }
+        } catch (createErr) {
+          console.warn('Backend sync for non-UUID invoice failed:', createErr.message);
+        }
       }
 
       setInvoices((prev) =>
         prev.map((inv) => {
           if (
-            (inv.id === invoiceId || String(inv.id) === String(invoiceId)) &&
+            (inv.id === invoiceId || String(inv.id) === String(invoiceId) || inv.id === backendInvoiceId) &&
             (inv.status === 'PENDING_PAYMENT' || inv.status === 'DRAFT')
           ) {
             const finalTotal = paymentDetails.finalTotal !== undefined ? paymentDetails.finalTotal : inv.total;
             paidInvoice = {
               ...inv,
+              id: backendInvoiceId,
               status: 'PAID',
               paymentMethod: paymentMethod || 'CASH',
               paidAt: now.toISOString(),
@@ -405,9 +471,12 @@ export function InvoiceProvider({ children }) {
         })
       );
 
+      // Trigger background refresh from backend to ensure state consistency
+      refreshInvoices().catch(() => {});
+
       return paidInvoice;
     },
-    []
+    [refreshInvoices]
   );
 
   // Record partial payment

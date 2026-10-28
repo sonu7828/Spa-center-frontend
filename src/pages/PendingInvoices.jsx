@@ -1558,16 +1558,16 @@ export default function PendingInvoices() {
         const itemFinalPriceStr = itemFinalPrice.toLocaleString('en-US');
         const itemSvcId = item.appointmentServiceId || item.id;
 
-        if (!isServiceClosed(itemSvcId, item.appointmentId)) {
+        if (!isServiceClosed(itemSvcId, item.appointmentId || invoice.appointmentId || invoice.id)) {
           closeServiceRecord({
-            appointmentId: item.appointmentId,
+            appointmentId: item.appointmentId || invoice.appointmentId || invoice.id,
             appointmentServiceId: itemSvcId,
             clientId: clientId,
             clientName: invoice.clientName,
             service: item.service,
             technician: item.technician,
             product: item.product,
-            price: itemFinalPriceStr,
+            price: itemFinalPrice,
             payment,
             date: today,
           });
@@ -1686,6 +1686,12 @@ export default function PendingInvoices() {
         pointsRedeemed: validPtsToRedeem,
       });
 
+      if (typeof refreshInvoices === 'function') {
+        try {
+          await refreshInvoices();
+        } catch (rErr) {}
+      }
+
       // Switch to Paid Today tab and expand the paid invoice
       const commTotal = generatedCommissions.reduce((sum, c) => sum + c.commissionAmount, 0);
       const commNotice = commTotal > 0
@@ -1693,7 +1699,7 @@ export default function PendingInvoices() {
         : '';
 
       setActiveTab('paid-today');
-      setExpandedId(invoice.id);
+      setExpandedId(paidInv?.id || invoice.id);
       setPaymentSuccessNotice(
         `Payment collected for ${invoice.clientName} (${finalTotal.toLocaleString('en-US')} FCFA via ${payment.toUpperCase()}).${commNotice} Moved to Paid Today.`
       );
