@@ -162,6 +162,7 @@ export function formatBackendClient(c) {
     serviceHistory: combinedHistory.length > 0 ? combinedHistory : (c.serviceHistory || []),
     appointments: c.appointments || [],
     photos: mappedPhotos.length > 0 ? mappedPhotos : (c.photos || []),
+    loyaltyPoints: Number(c.loyaltyPoints) || 0,
   };
 }
 

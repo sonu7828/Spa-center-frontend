@@ -461,6 +461,7 @@ export default function PendingInvoices() {
     earnPoints,
     redeemPoints,
     getClientLoyalty,
+    fetchClientLoyalty,
     settings,
     calculateDiscount,
     calculateEarnedPoints,
@@ -472,6 +473,15 @@ export default function PendingInvoices() {
 
   // Active tab: 'pending' | 'paid-today' | 'history'
   const [activeTab, setActiveTab] = useState('pending');
+
+  // Auto-fetch real-time loyalty balances for pending invoice clients
+  useEffect(() => {
+    if (pendingInvoices && pendingInvoices.length > 0 && fetchClientLoyalty) {
+      pendingInvoices.forEach((inv) => {
+        if (inv.clientId) fetchClientLoyalty(inv.clientId);
+      });
+    }
+  }, [pendingInvoices, fetchClientLoyalty]);
 
   // Expanded accordion in Pending & Paid Today lists
   const [expandedId, setExpandedId] = useState(null);
@@ -1492,7 +1502,14 @@ export default function PendingInvoices() {
       }
 
       const clientId = invoice.clientId;
-      const clientLoyalty = getClientLoyalty(clientId);
+      const clientObj = getClient(clientId) || invoice.client;
+      const rawLoyalty = getClientLoyalty(clientId);
+      const availablePoints = Math.max(
+        Number(rawLoyalty?.balance) || 0,
+        Number(clientObj?.loyaltyPoints) || 0,
+        Number(invoice.client?.loyaltyPoints) || 0
+      );
+      const clientLoyalty = { ...rawLoyalty, balance: availablePoints };
 
       // Calculate loyalty redemption
       const rs = redeemState[invoice.id] || {};
@@ -2033,7 +2050,14 @@ export default function PendingInvoices() {
               {pendingInvoices.map((invoice) => {
                 const isExpanded = expandedId === invoice.id;
                 const selectedPayment = formatPaymentMethod(paymentMethods[invoice.id] || 'CASH');
-                const clientLoyalty = getClientLoyalty(invoice.clientId);
+                const clientObj = getClient(invoice.clientId) || invoice.client;
+                const rawLoyalty = getClientLoyalty(invoice.clientId);
+                const availablePoints = Math.max(
+                  Number(rawLoyalty?.balance) || 0,
+                  Number(clientObj?.loyaltyPoints) || 0,
+                  Number(invoice.client?.loyaltyPoints) || 0
+                );
+                const clientLoyalty = { ...rawLoyalty, balance: availablePoints };
                 const rs = redeemState[invoice.id] || {};
                 const enteredPts = parseInt(rs.points, 10) || 0;
                 const validPtsToRedeem =
@@ -2443,7 +2467,9 @@ export default function PendingInvoices() {
 
                 const paymentBadge = formatPaymentMethod(invoice.paymentMethod);
 
-                const clientLoyalty = getClientLoyalty(invoice.clientId);
+                const clientObj = getClient(invoice.clientId) || invoice.client;
+                const rawLoyalty = getClientLoyalty(invoice.clientId);
+                const clientLoyalty = { ...rawLoyalty, balance: Math.max(Number(rawLoyalty?.balance) || 0, Number(clientObj?.loyaltyPoints) || 0, Number(invoice.client?.loyaltyPoints) || 0) };
 
                 return (
                   <div
