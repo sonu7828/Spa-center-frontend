@@ -488,18 +488,35 @@ export default function EditSalaryContractModal({
               </div>
 
               {/* Automatic Marketer Deduction Notice */}
-              <div className="p-3.5 rounded-[12px] bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950 space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-emerald-900">
-                  <CheckCircle2 size={15} className="text-emerald-700" />
-                  Automatic Marketer Split Deduction Active
+              <div className="p-3.5 rounded-[12px] bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950 space-y-1.5">
+                <div className="font-bold flex items-center justify-between text-emerald-900">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 size={15} className="text-emerald-700" />
+                    Dynamic Marketer Split Deduction
+                  </span>
+                  <span className="text-[10px] font-bold bg-white text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                    Fully Customizable (1%, 2%, 3%, etc.)
+                  </span>
                 </div>
                 <p className="text-[11px] text-emerald-800 leading-relaxed">
-                  When a client introduced by a Marketer comes to this technician, the Marketer's negotiated percentage (e.g. 2%) is automatically deducted from this commission:
-                  <br />
-                  <span className="font-mono font-bold text-emerald-900">
-                    Technician Net = {commNum}% - Marketer% = {Math.max(0, commNum - 2)}% (example with 2% marketer)
-                  </span>
-                  . Total spa payout remains 100% neutral.
+                  Jab koi client kisi Marketer ke through aata hai, toh us <strong>Marketer ka negotiated %</strong> is technician ke commission me se automatically deduct hota hai.
+                </p>
+                <div className="bg-white/90 p-2.5 rounded-[8px] border border-emerald-200 text-[11px] space-y-1 font-mono text-charcoal">
+                  <div className="font-bold text-emerald-900 font-sans text-xs">
+                    Universal Formula: Technician Net = {commNum}% - Marketer%
+                  </div>
+                  <div className="text-muted-gray text-[10px]">
+                    • Agar Marketer ka contract <strong>3%</strong> hai: Technician Net = {commNum}% - 3% = <strong className="text-charcoal">{Math.max(0, commNum - 3)}%</strong> (Marketer = 3%)
+                  </div>
+                  <div className="text-muted-gray text-[10px]">
+                    • Agar Marketer ka contract <strong>2%</strong> hai: Technician Net = {commNum}% - 2% = <strong className="text-charcoal">{Math.max(0, commNum - 2)}%</strong> (Marketer = 2%)
+                  </div>
+                  <div className="text-muted-gray text-[10px]">
+                    • Agar Marketer ka contract <strong>1%</strong> hai: Technician Net = {commNum}% - 1% = <strong className="text-charcoal">{Math.max(0, commNum - 1)}%</strong> (Marketer = 1%)
+                  </div>
+                </div>
+                <p className="text-[10px] text-emerald-700 italic">
+                  💡 Marketer ka percentage fix nahi hai — aap Staff list me Marketer ke "Contract" par click karke jo bhi percentage (e.g. 1%, 2%, 3%) set karenge, system wahi exact percent deduct karega!
                 </p>
               </div>
 
