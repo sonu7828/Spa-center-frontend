@@ -474,15 +474,6 @@ export default function PendingInvoices() {
   // Active tab: 'pending' | 'paid-today' | 'history'
   const [activeTab, setActiveTab] = useState('pending');
 
-  // Auto-fetch real-time loyalty balances for pending invoice clients
-  useEffect(() => {
-    if (pendingInvoices && pendingInvoices.length > 0 && fetchClientLoyalty) {
-      pendingInvoices.forEach((inv) => {
-        if (inv.clientId) fetchClientLoyalty(inv.clientId);
-      });
-    }
-  }, [pendingInvoices, fetchClientLoyalty]);
-
   // Expanded accordion in Pending & Paid Today lists
   const [expandedId, setExpandedId] = useState(null);
 
@@ -716,6 +707,15 @@ export default function PendingInvoices() {
   const pendingInvoices = useMemo(() => filterForUserRole(rawPendingInvoices), [rawPendingInvoices, filterForUserRole]);
   const paidTodayInvoices = useMemo(() => filterForUserRole(rawPaidTodayInvoices), [rawPaidTodayInvoices, filterForUserRole]);
   const historyInvoices = useMemo(() => filterForUserRole(rawHistoryInvoices), [rawHistoryInvoices, filterForUserRole]);
+
+  // Auto-fetch real-time loyalty balances for pending invoice clients
+  useEffect(() => {
+    if (pendingInvoices && pendingInvoices.length > 0 && fetchClientLoyalty) {
+      pendingInvoices.forEach((inv) => {
+        if (inv.clientId) fetchClientLoyalty(inv.clientId);
+      });
+    }
+  }, [pendingInvoices, fetchClientLoyalty]);
 
   // --- History Tab Search, Filter & Pagination State ---
   const [historySearch, setHistorySearch] = useState('');
