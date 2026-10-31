@@ -365,10 +365,18 @@ export function InvoiceProvider({ children }) {
       // 1. If invoiceId is a UUID in the backend, record the payment row
       if (isUUID(invoiceId)) {
         try {
+          const updatePayload = {};
           if (paymentDetails.discount !== undefined && Number(paymentDetails.discount) > 0) {
-            await invoicesApi.update(invoiceId, {
-              discount: Number(paymentDetails.discount),
-            });
+            updatePayload.discount = Number(paymentDetails.discount);
+          }
+          if (paymentDetails.pointsRedeemed !== undefined && Number(paymentDetails.pointsRedeemed) > 0) {
+            updatePayload.pointsRedeemed = Number(paymentDetails.pointsRedeemed);
+          }
+          if (paymentDetails.pointsEarned !== undefined && Number(paymentDetails.pointsEarned) > 0) {
+            updatePayload.pointsEarned = Number(paymentDetails.pointsEarned);
+          }
+          if (Object.keys(updatePayload).length > 0) {
+            await invoicesApi.update(invoiceId, updatePayload);
           }
         } catch (err) {
           console.warn('Backend invoice discount update note:', err.message);

@@ -1558,11 +1558,11 @@ export default function PendingInvoices() {
 
       // 1. Redeem points if applicable
       if (rs.wantRedeem && validPtsToRedeem >= settings.minPointsToRedeem) {
-        redeemPoints(clientId, {
-          pointsToRedeem: validPtsToRedeem,
-          serviceName: invoice.items.map((it) => it.service).join(', '),
-          date: today,
-        });
+        try {
+          await redeemPoints(invoice.id, validPtsToRedeem);
+        } catch (redeemErr) {
+          console.warn('Backend loyalty redemption error:', redeemErr);
+        }
       }
 
       // 2. For each service item, record operations (idempotent)

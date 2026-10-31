@@ -35,9 +35,21 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
     invoice.paidTime ||
     paidDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  const subtotal = invoice.total || 0;
-  const discount = invoice.discount || 0;
-  const grandTotal = invoice.finalTotal !== undefined ? invoice.finalTotal : subtotal;
+  const itemsSubtotal = (invoice.items || []).reduce(
+    (sum, it) => sum + (Number(it.price) || 0),
+    0
+  );
+  const discount = Number(invoice.discount) || 0;
+  const subtotal =
+    itemsSubtotal > 0
+      ? itemsSubtotal
+      : Number(invoice.subtotal) || Number(invoice.total || 0) + discount;
+  const grandTotal =
+    invoice.finalTotal !== undefined
+      ? invoice.finalTotal
+      : invoice.total !== undefined
+      ? invoice.total
+      : subtotal - discount;
   
   const formatPaymentMethod = (pm) => {
     const p = String(pm || 'cash').trim().toUpperCase();
@@ -342,7 +354,7 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                   {discount > 0 && (
                     <tr>
                       <td style={{ padding: '6px 0', color: '#7FA285' }}>
-                        Loyalty Discount ({pointsRedeemed} pts redeemed)
+                        {pointsRedeemed > 0 ? `Loyalty Discount (${pointsRedeemed} pts redeemed)` : 'Discount / Promo'}
                       </td>
                       <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 600, color: '#7FA285' }}>
                         −{discount.toLocaleString('en-US')} FCFA

@@ -243,8 +243,13 @@ export function LoyaltyProvider({ children }) {
         return { success: false, error: 'Unauthorized' };
       }
       try {
+        const pts =
+          typeof pointsToRedeem === 'object' && pointsToRedeem !== null
+            ? Number(pointsToRedeem.pointsToRedeem || pointsToRedeem.points || 0)
+            : Number(pointsToRedeem);
+
         const res = await loyaltyApi.redeem(invoiceId, {
-          pointsToRedeem: Number(pointsToRedeem),
+          pointsToRedeem: pts,
         });
         await refreshLoyalty();
         return { success: true, data: res?.data };
