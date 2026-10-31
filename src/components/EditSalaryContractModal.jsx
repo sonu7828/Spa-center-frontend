@@ -73,7 +73,7 @@ export default function EditSalaryContractModal({
       setTargetScope('SPA_TOTAL');
       setShowAdvancedQuota(false);
     } else if (isMarketer) {
-      setMonthlyTarget(0);
+      setMonthlyTarget(existingTarget !== null ? existingTarget : 500000);
       const bounty = existingFixed !== null && existingFixed > 0
         ? existingFixed
         : existingBase !== null && existingBase > 0
@@ -171,7 +171,7 @@ export default function EditSalaryContractModal({
       setLoading(true);
       try {
         await usersApi.updateSalaryContract(staff.id, {
-          monthlyTarget: 0,
+          monthlyTarget: targetNum,
           basePay: fixedNum,
           commissionRate: commNum,
           fixedSalary: fixedNum,
@@ -415,6 +415,35 @@ export default function EditSalaryContractModal({
                     Flat one-time fee paid on the new client's first paid invoice.
                   </p>
                 </div>
+              </div>
+
+              {/* 3. Monthly Sales Target Quota for Marketer */}
+              <div className="p-4 rounded-[14px] bg-white border border-border space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-charcoal">
+                    Monthly Sales Target Quota (FCFA)
+                  </label>
+                  <span className="text-[10px] font-semibold text-[#6D28D9] bg-[#EDE9FE] px-2 py-0.5 rounded-full">
+                    Target Tracking
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="10000"
+                    value={monthlyTarget}
+                    onChange={(e) => setMonthlyTarget(e.target.value)}
+                    placeholder="e.g. 500000"
+                    className="w-full px-4 py-2.5 rounded-[10px] border border-border bg-white text-base font-bold text-charcoal font-mono focus:outline-none focus:border-sage focus:ring-1 focus:ring-sage"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-gray">
+                    FCFA / Month
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-gray leading-normal">
+                  Monthly revenue target from clients introduced by this marketer. Tracks progress bar in Marketer Daily Summary dashboard.
+                </p>
               </div>
 
               {/* Marketer Payout Structure Card */}
