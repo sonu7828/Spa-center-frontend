@@ -418,32 +418,42 @@ export default function EditSalaryContractModal({
                 </div>
               </div>
 
-              {/* Live Preview Simulation Card */}
-              <div className="p-4 rounded-[14px] bg-soft-cream/70 border border-border space-y-2">
-                <div className="text-xs font-bold text-charcoal uppercase tracking-wider flex items-center gap-1.5">
-                  <Calculator size={14} className="text-sage" />
-                  Live Marketer Payout Simulation (Example: 20,000 FCFA Service)
+              {/* Marketer Payout Structure Card */}
+              <div className="p-4 rounded-[14px] bg-[#FAF5FF] border border-[#DDD6FE] space-y-2.5">
+                <div className="text-xs font-bold text-[#6D28D9] flex items-center gap-1.5">
+                  <Sparkles size={15} /> Payout Structure For This Marketer:
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-xs pt-1">
-                  <div className="p-3 bg-white rounded-[10px] border border-border">
-                    <span className="text-[11px] text-muted-gray block font-medium">1st Visit Payout</span>
-                    <span className="text-sm font-bold text-[#6D28D9] font-mono">
-                      {(fixedNum + Math.round((20000 * commNum) / 100)).toLocaleString()} FCFA
-                    </span>
-                    <span className="text-[10px] text-muted-gray block mt-0.5">
-                      {fixedNum.toLocaleString()} bounty + {Math.round((20000 * commNum) / 100).toLocaleString()} ({commNum}%)
-                    </span>
+                <div className="space-y-2 text-xs">
+                  <div className="p-3 bg-white rounded-[10px] border border-[#DDD6FE] flex items-start gap-2.5">
+                    <div className="w-6 h-6 rounded-full bg-[#EDE9FE] text-[#6D28D9] flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                      1
+                    </div>
+                    <div>
+                      <span className="font-bold text-charcoal block">
+                        Pehli Visit Par (New Client 1st Visit):
+                      </span>
+                      <span className="text-[11px] text-muted-gray block mt-0.5">
+                        Marketer ko <strong className="text-[#6D28D9]">{fixedNum.toLocaleString()} FCFA</strong> Flat Bounty milega + us invoice ki total service amount par <strong className="text-[#6D28D9]">{commNum}%</strong> commission milega.
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="p-3 bg-white rounded-[10px] border border-[#DDD6FE]">
-                    <span className="text-[11px] text-[#6D28D9] block font-semibold">Every Repeat Visit (For Life)</span>
-                    <span className="text-sm font-bold text-[#6D28D9] font-mono">
-                      {Math.round((20000 * commNum) / 100).toLocaleString()} FCFA
-                    </span>
-                    <span className="text-[10px] text-muted-gray block mt-0.5">
-                      Automatic {commNum}% deducted from technician
-                    </span>
+                  <div className="p-3 bg-white rounded-[10px] border border-[#DDD6FE] flex items-start gap-2.5">
+                    <div className="w-6 h-6 rounded-full bg-[#EDE9FE] text-[#6D28D9] flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                      ∞
+                    </div>
+                    <div>
+                      <span className="font-bold text-charcoal block">
+                        Aane Wali Har Visit Par (Lifetime for all repeat visits):
+                      </span>
+                      <span className="text-[11px] text-muted-gray block mt-0.5">
+                        Jab bhi yeh client spa aayega, Marketer ko service amount ka <strong className="text-[#6D28D9]">{commNum}%</strong> automatically milega (yeh {commNum}% technician ke commission se deduct hoga).
+                      </span>
+                    </div>
                   </div>
+                </div>
+                <div className="text-[10px] text-muted-gray italic pt-1">
+                  💡 Note: Actual commission har invoice ki service price par depend karega (e.g. 4,000 FCFA service par {commNum}% = {(4000 * commNum) / 100} FCFA, 10,000 FCFA par = {(10000 * commNum) / 100} FCFA).
                 </div>
               </div>
             </div>
@@ -487,37 +497,21 @@ export default function EditSalaryContractModal({
                 </p>
               </div>
 
-              {/* Automatic Marketer Deduction Notice */}
-              <div className="p-3.5 rounded-[12px] bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950 space-y-1.5">
-                <div className="font-bold flex items-center justify-between text-emerald-900">
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 size={15} className="text-emerald-700" />
-                    Dynamic Marketer Split Deduction
+              {/* Short & Clean Marketer Split Notice */}
+              <div className="p-3.5 rounded-[12px] bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950 flex items-start gap-2.5">
+                <CheckCircle2 size={16} className="text-emerald-700 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-bold text-emerald-900 block">
+                    Marketer Split Deduction Active
                   </span>
-                  <span className="text-[10px] font-bold bg-white text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
-                    Fully Customizable (1%, 2%, 3%, etc.)
+                  <span className="text-[11px] text-emerald-800 leading-relaxed block">
+                    Agar is technician ke paas kisi Marketer ka laya hua client aayega, toh us Marketer ka negotiated percentage (e.g. 2%, 3%, 4%) is commission me se automatically deduct ho jayega:
+                    <br />
+                    <span className="font-mono font-bold text-emerald-950">
+                      Technician Net = {commNum}% - Marketer%
+                    </span>
                   </span>
                 </div>
-                <p className="text-[11px] text-emerald-800 leading-relaxed">
-                  Jab koi client kisi Marketer ke through aata hai, toh us <strong>Marketer ka negotiated %</strong> is technician ke commission me se automatically deduct hota hai.
-                </p>
-                <div className="bg-white/90 p-2.5 rounded-[8px] border border-emerald-200 text-[11px] space-y-1 font-mono text-charcoal">
-                  <div className="font-bold text-emerald-900 font-sans text-xs">
-                    Universal Formula: Technician Net = {commNum}% - Marketer%
-                  </div>
-                  <div className="text-muted-gray text-[10px]">
-                    • Agar Marketer ka contract <strong>3%</strong> hai: Technician Net = {commNum}% - 3% = <strong className="text-charcoal">{Math.max(0, commNum - 3)}%</strong> (Marketer = 3%)
-                  </div>
-                  <div className="text-muted-gray text-[10px]">
-                    • Agar Marketer ka contract <strong>2%</strong> hai: Technician Net = {commNum}% - 2% = <strong className="text-charcoal">{Math.max(0, commNum - 2)}%</strong> (Marketer = 2%)
-                  </div>
-                  <div className="text-muted-gray text-[10px]">
-                    • Agar Marketer ka contract <strong>1%</strong> hai: Technician Net = {commNum}% - 1% = <strong className="text-charcoal">{Math.max(0, commNum - 1)}%</strong> (Marketer = 1%)
-                  </div>
-                </div>
-                <p className="text-[10px] text-emerald-700 italic">
-                  💡 Marketer ka percentage fix nahi hai — aap Staff list me Marketer ke "Contract" par click karke jo bhi percentage (e.g. 1%, 2%, 3%) set karenge, system wahi exact percent deduct karega!
-                </p>
               </div>
 
               {/* Optional Advanced Sales Quota Accordion */}
