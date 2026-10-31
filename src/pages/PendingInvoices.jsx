@@ -708,14 +708,7 @@ export default function PendingInvoices() {
   const paidTodayInvoices = useMemo(() => filterForUserRole(rawPaidTodayInvoices), [rawPaidTodayInvoices, filterForUserRole]);
   const historyInvoices = useMemo(() => filterForUserRole(rawHistoryInvoices), [rawHistoryInvoices, filterForUserRole]);
 
-  // Auto-fetch real-time loyalty balances for pending invoice clients
-  useEffect(() => {
-    if (pendingInvoices && pendingInvoices.length > 0 && fetchClientLoyalty) {
-      pendingInvoices.forEach((inv) => {
-        if (inv.clientId) fetchClientLoyalty(inv.clientId);
-      });
-    }
-  }, [pendingInvoices, fetchClientLoyalty]);
+
 
   // --- History Tab Search, Filter & Pagination State ---
   const [historySearch, setHistorySearch] = useState('');
@@ -865,7 +858,16 @@ export default function PendingInvoices() {
   };
 
   const toggleExpand = (id) => {
-    setExpandedId((prev) => (prev === id ? null : id));
+    setExpandedId((prev) => {
+      const next = prev === id ? null : id;
+      if (next) {
+        const inv = pendingInvoices.find((i) => i.id === next);
+        if (inv?.clientId && fetchClientLoyalty) {
+          fetchClientLoyalty(inv.clientId);
+        }
+      }
+      return next;
+    });
   };
 
   const setPaymentMethod = (invoiceId, method) => {
@@ -878,12 +880,19 @@ export default function PendingInvoices() {
       if (current.wantRedeem) {
         return { ...prev, [invoiceId]: { wantRedeem: false, points: '' } };
       }
-      const loyalty = getClientLoyalty(clientId);
+      const inv = pendingInvoices.find((i) => i.id === invoiceId);
+      const clientObj = getClient(clientId) || inv?.client;
+      const rawLoyalty = getClientLoyalty(clientId);
+      const availableBalance = Math.max(
+        Number(rawLoyalty?.balance) || 0,
+        Number(clientObj?.loyaltyPoints) || 0,
+        Number(inv?.client?.loyaltyPoints) || 0
+      );
       return {
         ...prev,
         [invoiceId]: {
           wantRedeem: true,
-          points: String(Math.min(loyalty.balance, settings.pointsForDiscount)),
+          points: String(Math.min(availableBalance, settings.pointsForDiscount || 100)),
         },
       };
     });

@@ -18,7 +18,7 @@
  *   - RBAC: Manager full control, Reception operational view & redeem, Technician view only, Cleaner blocked.
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { loyaltyApi } from '../services/api';
 import { useAuth } from './AuthContext';
 
@@ -43,6 +43,7 @@ export function LoyaltyProvider({ children }) {
   const isReception = role === 'reception';
   const isTechnician = role === 'technician';
   const isCleaner = role === 'cleaner';
+  const inFlightRef = useRef(new Set());
 
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [clientLoyaltyCache, setClientLoyaltyCache] = useState({});
@@ -104,9 +105,16 @@ export function LoyaltyProvider({ children }) {
     refreshLoyalty();
   }, [refreshLoyalty]);
 
-  // Fetch client loyalty profile from backend
-  const fetchClientLoyalty = useCallback(async (clientId) => {
+  // Fetch client loyalty profile from backend (with cache safeguard & in-flight deduplication)
+  const fetchClientLoyalty = useCallback(async (clientId, force = false) => {
     if (!clientId) return null;
+    if (!force && clientLoyaltyCache[clientId]) {
+      return clientLoyaltyCache[clientId];
+    }
+    if (inFlightRef.current && inFlightRef.current.has(clientId)) {
+      return null;
+    }
+    if (inFlightRef.current) inFlightRef.current.add(clientId);
     try {
       const res = await loyaltyApi.getClientLoyalty(clientId);
       if (res?.data) {
@@ -135,9 +143,11 @@ export function LoyaltyProvider({ children }) {
       }
     } catch (err) {
       console.warn('Failed to fetch client loyalty:', err);
+    } finally {
+      if (inFlightRef.current) inFlightRef.current.delete(clientId);
     }
     return null;
-  }, []);
+  }, [clientLoyaltyCache]);
 
   // Synchronous client loyalty getter (from cache or default)
   const getClientLoyalty = useCallback(
