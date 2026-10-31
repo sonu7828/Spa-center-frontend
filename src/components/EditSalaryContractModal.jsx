@@ -326,6 +326,7 @@ export default function EditSalaryContractModal({
                 <div className="relative">
                   <input
                     type="number"
+                    onWheel={(e) => e.target.blur()}
                     min="0"
                     step="any"
                     value={fixedSalary}
@@ -370,6 +371,7 @@ export default function EditSalaryContractModal({
                   <div className="relative">
                     <input
                       type="number"
+                    onWheel={(e) => e.target.blur()}
                       min="0"
                       max="100"
                       step="0.1"
@@ -396,6 +398,7 @@ export default function EditSalaryContractModal({
                   <div className="relative">
                     <input
                       type="number"
+                    onWheel={(e) => e.target.blur()}
                       min="0"
                       step="100"
                       value={fixedSalary}
@@ -430,6 +433,7 @@ export default function EditSalaryContractModal({
                 <div className="relative">
                   <input
                     type="number"
+                    onWheel={(e) => e.target.blur()}
                     min="0"
                     step="10000"
                     value={monthlyTarget}
@@ -507,6 +511,7 @@ export default function EditSalaryContractModal({
                 <div className="relative">
                   <input
                     type="number"
+                    onWheel={(e) => e.target.blur()}
                     min="0"
                     max="100"
                     step="0.5"
@@ -557,6 +562,7 @@ export default function EditSalaryContractModal({
                         </label>
                         <input
                           type="number"
+                    onWheel={(e) => e.target.blur()}
                           min="0"
                           step="any"
                           value={monthlyTarget}
@@ -572,6 +578,7 @@ export default function EditSalaryContractModal({
                         </label>
                         <input
                           type="number"
+                    onWheel={(e) => e.target.blur()}
                           min="0"
                           step="any"
                           value={fixedSalary}
@@ -587,6 +594,7 @@ export default function EditSalaryContractModal({
                         </label>
                         <input
                           type="number"
+                    onWheel={(e) => e.target.blur()}
                           min="0"
                           step="any"
                           value={basePay}
