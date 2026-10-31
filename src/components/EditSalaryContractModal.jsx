@@ -204,10 +204,9 @@ export default function EditSalaryContractModal({
 
     setLoading(true);
     try {
-      // If advanced quota is hidden, save as pure commission
-      const payloadTarget = showAdvancedQuota ? targetNum : 0;
-      const payloadBase = showAdvancedQuota ? baseNum : 0;
-      const payloadFixed = showAdvancedQuota ? fixedNum : 0;
+      const payloadTarget = targetNum;
+      const payloadBase = baseNum;
+      const payloadFixed = fixedNum;
 
       const res = await usersApi.updateSalaryContract(staff.id, {
         monthlyTarget: payloadTarget,
@@ -514,25 +513,14 @@ export default function EditSalaryContractModal({
                 </div>
               </div>
 
-              {/* Optional Advanced Sales Quota Accordion */}
+              {/* Monthly Target Quota & Baseline Salary Section */}
               <div className="border border-border rounded-[14px] overflow-hidden bg-white">
-                <button
-                  type="button"
-                  onClick={() => setShowAdvancedQuota(!showAdvancedQuota)}
-                  className="w-full px-4 py-3 bg-soft-cream/40 flex items-center justify-between text-xs font-bold text-charcoal hover:bg-soft-cream/70 transition-colors cursor-pointer"
-                >
-                  <span className="flex items-center gap-2">
-                    <Calculator size={14} className="text-muted-gray" />
-                    Advanced Monthly Target Quota & Baseline Salary (Optional)
-                  </span>
-                  <span className="flex items-center gap-1.5 text-muted-gray font-normal text-[11px]">
-                    {showAdvancedQuota ? 'Hide' : 'Configure Quota'}
-                    {showAdvancedQuota ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </span>
-                </button>
+                <div className="px-4 py-3 bg-soft-cream/40 border-b border-border flex items-center gap-2 text-xs font-bold text-charcoal">
+                  <Calculator size={14} className="text-sage" />
+                  <span>Monthly Target Quota & Baseline Salary</span>
+                </div>
 
-                {showAdvancedQuota && (
-                  <div className="p-4 space-y-4 border-t border-border bg-white">
+                <div className="p-4 space-y-4 bg-white">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-[11px] font-semibold text-charcoal mb-1">
@@ -634,7 +622,6 @@ export default function EditSalaryContractModal({
                       </div>
                     )}
                   </div>
-                )}
               </div>
             </div>
           )}
