@@ -210,13 +210,56 @@ export default function AttendanceManager() {
 
   // Filtered history records
   const filteredHistory = useMemo(() => {
+    // If a specific date is selected, build the complete daily roster (present staff + absent staff)
+    if (filterDate) {
+      const existingDateRecords = allRecordsSorted.filter((rec) => rec.date === filterDate);
+      const recordedEmpIds = new Set(existingDateRecords.map((r) => String(r.employeeId)));
+
+      // Generate absent records for all active employees who didn't clock in on filterDate
+      const absentRecords = employees
+        .filter((emp) => !recordedEmpIds.has(String(emp.id)))
+        .map((emp) => ({
+          id: `absent-${emp.id}-${filterDate}`,
+          employeeId: emp.id,
+          employeeName: emp.name || emp.email,
+          employeeRole: emp.role || 'technician',
+          date: filterDate,
+          clockIn: '—',
+          clockOut: '—',
+          clockInRaw: null,
+          breaks: [],
+          breakCount: 0,
+          totalBreakMinutes: 0,
+          workingHours: '—',
+          netWorkingHours: '—',
+          status: 'not_started',
+          isManualEntry: false,
+          isAbsent: true,
+          photo: null,
+          clockInPhoto: null,
+          clockOutPhoto: null,
+        }));
+
+      // Combine: Present staff first, then Absent staff sorted by name
+      const fullRoster = [
+        ...existingDateRecords,
+        ...absentRecords.sort((a, b) => a.employeeName.localeCompare(b.employeeName)),
+      ];
+
+      return fullRoster.filter((rec) => {
+        if (filterEmployee && rec.employeeName !== filterEmployee) return false;
+        if (filterStatus && rec.status !== filterStatus) return false;
+        return true;
+      });
+    }
+
+    // Default: full history across all dates
     return allRecordsSorted.filter((rec) => {
-      if (filterDate && rec.date !== filterDate) return false;
       if (filterEmployee && rec.employeeName !== filterEmployee) return false;
       if (filterStatus && rec.status !== filterStatus) return false;
       return true;
     });
-  }, [allRecordsSorted, filterDate, filterEmployee, filterStatus]);
+  }, [allRecordsSorted, filterDate, filterEmployee, filterStatus, employees]);
 
   const formatDateDisplay = (dateStr) => {
     return formatDoualaDateDisplay(dateStr);
@@ -938,8 +981,9 @@ export default function AttendanceManager() {
                   className="w-full px-3 py-2 rounded-[10px] border border-border bg-warm-ivory text-xs text-charcoal focus:outline-none focus:border-sage transition-colors cursor-pointer"
                 >
                   <option value="">All Statuses</option>
-                  <option value="working">Working</option>
                   <option value="completed">Completed</option>
+                  <option value="working">Working</option>
+                  <option value="not_started">Absent</option>
                 </select>
               </div>
               {hasActiveFilters && (
@@ -1077,7 +1121,25 @@ export default function AttendanceManager() {
                                     </button>
                                   ) : null
                                 ))}
-                                {!rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (!rec.breaks || !rec.breaks.some((b) => b.startPhoto || b.endPhoto)) && (
+                                {rec.isAbsent ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      resetManualForm();
+                                      setManualEmployee(String(rec.employeeId));
+                                      setManualDate(rec.date);
+                                      setManualClockIn(getDoualaCurrentTimeStr());
+                                      setManualClockOut(getDoualaCurrentTimeStr());
+                                      setManualStatus('completed');
+                                      setManualReason('Manager recorded attendance for absent employee');
+                                      setShowManualForm(true);
+                                    }}
+                                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2 py-0.5 rounded-[6px] transition-colors cursor-pointer"
+                                    title="Add manual attendance for this date"
+                                  >
+                                    + Add
+                                  </button>
+                                ) : !rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (!rec.breaks || !rec.breaks.some((b) => b.startPhoto || b.endPhoto)) && (
                                   rec.isManualEntry ? (
                                     <button
                                       onClick={() => setSelectedManualDetails(rec)}
@@ -1139,6 +1201,26 @@ export default function AttendanceManager() {
                           </div>
                         </div>
                         <ManualBadge rec={rec} />
+                        {rec.isAbsent && (
+                          <div className="pt-2 border-t border-border/40 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                resetManualForm();
+                                setManualEmployee(String(rec.employeeId));
+                                setManualDate(rec.date);
+                                setManualClockIn(getDoualaCurrentTimeStr());
+                                setManualClockOut(getDoualaCurrentTimeStr());
+                                setManualStatus('completed');
+                                setManualReason('Manager recorded attendance for absent employee');
+                                setShowManualForm(true);
+                              }}
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-[6px] transition-colors cursor-pointer"
+                            >
+                              + Record Attendance
+                            </button>
+                          </div>
+                        )}
                         {((rec.clockInPhoto || rec.photo) || rec.clockOutPhoto) && (
                           <div className="flex items-center gap-2 pt-1 border-t border-border/40">
                             {(rec.clockInPhoto || rec.photo) && (
