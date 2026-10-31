@@ -430,10 +430,10 @@ export default function EditSalaryContractModal({
                     </div>
                     <div>
                       <span className="font-bold text-charcoal block">
-                        Pehli Visit Par (New Client 1st Visit):
+                        First Visit (Client Acquisition):
                       </span>
                       <span className="text-[11px] text-muted-gray block mt-0.5">
-                        Marketer ko <strong className="text-[#6D28D9]">{fixedNum.toLocaleString()} FCFA</strong> Flat Bounty milega + us invoice ki total service amount par <strong className="text-[#6D28D9]">{commNum}%</strong> commission milega.
+                        Marketer receives a <strong className="text-[#6D28D9]">{fixedNum.toLocaleString()} FCFA</strong> Flat Bounty + <strong className="text-[#6D28D9]">{commNum}%</strong> commission on all service totals for this visit.
                       </span>
                     </div>
                   </div>
@@ -444,16 +444,16 @@ export default function EditSalaryContractModal({
                     </div>
                     <div>
                       <span className="font-bold text-charcoal block">
-                        Aane Wali Har Visit Par (Lifetime for all repeat visits):
+                        All Recurring Visits (Lifetime for all repeat visits):
                       </span>
                       <span className="text-[11px] text-muted-gray block mt-0.5">
-                        Jab bhi yeh client spa aayega, Marketer ko service amount ka <strong className="text-[#6D28D9]">{commNum}%</strong> automatically milega (yeh {commNum}% technician ke commission se deduct hoga).
+                        Every time this client returns for services, the marketer automatically receives <strong className="text-[#6D28D9]">{commNum}%</strong> for life (deducted from the performing technician).
                       </span>
                     </div>
                   </div>
                 </div>
                 <div className="text-[10px] text-muted-gray italic pt-1">
-                  💡 Note: Actual commission har invoice ki service price par depend karega (e.g. 4,000 FCFA service par {commNum}% = {(4000 * commNum) / 100} FCFA, 10,000 FCFA par = {(10000 * commNum) / 100} FCFA).
+                  💡 Note: Payout is calculated dynamically from the actual service price on each invoice (e.g. on a 4,000 FCFA service, {commNum}% = {(4000 * commNum) / 100} FCFA).
                 </div>
               </div>
             </div>
@@ -505,7 +505,7 @@ export default function EditSalaryContractModal({
                     Marketer Split Deduction Active
                   </span>
                   <span className="text-[11px] text-emerald-800 leading-relaxed block">
-                    Agar is technician ke paas kisi Marketer ka laya hua client aayega, toh us Marketer ka negotiated percentage (e.g. 2%, 3%, 4%) is commission me se automatically deduct ho jayega:
+                    When this technician provides services to a client introduced by a Marketer, the Marketer's negotiated percentage (e.g. 2%, 3%, 4%) is automatically deducted from this commission:
                     <br />
                     <span className="font-mono font-bold text-emerald-950">
                       Technician Net = {commNum}% - Marketer%
