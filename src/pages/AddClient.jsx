@@ -18,6 +18,7 @@ import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import PhoneInputField from '../components/PhoneInputField';
+import CelebrationDateInput from '../components/CelebrationDateInput';
 import { useClients } from '../context/ClientsContext';
 import { useAuth } from '../context/AuthContext';
 import { validatePhoneNumber } from '../utils/phone';
@@ -155,21 +156,21 @@ export default function AddClient() {
             onChange={update('quartier')}
             placeholder="Neighborhood"
           />
-          <Input
+          <CelebrationDateInput
             label="Birthday Date"
-            type="date"
             value={form.birthday}
             onChange={update('birthday')}
+            hint="Year is optional"
           />
         </div>
 
         {/* Row 2b: Anniversary Date (Optional) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4">
-          <Input
+          <CelebrationDateInput
             label="Anniversary Date (Optional)"
-            type="date"
             value={form.anniversary}
             onChange={update('anniversary')}
+            hint="Year is optional"
           />
         </div>
 

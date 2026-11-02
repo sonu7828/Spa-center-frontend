@@ -43,6 +43,7 @@ import {
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import Input from '../components/Input';
+import CelebrationDateInput, { formatCelebrationDisplay } from '../components/CelebrationDateInput';
 import Tabs from '../components/Tabs';
 import PhoneInputField from '../components/PhoneInputField';
 import { formatPhoneNumber, validatePhoneNumber } from '../utils/phone';
@@ -243,20 +244,20 @@ export default function ClientFile() {
                 onChange={updateField('quartier')}
                 placeholder="Neighborhood"
               />
-              <Input
+              <CelebrationDateInput
                 label="Birthday Date"
-                type="date"
                 value={editForm.birthday}
                 onChange={updateField('birthday')}
+                hint="Year is optional"
               />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-              <Input
+              <CelebrationDateInput
                 label="Anniversary Date (Optional)"
-                type="date"
                 value={editForm.anniversary}
                 onChange={updateField('anniversary')}
+                hint="Year is optional"
               />
             </div>
 
@@ -341,14 +342,14 @@ export default function ClientFile() {
               <div className="flex items-center gap-2.5">
                 <Cake size={16} className="text-sage shrink-0" />
                 <span className="text-sm text-muted-gray">
-                  Birthday: {client.birthday || '—'}
+                  Birthday: <span className="text-charcoal font-medium">{formatCelebrationDisplay(client.birthday)}</span>
                 </span>
               </div>
               {client.anniversary && (
                 <div className="flex items-center gap-2.5">
                   <Heart size={16} className="text-sage shrink-0" />
                   <span className="text-sm text-muted-gray">
-                    Anniversary: {client.anniversary}
+                    Anniversary: <span className="text-charcoal font-medium">{formatCelebrationDisplay(client.anniversary)}</span>
                   </span>
                 </div>
               )}
