@@ -48,8 +48,22 @@ export function formatBackendInvoice(inv, allUsers = []) {
   const paymentMethodDisplay = firstPayment?.paymentMethod
     ? firstPayment.paymentMethod.replace(/_/g, ' ')
     : null;
-  const paidTime = firstPayment?.paidAt
-    ? new Date(firstPayment.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+  // Helper to detect if a timestamp is merely midnight UTC or date-only (e.g. "2026-11-02T00:00:00.000Z")
+  const isMidnightOrDateOnly = (t) => {
+    if (!t) return true;
+    const str = String(t);
+    return str.endsWith('T00:00:00.000Z') || str.endsWith('T00:00:00Z') || /^\d{4}-\d{2}-\d{2}$/.test(str);
+  };
+
+  // Determine actual payment time: prioritize real timestamp over midnight UTC date
+  const rawPaymentTimestamp =
+    (!isMidnightOrDateOnly(firstPayment?.paidAt) ? firstPayment?.paidAt : null) ||
+    (!isMidnightOrDateOnly(inv.paidAt) ? inv.paidAt : null) ||
+    (!isMidnightOrDateOnly(inv.createdAt) ? inv.createdAt : null);
+
+  const paidTime = rawPaymentTimestamp
+    ? new Date(rawPaymentTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null;
 
   const mainTechName =
@@ -138,7 +152,7 @@ export function formatBackendInvoice(inv, allUsers = []) {
     paidAmount: paidNum,
     remainingAmount: remainingNum,
     paymentMethod: paymentMethodDisplay,
-    paidAt: firstPayment?.paidAt || inv.paidAt || inv.createdAt || null,
+    paidAt: rawPaymentTimestamp || firstPayment?.paidAt || inv.paidAt || inv.createdAt || null,
     paidTime: paidTime,
     payments: inv.payments || [],
     pointsEarned: inv.pointsEarned || 0,

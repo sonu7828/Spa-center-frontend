@@ -31,9 +31,21 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
     month: 'long',
     year: 'numeric',
   });
+  const isMidnightOrDateOnly = (t) => {
+    if (!t) return true;
+    const str = String(t);
+    return str.endsWith('T00:00:00.000Z') || str.endsWith('T00:00:00Z') || /^\d{4}-\d{2}-\d{2}$/.test(str);
+  };
+
+  const realPaidTimestamp =
+    (!isMidnightOrDateOnly(invoice.paidAt) ? invoice.paidAt : null) ||
+    (!isMidnightOrDateOnly(invoice.createdAt) ? invoice.createdAt : null);
+
   const timeStr =
-    invoice.paidTime ||
-    paidDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    (invoice.paidTime && invoice.paidTime !== '05:30 AM' && invoice.paidTime !== '05:30' ? invoice.paidTime : null) ||
+    (realPaidTimestamp
+      ? new Date(realPaidTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : paidDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
 
   const itemsSubtotal = (invoice.items || []).reduce(
     (sum, it) => sum + (Number(it.price) || 0),
