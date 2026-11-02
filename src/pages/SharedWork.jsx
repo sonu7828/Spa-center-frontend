@@ -15,7 +15,7 @@
  *       5. Paid invoices are locked and immutable.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -57,8 +57,13 @@ export default function SharedWork() {
   const activeTechnicians = allUsers.filter((u) => u.role === 'technician' && u.active !== false);
 
   // 1. FILTER VISITS: Only show appointments where logged-in user is MAIN TECHNICIAN (or Manager / Reception sees all)
+  const appointmentIdFromUrl = searchParams.get('appointmentId');
   const eligibleAppointments = useMemo(() => {
     return appointments.filter((apt) => {
+      // If directly targeted by URL parameter from CloseService, always allow access
+      if (appointmentIdFromUrl && String(apt.id) === String(appointmentIdFromUrl)) {
+        return true;
+      }
       // Must not be no-show or cancelled
       if (apt.status === 'no-show' || apt.status === 'cancelled') return false;
       // Main Technician check: technician can only access their own assigned appointments
@@ -67,13 +72,21 @@ export default function SharedWork() {
       }
       return true;
     });
-  }, [appointments, canViewAll, user]);
+  }, [appointments, canViewAll, user, appointmentIdFromUrl]);
 
-  // Selected appointment currently being edited in Shared Work
-  const initialAptId = searchParams.get('appointmentId');
-  const [activeAptId, setActiveAptId] = useState(
-    initialAptId ? Number(initialAptId) : (eligibleAppointments[0]?.id || null)
-  );
+  // Selected appointment currently being edited in Shared Work (stores raw ID string/UUID)
+  const initialAptId = appointmentIdFromUrl;
+  const [activeAptId, setActiveAptId] = useState(initialAptId || null);
+
+  // Sync activeAptId whenever searchParams or eligibleAppointments change
+  useEffect(() => {
+    const paramId = searchParams.get('appointmentId');
+    if (paramId) {
+      setActiveAptId(paramId);
+    } else if (!activeAptId && eligibleAppointments.length > 0) {
+      setActiveAptId(eligibleAppointments[0].id);
+    }
+  }, [searchParams, eligibleAppointments]);
 
   // Search filter for assigned client visits
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,16 +112,26 @@ export default function SharedWork() {
   // Feedback notifications
   const [feedbackNotice, setFeedbackNotice] = useState('');
 
-  // Currently active appointment object
-  const activeApt = eligibleAppointments.find((a) => a.id === activeAptId) || eligibleAppointments[0] || null;
+  // Currently active appointment object (string-safe UUID match)
+  const activeApt = useMemo(() => {
+    const targetId = activeAptId || searchParams.get('appointmentId');
+    if (targetId) {
+      const found =
+        eligibleAppointments.find((a) => String(a.id) === String(targetId)) ||
+        appointments.find((a) => String(a.id) === String(targetId));
+      if (found) return found;
+    }
+    return eligibleAppointments[0] || null;
+  }, [eligibleAppointments, appointments, activeAptId, searchParams]);
 
   // Existing invoice for active appointment if already submitted or paid
   const existingInvoice = useMemo(() => {
     if (!activeApt) return null;
     return invoices.find(
       (inv) =>
-        inv.items?.some((it) => it.appointmentId === activeApt.id) ||
-        inv.id === activeApt.id
+        inv.items?.some((it) => String(it.appointmentId) === String(activeApt.id)) ||
+        String(inv.appointmentId) === String(activeApt.id) ||
+        String(inv.id) === String(activeApt.id)
     );
   }, [invoices, activeApt]);
 
@@ -310,20 +333,30 @@ export default function SharedWork() {
         title="Shared Work"
         subtitle="Multi-technician collaborative visits managed by the assigned Main Technician."
         action={
-          <Button
-            variant="secondary"
-            onClick={() => {
-              if (initialAptId) {
-                navigate(`/appointments/${initialAptId}/close`);
-              } else {
-                navigate('/appointments');
-              }
-            }}
-            className="gap-1.5"
-          >
-            <ArrowLeft size={16} strokeWidth={1.8} />
-            <span>Back</span>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="primary"
+              onClick={() => navigate('/invoices?newWalkIn=shared')}
+              className="gap-1.5 shadow-sm"
+            >
+              <Users size={15} strokeWidth={2.2} />
+              <span>+ New Walk-in Shared Visit</span>
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (appointmentIdFromUrl) {
+                  navigate(`/appointments/${appointmentIdFromUrl}/close`);
+                } else {
+                  navigate('/appointments');
+                }
+              }}
+              className="gap-1.5"
+            >
+              <ArrowLeft size={16} strokeWidth={1.8} />
+              <span>Back</span>
+            </Button>
+          </div>
         }
       />
 
@@ -448,8 +481,8 @@ export default function SharedWork() {
                 </div>
               ) : (
                 filteredVisits.map((apt) => {
-                  const isSelected = apt.id === activeAptId;
-                  const aptInvoice = invoices.find((inv) => inv.items?.some((it) => it.appointmentId === apt.id));
+                  const isSelected = activeApt && String(apt.id) === String(activeApt.id);
+                  const aptInvoice = invoices.find((inv) => inv.items?.some((it) => String(it.appointmentId) === String(apt.id)));
                   const aptPaid = aptInvoice?.status === 'PAID';
                   const aptPending = aptInvoice?.status === 'PENDING_PAYMENT';
 
@@ -457,7 +490,10 @@ export default function SharedWork() {
                     <button
                       key={apt.id}
                       type="button"
-                      onClick={() => setActiveAptId(apt.id)}
+                      onClick={() => {
+                        setActiveAptId(apt.id);
+                        navigate(`/shared-work?appointmentId=${apt.id}`, { replace: true });
+                      }}
                       className={`w-full text-left p-3.5 rounded-[12px] border transition-all duration-150 cursor-pointer shadow-xs ${
                         isSelected
                           ? 'bg-white border-sage ring-2 ring-sage/20 shadow-card'

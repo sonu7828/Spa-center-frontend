@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileText,
   CheckCircle2,
@@ -471,8 +471,26 @@ export default function PendingInvoices() {
   const { calculateAndAddCommission, commissionRate } = useCommission();
   const { appointments } = useAppointments();
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Active tab: 'pending' | 'paid-today' | 'history'
   const [activeTab, setActiveTab] = useState('pending');
+
+  // Handle URL navigation (e.g. /invoices?newWalkIn=shared)
+  useEffect(() => {
+    const newWalkIn = searchParams.get('newWalkIn');
+    if (newWalkIn === 'shared') {
+      openNewServiceModal(true);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('newWalkIn');
+      setSearchParams(nextParams, { replace: true });
+    } else if (newWalkIn === 'true' || newWalkIn === '1') {
+      openNewServiceModal(false);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('newWalkIn');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams]);
 
   // Expanded accordion in Pending & Paid Today lists
   const [expandedId, setExpandedId] = useState(null);
@@ -1066,23 +1084,85 @@ export default function PendingInvoices() {
 
   const newServiceGrandTotal = newServiceLinesTotal + newServiceRetailTotal;
 
-  const openNewServiceModal = () => {
+  // Multi-technician analysis for newServiceLines
+  const newServiceTechSummary = useMemo(() => {
+    const map = new Map();
+    (newServiceLines || []).forEach((line) => {
+      const tName = line.technicianName?.trim() || 'Unassigned Staff';
+      const tId = line.technicianId || null;
+      const priceNum =
+        typeof line.price === 'number'
+          ? line.price
+          : parseInt(String(line.price || 0).replace(/[^0-9]/g, ''), 10) || 0;
+      const existing = map.get(tName) || { name: tName, id: tId, total: 0, count: 0, services: [] };
+      existing.total += priceNum;
+      existing.count += 1;
+      if (line.serviceName) existing.services.push(line.serviceName);
+      map.set(tName, existing);
+    });
+    return Array.from(map.values());
+  }, [newServiceLines]);
+
+  const hasMultipleTechs = newServiceTechSummary.filter((t) => t.name !== 'Unassigned Staff').length > 1;
+
+  const openNewServiceModal = (isShared = false) => {
     setNewServiceClientType('walkin');
     setNewServiceClientId('');
     setNewServiceWalkInName('');
     setNewServiceWalkInPhone('+237 ');
     setNewServiceIntroducedById(isMarketer ? String(user?.id) : '');
-    setNewServiceLines([
-      {
-        id: Date.now(),
-        serviceId: '',
-        serviceName: '',
-        technicianId: isTechnician ? String(user?.id) : '',
-        technicianName: isTechnician ? (user?.name || '') : '',
-        price: '',
-        product: '',
-      },
-    ]);
+
+    const tech1Id = isTechnician
+      ? String(user?.id)
+      : activeTechnicians[0]?.id
+      ? String(activeTechnicians[0].id)
+      : '';
+    const tech1Name = isTechnician
+      ? user?.name || ''
+      : activeTechnicians[0]?.name || '';
+
+    const otherTech =
+      activeTechnicians.find((t) => String(t.id) !== String(tech1Id)) ||
+      activeTechnicians[1] ||
+      activeTechnicians[0];
+    const tech2Id = otherTech?.id ? String(otherTech.id) : '';
+    const tech2Name = otherTech?.name || '';
+
+    if (isShared) {
+      setNewServiceLines([
+        {
+          id: Date.now(),
+          serviceId: '',
+          serviceName: '',
+          technicianId: tech1Id,
+          technicianName: tech1Name,
+          price: '',
+          product: '',
+        },
+        {
+          id: Date.now() + 1,
+          serviceId: '',
+          serviceName: '',
+          technicianId: tech2Id,
+          technicianName: tech2Name,
+          price: '',
+          product: '',
+        },
+      ]);
+    } else {
+      setNewServiceLines([
+        {
+          id: Date.now(),
+          serviceId: '',
+          serviceName: '',
+          technicianId: tech1Id,
+          technicianName: tech1Name,
+          price: '',
+          product: '',
+        },
+      ]);
+    }
+
     setNewServiceRetailCart([]);
     setShowRetailInServiceModal(false);
     setNewServiceRetailTab('drinks');
@@ -1091,6 +1171,36 @@ export default function PendingInvoices() {
     setNewServiceActionChoice('pending');
     setNewServiceError('');
     setShowNewServiceModal(true);
+  };
+
+  const addSharedWorkLine = () => {
+    const assignedTechIds = new Set(
+      newServiceLines.map((l) => String(l.technicianId)).filter(Boolean)
+    );
+    const nextTech =
+      activeTechnicians.find((t) => !assignedTechIds.has(String(t.id))) ||
+      activeTechnicians[0];
+
+    // Ensure line 1 has technician assigned
+    if (newServiceLines.length > 0 && !newServiceLines[0].technicianId) {
+      const defaultFirstTech = isTechnician ? user : activeTechnicians[0];
+      if (defaultFirstTech) {
+        handleTechnicianLineSelect(0, String(defaultFirstTech.id));
+      }
+    }
+
+    setNewServiceLines((prev) => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        serviceId: '',
+        serviceName: '',
+        technicianId: nextTech ? String(nextTech.id) : '',
+        technicianName: nextTech ? nextTech.name : '',
+        price: '',
+        product: '',
+      },
+    ]);
   };
 
   const closeNewServiceModal = () => {
@@ -1889,14 +1999,26 @@ export default function PendingInvoices() {
               </Button>
             )}
             {canCreateInvoice && (
-              <Button
-                variant="primary"
-                onClick={openNewServiceModal}
-                title="Create Walk-In / Service Invoice"
-              >
-                <Sparkles size={15} strokeWidth={2.2} />
-                <span>+ New Service</span>
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  onClick={() => openNewServiceModal(true)}
+                  title="Create Shared Work Walk-in Visit (Multiple Technicians)"
+                  className="gap-1.5 shadow-sm bg-gradient-to-r from-[#4F6748] to-[#3D5A40] text-white hover:opacity-95"
+                >
+                  <Users size={15} strokeWidth={2.2} />
+                  <span>+ Shared Work (Walk-in)</span>
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => openNewServiceModal(false)}
+                  title="Create Walk-In / Service Invoice"
+                  className="gap-1.5"
+                >
+                  <Sparkles size={15} strokeWidth={2.2} />
+                  <span>+ New Service</span>
+                </Button>
+              </>
             )}
           </div>
         }
@@ -2037,7 +2159,20 @@ export default function PendingInvoices() {
               </p>
               {canCreateInvoice ? (
                 <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
-                  <Button variant="primary" onClick={openNewServiceModal}>
+                  <Button
+                    variant="primary"
+                    onClick={() => openNewServiceModal(true)}
+                    className="gap-1.5 shadow-sm bg-gradient-to-r from-[#4F6748] to-[#3D5A40] text-white hover:opacity-95"
+                    title="Create Shared Work Walk-in Visit (Multiple Technicians)"
+                  >
+                    <Users size={15} strokeWidth={2.2} />
+                    <span>+ Shared Work (Walk-in)</span>
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => openNewServiceModal(false)}
+                    className="gap-1.5"
+                  >
                     <Sparkles size={15} strokeWidth={2.2} />
                     <span>+ New Service Invoice</span>
                   </Button>
@@ -2134,6 +2269,12 @@ export default function PendingInvoices() {
                               <User size={11} className="text-sage shrink-0" />
                               <span>Tech: {techDisplay}</span>
                             </span>
+                            {techItems.length > 1 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#2C422E] bg-[#E8F2E6] px-2 py-0.5 rounded-[6px] border border-[#B7CEB3]">
+                                <Users size={11} className="text-[#3D5A40] shrink-0" />
+                                <span>Shared Work ({techItems.length} Techs)</span>
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2499,6 +2640,12 @@ export default function PendingInvoices() {
                             <span className="font-mono text-xs font-bold text-charcoal bg-soft-cream px-2 py-0.5 rounded">
                               {invNum}
                             </span>
+                            {techItems.length > 1 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#2C422E] bg-[#E8F2E6] px-2 py-0.5 rounded-[6px] border border-[#B7CEB3]">
+                                <Users size={11} className="text-[#3D5A40] shrink-0" />
+                                <span>Shared Work ({techItems.length} Techs)</span>
+                              </span>
+                            )}
                             <span className="text-sm font-bold text-charcoal truncate">
                               {formatClientDisplay(invoice.clientName, invoice.clientId)}
                             </span>
@@ -3862,9 +4009,17 @@ export default function PendingInvoices() {
                   <Sparkles size={20} strokeWidth={2.2} />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-charcoal">
-                    New Walk-In / Service Invoice
-                  </h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-bold text-charcoal">
+                      New Walk-In / Service Invoice
+                    </h3>
+                    {newServiceLines.length > 1 && (
+                      <span className="text-[10px] font-bold bg-[#E8F2E6] text-[#2C422E] border border-[#B7CEB3] px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Users size={11} strokeWidth={2.2} />
+                        Shared Work ({newServiceLines.length} Services)
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-gray">
                     Create service invoice & assign performing technicians
                   </p>
@@ -4007,23 +4162,39 @@ export default function PendingInvoices() {
 
               {/* 2. Services List */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold text-charcoal uppercase tracking-wider">
                       Services Rendered
                     </span>
                     <span className="text-[10px] font-bold bg-sage-soft text-[#4F6748] px-2 py-0.5 rounded-full">
                       {newServiceLines.length}
                     </span>
+                    {hasMultipleTechs && (
+                      <span className="text-[10px] font-bold bg-[#DCE7D7] text-[#2C422E] px-2 py-0.5 rounded-full border border-sage/30 flex items-center gap-1">
+                        <Users size={10} /> Multi-Technician Shared Work
+                      </span>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={addServiceLine}
-                    className="text-xs font-semibold text-[#4F6748] hover:text-[#3E5238] flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Plus size={14} strokeWidth={2.5} />
-                    <span>Add Another Service</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={addSharedWorkLine}
+                      className="text-xs font-semibold px-2.5 py-1 rounded-[8px] bg-[#E8F2E6] hover:bg-[#DEECEB] text-[#2C422E] border border-[#B7CEB3] flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                      title="Add another service performed by a different technician"
+                    >
+                      <Users size={13} strokeWidth={2} />
+                      <span>+ Shared Work (Add 2nd Tech)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addServiceLine}
+                      className="text-xs font-semibold text-[#4F6748] hover:text-[#3E5238] flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Plus size={14} strokeWidth={2.5} />
+                      <span>Add Service</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -4033,9 +4204,20 @@ export default function PendingInvoices() {
                       className="bg-warm-ivory/50 rounded-[14px] p-3.5 border border-border/80 space-y-2.5 relative group"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-muted-gray uppercase tracking-wider">
-                          Service #{idx + 1}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-muted-gray uppercase tracking-wider">
+                            Service #{idx + 1}
+                          </span>
+                          {idx === 0 && newServiceLines.length > 1 ? (
+                            <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-sage-soft text-sage border border-sage/20">
+                              Main Tech
+                            </span>
+                          ) : idx > 0 ? (
+                            <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-[#EDE9FE] text-[#6D28D9] border border-[#DDD6FE]">
+                              Collaborating Tech #{idx + 1}
+                            </span>
+                          ) : null}
+                        </div>
                         {newServiceLines.length > 1 && (
                           <button
                             type="button"
@@ -4158,6 +4340,41 @@ export default function PendingInvoices() {
                     </div>
                   ))}
                 </div>
+
+                {hasMultipleTechs && (
+                  <div className="p-3.5 bg-gradient-to-r from-[#F4F9F2] to-[#EBF4E9] border border-[#BDD7B7] rounded-[14px] space-y-2.5 animate-fade-in shadow-2xs">
+                    <div className="flex items-center justify-between text-xs font-bold text-[#2C422E]">
+                      <div className="flex items-center gap-1.5">
+                        <Users size={15} className="text-[#3D5A40]" />
+                        <span>Shared Work Breakdown ({newServiceTechSummary.filter((t) => t.name !== 'Unassigned Staff').length} Technicians)</span>
+                      </div>
+                      <span className="text-[10.5px] font-semibold text-[#4B634E] bg-white/70 px-2 py-0.5 rounded-full border border-[#BDD7B7]">
+                        Separate Commission & Productivity
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {newServiceTechSummary.map((t) => (
+                        <div
+                          key={t.name}
+                          className="flex items-center justify-between bg-white px-3 py-2 rounded-[10px] border border-[#BDD7B7]/70 shadow-2xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="font-bold text-charcoal block truncate">{t.name}</span>
+                            <span className="text-[10px] text-muted-gray truncate block">
+                              {t.services.join(', ') || '1 service'}
+                            </span>
+                          </div>
+                          <span className="font-extrabold text-[#2C422E] shrink-0 ml-2">
+                            {t.total.toLocaleString()} FCFA
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-[#5A6E5C] leading-relaxed">
+                      ✓ Each technician will be credited for their specific service when Reception collects payment.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* 3. Optional Retail Items */}
