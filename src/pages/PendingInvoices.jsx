@@ -2001,26 +2001,15 @@ export default function PendingInvoices() {
               </Button>
             )}
             {canCreateInvoice && (
-              <>
-                <Button
-                  variant="primary"
-                  onClick={() => openNewServiceModal(true)}
-                  title="Create Shared Work Walk-in Visit (Multiple Technicians)"
-                  className="gap-1.5 shadow-sm bg-gradient-to-r from-[#4F6748] to-[#3D5A40] text-white hover:opacity-95"
-                >
-                  <Users size={15} strokeWidth={2.2} />
-                  <span>+ Shared Work (Walk-in)</span>
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => openNewServiceModal(false)}
-                  title="Create Walk-In / Service Invoice"
-                  className="gap-1.5"
-                >
-                  <Sparkles size={15} strokeWidth={2.2} />
-                  <span>+ New Service</span>
-                </Button>
-              </>
+              <Button
+                variant="primary"
+                onClick={() => openNewServiceModal(false)}
+                title="Create Walk-In / Service Invoice"
+                className="gap-1.5"
+              >
+                <Sparkles size={15} strokeWidth={2.2} />
+                <span>+ New Service</span>
+              </Button>
             )}
           </div>
         }
@@ -2163,15 +2152,6 @@ export default function PendingInvoices() {
                 <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
                   <Button
                     variant="primary"
-                    onClick={() => openNewServiceModal(true)}
-                    className="gap-1.5 shadow-sm bg-gradient-to-r from-[#4F6748] to-[#3D5A40] text-white hover:opacity-95"
-                    title="Create Shared Work Walk-in Visit (Multiple Technicians)"
-                  >
-                    <Users size={15} strokeWidth={2.2} />
-                    <span>+ Shared Work (Walk-in)</span>
-                  </Button>
-                  <Button
-                    variant="secondary"
                     onClick={() => openNewServiceModal(false)}
                     className="gap-1.5"
                   >
