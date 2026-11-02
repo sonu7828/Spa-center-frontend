@@ -283,12 +283,12 @@ export default function SharedWork() {
   };
 
   // Complete Shared Work & Submit to Reception (only actually performed lines)
-  const handleCompleteAndSubmit = () => {
+  const handleCompleteAndSubmit = async () => {
     if (!activeApt || currentDraftLines.length === 0) return;
     if (isPaid) return;
 
     // 1. Submit single combined invoice to Reception (moves status to PENDING_PAYMENT)
-    submitSharedWorkInvoice({
+    await submitSharedWorkInvoice({
       appointmentId: activeApt.id,
       clientId: activeApt.clientId,
       clientName: activeApt.clientName,
@@ -299,7 +299,7 @@ export default function SharedWork() {
     });
 
     // 2. Mark appointment completed with only the actually performed services
-    updateAppointment(activeApt.id, {
+    await updateAppointment(activeApt.id, {
       status: 'completed',
       services: currentDraftLines.map((item) => ({
         appointmentServiceId: item.appointmentServiceId || item.id,

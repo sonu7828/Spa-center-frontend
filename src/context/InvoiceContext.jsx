@@ -1125,8 +1125,22 @@ export function InvoiceProvider({ children }) {
       const isBackendApt = Boolean(targetAptId && isUUID(targetAptId));
       if (isBackendApt) {
         try {
+          const formattedServices = (items || []).map((it) => ({
+            serviceId: isUUID(it.serviceId) ? it.serviceId : null,
+            name: it.service || it.name,
+            service: it.service || it.name,
+            price:
+              typeof it.price === 'number'
+                ? it.price
+                : parseInt(String(it.price).replace(/[^0-9]/g, ''), 10) || 0,
+            technicianId: isUUID(it.technicianId) ? it.technicianId : null,
+            technician: it.technician || null,
+            quantity: 1,
+          }));
+
           const res = await invoicesApi.create({
             appointmentId: String(targetAptId),
+            services: formattedServices,
             discount: 0,
             status: 'PENDING_PAYMENT',
           });
@@ -1142,9 +1156,7 @@ export function InvoiceProvider({ children }) {
           }
         } catch (err) {
           console.warn('Backend shared work invoice creation note:', err.message);
-          if (err.status === 409 || err.message?.includes('already exists')) {
-            await refreshInvoices();
-          }
+          await refreshInvoices();
         }
       }
 
@@ -1242,8 +1254,22 @@ export function InvoiceProvider({ children }) {
       // 1. Try Backend Invoice Creation if UUID
       if (isBackendApt) {
         try {
+          const formattedServices = (items || []).map((it) => ({
+            serviceId: isUUID(it.serviceId) ? it.serviceId : null,
+            name: it.service || it.name,
+            service: it.service || it.name,
+            price:
+              typeof it.price === 'number'
+                ? it.price
+                : parseInt(String(it.price).replace(/[^0-9]/g, ''), 10) || 0,
+            technicianId: isUUID(it.technicianId) ? it.technicianId : null,
+            technician: it.technician || null,
+            quantity: 1,
+          }));
+
           const res = await invoicesApi.create({
             appointmentId: targetAptId,
+            services: formattedServices,
             discount: 0,
             status: 'PENDING_PAYMENT',
           });
