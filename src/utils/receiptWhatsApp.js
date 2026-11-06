@@ -79,5 +79,5 @@ ${itemsText}
 *Points Fidélité / Loyalty:* +${pointsEarned} pts (Solde: ${currentBalance} pts)
 ----------------------------------------${feedbackSection}
 _Merci pour votre visite chez OMEGA SPA !_ 🌿
-_Douala, Cameroun · Tél: +237 6 87 67 32 62_`;
+_Douala, Cameroun · Tél: +237 6 53 14 62 69_`;
 }

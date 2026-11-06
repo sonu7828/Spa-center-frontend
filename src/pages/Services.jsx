@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react';
-import { Plus, Pencil, Check, X, Sparkles, Clock, DollarSign, ToggleLeft, ToggleRight, Layers, Trash2, FolderTree, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Check, X, Sparkles, Clock, DollarSign, ToggleLeft, ToggleRight, Layers, Trash2, FolderTree, AlertCircle, Search } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -46,6 +46,7 @@ export default function Services() {
   const [editingService, setEditingService] = useState(null);
   const [saved, setSaved] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [form, setForm] = useState({
     name: '',
@@ -126,6 +127,17 @@ export default function Services() {
   const activeServices = services.filter((s) => s.active !== false);
   const inactiveServices = services.filter((s) => s.active === false);
 
+  const filterService = (s) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const matchName = s.name?.toLowerCase().includes(q);
+    const matchCat = s.category?.toLowerCase().includes(q);
+    return matchName || matchCat;
+  };
+
+  const filteredActiveServices = activeServices.filter(filterService);
+  const filteredInactiveServices = inactiveServices.filter(filterService);
+
   // --- Category Handlers ---
   const handleAddCategory = async (e) => {
     e.preventDefault();
@@ -192,10 +204,41 @@ export default function Services() {
 
       {/* Active Services Table */}
       <div className="bg-white border border-border rounded-[16px] shadow-card overflow-hidden w-full">
-        <div className="px-5 pt-5 pb-3">
-          <h3 className="text-sm font-semibold text-charcoal uppercase tracking-wider">
-            Active Services ({activeServices.length})
-          </h3>
+        <div className="px-5 pt-5 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-charcoal uppercase tracking-wider">
+              Active Services ({filteredActiveServices.length})
+            </h3>
+            {searchQuery && (
+              <span className="text-xs text-muted-gray font-normal">
+                (of {activeServices.length})
+              </span>
+            )}
+          </div>
+
+          {/* Search bar */}
+          <div className="w-full sm:w-72">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-gray" />
+              <input
+                type="text"
+                placeholder="Search services..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-9 pl-8.5 pr-8 bg-soft-cream/40 border border-border rounded-[10px] text-xs text-charcoal placeholder:text-muted-gray focus:border-sage outline-none transition-all"
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-gray hover:text-charcoal cursor-pointer p-0.5"
+                  title="Clear search"
+                >
+                  <X size={13} />
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         {/* Desktop Table View */}
@@ -226,7 +269,14 @@ export default function Services() {
               </tr>
             </thead>
             <tbody>
-              {activeServices.map((svc) => (
+              {filteredActiveServices.length === 0 ? (
+                <tr>
+                  <td colSpan={isManager ? 6 : 5} className="py-10 text-center text-sm text-muted-gray">
+                    {searchQuery ? `No services found matching "${searchQuery}"` : 'No active services found.'}
+                  </td>
+                </tr>
+              ) : (
+                filteredActiveServices.map((svc) => (
                 <tr
                   key={svc.id}
                   className="border-b border-border/40 last:border-b-0 hover:bg-soft-cream/30 transition-colors"
@@ -299,14 +349,19 @@ export default function Services() {
                     </td>
                   )}
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>
 
         {/* Mobile / Tablet Portrait Cards View */}
         <div className="block md:hidden divide-y divide-border/60">
-          {activeServices.map((svc) => (
+          {filteredActiveServices.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-gray">
+              {searchQuery ? `No services found matching "${searchQuery}"` : 'No active services found.'}
+            </div>
+          ) : (
+            filteredActiveServices.map((svc) => (
             <div key={svc.id} className="p-4 space-y-3 hover:bg-soft-cream/20 transition-colors">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -373,16 +428,16 @@ export default function Services() {
                 </div>
               )}
             </div>
-          ))}
+          )))}
         </div>
       </div>
 
       {/* Inactive Services Table */}
-      {inactiveServices.length > 0 && (
+      {inactiveServices.length > 0 && filteredInactiveServices.length > 0 && (
         <div className="bg-white border border-border rounded-[16px] shadow-card overflow-hidden w-full opacity-75">
           <div className="px-5 pt-5 pb-3">
             <h3 className="text-sm font-semibold text-muted-gray uppercase tracking-wider">
-              Inactive Services ({inactiveServices.length})
+              Inactive Services ({filteredInactiveServices.length})
             </h3>
           </div>
 
@@ -390,7 +445,7 @@ export default function Services() {
           <div className="hidden md:block overflow-x-auto w-full">
             <table className="w-full min-w-[620px]">
               <tbody>
-                {inactiveServices.map((svc) => (
+                {filteredInactiveServices.map((svc) => (
                   <tr
                     key={svc.id}
                     className="border-b border-border/40 last:border-b-0 hover:bg-soft-cream/30 transition-colors"
@@ -458,7 +513,7 @@ export default function Services() {
 
           {/* Mobile / Tablet Portrait Inactive Cards */}
           <div className="block md:hidden divide-y divide-border/60">
-            {inactiveServices.map((svc) => (
+            {filteredInactiveServices.map((svc) => (
               <div key={svc.id} className="p-4 space-y-2.5 hover:bg-soft-cream/20 transition-colors">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">

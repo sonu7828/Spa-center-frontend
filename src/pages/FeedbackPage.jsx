@@ -191,7 +191,7 @@ export default function FeedbackPage() {
                   className="w-full h-[46px] rounded-[12px] bg-[#4F6748] hover:bg-[#3D5237] text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors"
                 >
                   <MessageCircle size={16} />
-                  Contact Reception on WhatsApp (+237 6 87 67 32 62)
+                  Contact Reception on WhatsApp (+237 6 53 14 62 69)
                 </a>
               </div>
             </div>
@@ -218,13 +218,13 @@ export default function FeedbackPage() {
 
               <div className="pt-2">
                 <a
-                  href="https://wa.me/237687673262?text=Hello%20OMEGA%20SPA%2C%20my%20feedback%20link%20appears%20invalid."
+                  href="https://wa.me/237653146269?text=Hello%20OMEGA%20SPA%2C%20my%20feedback%20link%20appears%20invalid."
                   target="_blank"
                   rel="noreferrer"
                   className="w-full h-[44px] rounded-[12px] bg-[#4F6748] hover:bg-[#3D5237] text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
                 >
                   <MessageCircle size={15} />
-                  Contact OMEGA SPA (+237 6 87 67 32 62)
+                  Contact OMEGA SPA (+237 6 53 14 62 69)
                 </a>
               </div>
             </div>
@@ -269,7 +269,7 @@ export default function FeedbackPage() {
                     🌿 We look forward to welcoming you back soon!
                   </p>
                   <p className="text-[11px] text-[#A1A1AA] mt-1">
-                    OMEGA SPA · Bonapriso / Akwa, Douala
+                    OMEGA SPA · Bonamousadi, Douala
                   </p>
                 </div>
               </div>
@@ -422,7 +422,7 @@ export default function FeedbackPage() {
         </div>
 
         <p className="text-center text-[11px] text-[#A1A1AA] mt-4">
-          OMEGA SPA · Douala, Cameroon · Phone: +237 6 87 67 32 62
+          OMEGA SPA · Bonamousadi, Douala · Phone: +237 6 53 14 62 69
         </p>
       </div>
     </div>
