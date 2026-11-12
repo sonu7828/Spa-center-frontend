@@ -195,8 +195,8 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
       setError('Please select a preferred time.');
       return;
     }
-    if (preferredTime < '10:00' || preferredTime > '21:00') {
-      setError('Preferred time must be between 10:00 AM and 9:00 PM (10:00 – 21:00).');
+    if (preferredTime < '09:00' || preferredTime > '21:00') {
+      setError('Preferred time must be between 09:00 AM and 9:00 PM (09:00 – 21:00).');
       return;
     }
 
@@ -586,7 +586,7 @@ export default function ClientAcquisitionModal({ isOpen, onClose, onSuccess }) {
             <div>
               <label className="text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1 flex items-center gap-1">
                 <Clock size={11} className="text-[#6D28D9]" />
-                Preferred Time (10:00 AM – 09:00 PM) *
+                Preferred Time (09:00 AM – 09:00 PM) *
               </label>
               <select
                 value={preferredTime}

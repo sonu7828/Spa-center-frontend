@@ -172,7 +172,7 @@ export default function CreateAppointment() {
   const newStartMins = form.time ? timeToMinutes(form.time) : 0;
   const newEndMins = form.time ? newStartMins + (totalDurationMinutes || 30) : 0;
   const newEndTime = form.time ? minutesToTime(newEndMins) : '';
-  const isTimeOutOfRange = form.time ? newStartMins < 10 * 60 || newStartMins > 21 * 60 : false;
+  const isTimeOutOfRange = form.time ? newStartMins < 9 * 60 || newStartMins > 21 * 60 : false;
 
   // Check if currently selected technician has a conflict
   const conflictingAppointment =
@@ -252,8 +252,8 @@ export default function CreateAppointment() {
       return;
     }
 
-    if (newStartMins < 10 * 60 || newStartMins > 21 * 60) {
-      setServerError('Appointments can only be booked between 10:00 AM and 9:00 PM (10:00 – 21:00).');
+    if (newStartMins < 9 * 60 || newStartMins > 21 * 60) {
+      setServerError('Appointments can only be booked between 09:00 AM and 9:00 PM (09:00 – 21:00).');
       return;
     }
 
@@ -580,7 +580,7 @@ export default function CreateAppointment() {
                 Outside Operating Hours
               </p>
               <p className="text-xs sm:text-sm text-error mt-0.5 leading-relaxed">
-                Appointments can only be booked between <strong>10:00 AM and 9:00 PM (10:00 – 21:00)</strong>.
+                Appointments can only be booked between <strong>09:00 AM and 9:00 PM (09:00 – 21:00)</strong>.
               </p>
             </div>
           </div>
@@ -764,7 +764,7 @@ export default function CreateAppointment() {
             <label className="block text-[13px] font-medium text-muted-gray mb-1.5">
               Time
               <span className="text-[11px] font-normal text-muted-gray ml-1.5">
-                (10:00 AM – 09:00 PM)
+                (09:00 AM – 09:00 PM)
               </span>
               {form.time && totalDurationMinutes > 0 && (
                 <span className="text-[11px] font-normal text-sage ml-1.5">
@@ -777,7 +777,7 @@ export default function CreateAppointment() {
               onChange={update('time')}
               className="w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150 cursor-pointer appearance-none"
             >
-              <option value="">Select Time (10:00 AM – 09:00 PM)</option>
+              <option value="">Select Time (09:00 AM – 09:00 PM)</option>
               {BOOKING_TIME_SLOTS.map((slot) => (
                 <option key={slot.value} value={slot.value}>
                   {slot.label}

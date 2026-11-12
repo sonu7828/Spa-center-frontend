@@ -167,9 +167,14 @@ export default function Dashboard() {
       String(a.introducedById) === String(user?.id)
   );
 
-  // Active technicians for manager summary
+  // Active technicians & marketers for manager summary (excluding reception & managers)
   const activeTechnicians = allUsers.filter(
-    (u) => u.role === 'technician' && u.active !== false
+    (u) =>
+      (u.role === 'technician' || u.role === 'marketer' || isMarketerUser(u)) &&
+      u.role !== 'reception' &&
+      u.role !== 'manager' &&
+      u.role !== 'cleaner' &&
+      u.active !== false
   );
 
   // Current user's referral commission summary fallback
@@ -201,23 +206,13 @@ export default function Dashboard() {
 
   const allIntroducedClients = clients.filter((c) => Boolean(c.introducedBy));
 
-  // Top Staff Referrer computation (Employee Referral)
-  const referrerCounts = {};
-  clients.forEach((c) => {
-    if (c.introducedBy) {
-      const name = c.introducedBy.trim();
-      if (name) {
-        referrerCounts[name] = (referrerCounts[name] || 0) + 1;
-      }
-    }
-  });
-
+  // Top Staff Referrer computation (Strictly Technicians & Marketers - Receptionists & Managers excluded)
   let topReferrer = null;
   let maxCount = 0;
-  Object.entries(referrerCounts).forEach(([name, count]) => {
-    if (count > maxCount) {
-      maxCount = count;
-      topReferrer = { name, count };
+  technicianAcquisitionSummary.forEach((tech) => {
+    if (tech.clientsIntroduced > maxCount) {
+      maxCount = tech.clientsIntroduced;
+      topReferrer = { name: tech.name, count: tech.clientsIntroduced };
     }
   });
 
@@ -1134,6 +1129,9 @@ export default function Dashboard() {
         subtitle={`Live Business & Operational Analytics · ${today}`}
       />
 
+      {/* ── Date Filter Bar: Today / Weekly / Monthly / Custom Range ── */}
+      {renderFilterBar()}
+
       {acquisitionSuccess && (
         <div className="bg-success-soft border border-success/30 rounded-[12px] p-3.5 flex items-center gap-2.5 text-xs font-semibold text-[#4F6748] shadow-xs">
           <CheckCircle size={16} className="text-success shrink-0" />
@@ -1168,6 +1166,91 @@ export default function Dashboard() {
           value={orangeAmount.toLocaleString('en-US')}
           icon={Smartphone}
         />
+      </section>
+
+      {/* ── Revenue Collections (Operational View) ── */}
+      <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-border/70">
+          <div>
+            <h2 className="text-base font-bold text-charcoal flex items-center gap-2">
+              <Banknote size={18} className="text-sage" />
+              Revenue Collections (Operational View)
+            </h2>
+            <p className="text-xs text-muted-gray">Daily collections breakdown by payment method</p>
+          </div>
+          <div className="px-3 py-1 bg-soft-cream rounded-[8px] border border-border text-xs font-semibold text-charcoal">
+            Total Collected: <span className="text-[#4F6748] font-bold">{totalRevenueVal.toLocaleString('en-US')} FCFA</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-3 bg-warm-ivory/60 rounded-[12px] border border-border/60">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">Cash</span>
+            <span className="text-lg font-bold text-charcoal mt-1 block">
+              {cashAmount.toLocaleString('en-US')} <span className="text-xs font-normal text-muted-gray">FCFA</span>
+            </span>
+          </div>
+          <div className="p-3 bg-warm-ivory/60 rounded-[12px] border border-border/60">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">MTN MoMo</span>
+            <span className="text-lg font-bold text-charcoal mt-1 block">
+              {mtnAmount.toLocaleString('en-US')} <span className="text-xs font-normal text-muted-gray">FCFA</span>
+            </span>
+          </div>
+          <div className="p-3 bg-warm-ivory/60 rounded-[12px] border border-border/60">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">Orange Money</span>
+            <span className="text-lg font-bold text-charcoal mt-1 block">
+              {orangeAmount.toLocaleString('en-US')} <span className="text-xs font-normal text-muted-gray">FCFA</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Technician Staff Activity ── */}
+      <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card">
+        <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/70">
+          <div>
+            <h2 className="text-base font-bold text-charcoal flex items-center gap-2">
+              <Users size={18} className="text-sage" />
+              Technician Staff Activity
+            </h2>
+            <p className="text-xs text-muted-gray">Operational productivity and completed client sessions</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-[10px] border border-border/60">
+          <table className="w-full text-xs">
+            <thead className="bg-soft-cream border-b border-border">
+              <tr>
+                <th className="text-left py-2.5 px-3 font-bold text-muted-gray uppercase tracking-wider text-[10px]">Technician</th>
+                <th className="text-center py-2.5 px-3 font-bold text-muted-gray uppercase tracking-wider text-[10px]">Services Completed</th>
+                <th className="text-right py-2.5 px-3 font-bold text-muted-gray uppercase tracking-wider text-[10px]">Revenue Generated</th>
+                <th className="text-right py-2.5 px-3 font-bold text-muted-gray uppercase tracking-wider text-[10px]">Avg Ticket</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/40 bg-white">
+              {techniciansPerformance.length > 0 ? (
+                techniciansPerformance.map((tech) => (
+                  <tr key={tech.technicianId} className="hover:bg-warm-ivory/50 transition-colors">
+                    <td className="py-2.5 px-3 font-bold text-charcoal">{tech.technicianName}</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-charcoal">{tech.servicesCompleted}</td>
+                    <td className="py-2.5 px-3 text-right font-medium text-charcoal">
+                      {tech.revenueGenerated.toLocaleString('en-US')} FCFA
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-muted-gray font-mono">
+                      {tech.averageTicket.toLocaleString('en-US')} FCFA
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="py-4 text-center text-muted-gray">
+                    No technician operational activity recorded for this period.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {/* ── Section 2: Employee Client Acquisition & Referral Summary ── */}
@@ -1427,76 +1510,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* ── Section 4 & 5: Top Referrer & Attention ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Top Referrer This Month */}
-        <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card flex flex-col justify-between">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4">
-              <h2 className="text-base sm:text-lg font-semibold text-charcoal">
-                Top Referrer
-              </h2>
-              <Button
-                variant="secondary"
-                onClick={() => navigate('/referrals')}
-                className="w-full sm:w-auto h-10 sm:h-11 text-xs sm:text-sm"
-              >
-                View Referrals
-              </Button>
-            </div>
 
-            <div className="bg-soft-cream/60 border border-border/70 rounded-[14px] p-4 flex items-center gap-3.5 mt-1">
-              <div className="w-12 h-12 rounded-[12px] bg-sage-soft border border-sage/30 flex items-center justify-center text-charcoal shrink-0">
-                <Award size={24} className="text-sage" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-gray uppercase tracking-wider">
-                  Top Staff Referrer
-                </p>
-                <h3 className="text-lg font-bold text-charcoal mt-0.5">
-                  {topReferrer ? topReferrer.name : '-'}
-                </h3>
-                {topReferrer ? (
-                  <p className="text-xs text-sage font-semibold mt-0.5">
-                    {topReferrer.count} {topReferrer.count === 1 ? 'client referred' : 'clients referred'}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-gray font-medium mt-0.5">-</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-3.5 mt-3.5 border-t border-border/60 flex items-center justify-between text-xs text-muted-gray">
-            <span>Referral Program Reward:</span>
-            <span className="font-semibold text-charcoal">{commissionRate}% Staff Commission</span>
-          </div>
-        </section>
-
-        {/* Attention Items */}
-        <section className="bg-white border border-border rounded-[16px] p-5 shadow-card flex flex-col justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-charcoal mb-4">Attention</h2>
-
-            <div className="space-y-2">
-              {attentionItems.length > 0 ? (
-                attentionItems.map((item) => (
-                  <AttentionItem
-                    key={item.id}
-                    label={item.label}
-                    count={item.count}
-                    type={item.type}
-                  />
-                ))
-              ) : (
-                <p className="text-sm text-muted-gray text-center py-4">
-                  No attention items today. All clear! ✨
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
-      </div>
 
       <ClientAcquisitionModal
         isOpen={showAcquisitionModal}

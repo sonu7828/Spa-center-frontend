@@ -1117,8 +1117,8 @@ export default function PendingInvoices() {
     const tech1Id = isTechnician
       ? String(user?.id)
       : activeTechnicians[0]?.id
-      ? String(activeTechnicians[0].id)
-      : '';
+        ? String(activeTechnicians[0].id)
+        : '';
     const tech1Name = isTechnician
       ? user?.name || ''
       : activeTechnicians[0]?.name || '';
@@ -1424,22 +1424,22 @@ export default function PendingInvoices() {
         .filter((line) => line.serviceName || line.serviceId || Number(line.price) > 0)
         .map((line) => {
           const lineTechId = line.technicianId || (isTechnician ? String(user?.id) : '');
-        const lineTechName = line.technicianName || (isTechnician ? (user?.name || '') : '');
-        return {
-          serviceId: line.serviceId,
-          service: line.serviceName,
-          name: line.serviceName,
-          technician: lineTechName,
-          technicianId: lineTechId,
-          price:
-            typeof line.price === 'number'
-              ? line.price
-              : parseInt(String(line.price).replace(/[^0-9]/g, ''), 10) || 0,
-          product: line.product || null,
-          category: 'SERVICES',
-          type: 'service',
-        };
-      });
+          const lineTechName = line.technicianName || (isTechnician ? (user?.name || '') : '');
+          return {
+            serviceId: line.serviceId,
+            service: line.serviceName,
+            name: line.serviceName,
+            technician: lineTechName,
+            technicianId: lineTechId,
+            price:
+              typeof line.price === 'number'
+                ? line.price
+                : parseInt(String(line.price).replace(/[^0-9]/g, ''), 10) || 0,
+            product: line.product || null,
+            category: 'SERVICES',
+            type: 'service',
+          };
+        });
 
       // Create invoice via InvoiceContext
       const invoice = await createWalkInServiceInvoice({
@@ -1815,7 +1815,7 @@ export default function PendingInvoices() {
           if (comm) generatedCommissions.push(comm);
         });
       }
-
+      Chan
       // 7. Mark invoice paid (NOT removed — moved to Paid Today & History)
       const paidInv = await markInvoicePaid(invoice.id, payment, {
         discount: discountAmount,
@@ -1827,7 +1827,7 @@ export default function PendingInvoices() {
       if (typeof refreshInvoices === 'function') {
         try {
           await refreshInvoices();
-        } catch (rErr) {}
+        } catch (rErr) { }
       }
 
       // Switch to Paid Today tab and expand the paid invoice
@@ -1842,6 +1842,14 @@ export default function PendingInvoices() {
         `Payment collected for ${invoice.clientName} (${finalTotal.toLocaleString('en-US')} FCFA via ${payment.toUpperCase()}).${commNotice} Moved to Paid Today.`
       );
       setTimeout(() => setPaymentSuccessNotice(null), 6000);
+
+      // Automatically dispatch / prepare WhatsApp receipt with feedback link for paid invoice
+      const targetInvForReceipt = paidInv || invoice;
+      const targetClient = getClient(invoice.clientId);
+      const phoneOnFile = (invoice.clientPhone || invoice.phone || targetClient?.whatsapp || targetClient?.phone || '').trim();
+      if (phoneOnFile && phoneOnFile !== '+237' && phoneOnFile !== '+237 ') {
+        handleSendWhatsAppReceipt(targetInvForReceipt, true).catch(() => {});
+      }
     } catch (err) {
       console.error('Payment collection error:', err);
       setPaymentSuccessNotice(`Payment error: ${err?.message || 'Could not complete payment'}`);
@@ -1913,16 +1921,14 @@ export default function PendingInvoices() {
       try {
         let feedbackUrl = '';
         try {
-          if (invoice.clientId && isUUID(invoice.clientId)) {
-            const fbRes = await createFeedbackRequest({
-              clientId: invoice.clientId,
-              clientName: invoice.clientName,
-              appointmentId: isUUID(invoice.appointmentId) ? invoice.appointmentId : undefined,
-              service: invoice.items.map((it) => it.service || it.name).join(', '),
-              technician: invoice.items.map((it) => it.technician || 'Staff').join(', '),
-            });
-            feedbackUrl = fbRes?.url || '';
-          }
+          const fbRes = await createFeedbackRequest({
+            clientId: invoice.clientId,
+            clientName: invoice.clientName,
+            appointmentId: isUUID(invoice.appointmentId) ? invoice.appointmentId : undefined,
+            service: (invoice.items || []).map((it) => it.service || it.name).join(', '),
+            technician: (invoice.items || []).map((it) => it.technician || 'Staff').join(', '),
+          });
+          feedbackUrl = fbRes?.url || '';
         } catch (_) { }
 
         const message = buildReceiptWhatsAppMessage(
@@ -1977,8 +1983,8 @@ export default function PendingInvoices() {
           isMarketer
             ? "Create service invoices for your clients and track pending payment."
             : isTechnician
-            ? "View your service invoices and payment status."
-            : "Reception & Manager Invoices Management."
+              ? "View your service invoices and payment status."
+              : "Reception & Manager Invoices Management."
         }
         action={
           <div className="flex items-center gap-2">
@@ -2020,8 +2026,8 @@ export default function PendingInvoices() {
         <div
           onClick={() => setActiveTab('pending')}
           className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${activeTab === 'pending'
-              ? 'border-warning ring-2 ring-warning/20'
-              : 'border-border hover:border-warning/50'
+            ? 'border-warning ring-2 ring-warning/20'
+            : 'border-border hover:border-warning/50'
             }`}
         >
           <p className="text-[10px] sm:text-xs text-muted-gray uppercase tracking-wider font-semibold truncate">
@@ -2035,8 +2041,8 @@ export default function PendingInvoices() {
         <div
           onClick={() => setActiveTab('paid-today')}
           className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${activeTab === 'paid-today'
-              ? 'border-success ring-2 ring-success/20'
-              : 'border-border hover:border-success/50'
+            ? 'border-success ring-2 ring-success/20'
+            : 'border-border hover:border-success/50'
             }`}
         >
           <p className="text-[10px] sm:text-xs text-muted-gray uppercase tracking-wider font-semibold truncate">
@@ -2050,8 +2056,8 @@ export default function PendingInvoices() {
         <div
           onClick={() => setActiveTab('history')}
           className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${activeTab === 'history'
-              ? 'border-sage ring-2 ring-sage/20'
-              : 'border-border hover:border-sage/50'
+            ? 'border-sage ring-2 ring-sage/20'
+            : 'border-border hover:border-sage/50'
             }`}
         >
           <p className="text-[10px] sm:text-xs text-muted-gray uppercase tracking-wider font-semibold truncate">
@@ -2084,15 +2090,15 @@ export default function PendingInvoices() {
         <button
           onClick={() => setActiveTab('pending')}
           className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'pending'
-              ? 'border-sage text-charcoal font-bold'
-              : 'border-transparent text-muted-gray hover:text-charcoal'
+            ? 'border-sage text-charcoal font-bold'
+            : 'border-transparent text-muted-gray hover:text-charcoal'
             }`}
         >
           <span>Pending</span>
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-medium ${activeTab === 'pending'
-                ? 'bg-warning-soft text-warning'
-                : 'bg-soft-cream text-muted-gray'
+              ? 'bg-warning-soft text-warning'
+              : 'bg-soft-cream text-muted-gray'
               }`}
           >
             {pendingInvoices.length}
@@ -2102,15 +2108,15 @@ export default function PendingInvoices() {
         <button
           onClick={() => setActiveTab('paid-today')}
           className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'paid-today'
-              ? 'border-sage text-charcoal font-bold'
-              : 'border-transparent text-muted-gray hover:text-charcoal'
+            ? 'border-sage text-charcoal font-bold'
+            : 'border-transparent text-muted-gray hover:text-charcoal'
             }`}
         >
           <span>Paid Today</span>
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-medium ${activeTab === 'paid-today'
-                ? 'bg-success-soft text-success'
-                : 'bg-soft-cream text-muted-gray'
+              ? 'bg-success-soft text-success'
+              : 'bg-soft-cream text-muted-gray'
               }`}
           >
             {paidTodayInvoices.length}
@@ -2120,15 +2126,15 @@ export default function PendingInvoices() {
         <button
           onClick={() => setActiveTab('history')}
           className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'history'
-              ? 'border-sage text-charcoal font-bold'
-              : 'border-transparent text-muted-gray hover:text-charcoal'
+            ? 'border-sage text-charcoal font-bold'
+            : 'border-transparent text-muted-gray hover:text-charcoal'
             }`}
         >
           <span>History</span>
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-medium ${activeTab === 'history'
-                ? 'bg-sage-soft text-sage'
-                : 'bg-soft-cream text-muted-gray'
+              ? 'bg-sage-soft text-sage'
+              : 'bg-soft-cream text-muted-gray'
               }`}
           >
             {historyInvoices.length}
@@ -2434,11 +2440,10 @@ export default function PendingInvoices() {
                                     key={rate}
                                     type="button"
                                     onClick={() => setProspectDiscounts((prev) => ({ ...prev, [invoice.id]: rate }))}
-                                    className={`px-2.5 py-1 rounded-[8px] text-xs font-semibold border transition-all cursor-pointer ${
-                                      prospectPercent === rate
-                                        ? 'bg-charcoal text-white border-charcoal font-bold shadow-2xs'
-                                        : 'bg-white text-charcoal border-border hover:bg-soft-cream'
-                                    }`}
+                                    className={`px-2.5 py-1 rounded-[8px] text-xs font-semibold border transition-all cursor-pointer ${prospectPercent === rate
+                                      ? 'bg-charcoal text-white border-charcoal font-bold shadow-2xs'
+                                      : 'bg-white text-charcoal border-border hover:bg-soft-cream'
+                                      }`}
                                   >
                                     {rate === 0 ? 'No Promo (0%)' : `${rate}% Off`}
                                   </button>
@@ -2460,14 +2465,14 @@ export default function PendingInvoices() {
                                       type="button"
                                       onClick={() => setPaymentMethod(invoice.id, pm.key)}
                                       className={`h-[44px] px-3.5 rounded-[11px] text-xs font-bold border transition-all duration-150 cursor-pointer flex items-center justify-start gap-2.5 ${isSelected
-                                          ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
-                                          : 'bg-white border-border text-charcoal/80 hover:border-sage/40 hover:bg-soft-cream/30'
+                                        ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                                        : 'bg-white border-border text-charcoal/80 hover:border-sage/40 hover:bg-soft-cream/30'
                                         }`}
                                     >
                                       <span
                                         className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${isSelected
-                                            ? 'border-sage bg-sage'
-                                            : 'border-muted-gray/50 bg-white'
+                                          ? 'border-sage bg-sage'
+                                          : 'border-muted-gray/50 bg-white'
                                           }`}
                                       >
                                         {isSelected && (
@@ -3080,6 +3085,7 @@ export default function PendingInvoices() {
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-end gap-2">
+
                                   <Button
                                     variant="secondary"
                                     className="!py-1 !px-2.5 !text-xs !h-[30px]"
@@ -3162,6 +3168,7 @@ export default function PendingInvoices() {
                             className="flex items-center gap-2 pt-2 border-t border-border/50"
                             onClick={(e) => e.stopPropagation()}
                           >
+
                             <Button
                               variant="secondary"
                               className="flex-1 !h-[38px] !text-xs font-semibold"
@@ -3195,8 +3202,8 @@ export default function PendingInvoices() {
                           disabled={historyPage === 1}
                           onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
                           className={`px-3 py-1.5 rounded-[8px] border border-border text-xs font-semibold flex items-center gap-1 transition-all ${historyPage === 1
-                              ? 'bg-soft-cream/50 text-muted-gray/50 cursor-not-allowed'
-                              : 'bg-white hover:bg-sage-soft text-charcoal cursor-pointer shadow-2xs'
+                            ? 'bg-soft-cream/50 text-muted-gray/50 cursor-not-allowed'
+                            : 'bg-white hover:bg-sage-soft text-charcoal cursor-pointer shadow-2xs'
                             }`}
                         >
                           <ChevronLeft size={13} />
@@ -3222,8 +3229,8 @@ export default function PendingInvoices() {
                                   <button
                                     onClick={() => setHistoryPage(p)}
                                     className={`w-7 h-7 rounded-[7px] text-xs font-bold transition-all cursor-pointer ${historyPage === p
-                                        ? 'bg-sage text-white shadow-xs'
-                                        : 'bg-white hover:bg-sage-soft text-charcoal border border-border'
+                                      ? 'bg-sage text-white shadow-xs'
+                                      : 'bg-white hover:bg-sage-soft text-charcoal border border-border'
                                       }`}
                                   >
                                     {p}
@@ -3237,8 +3244,8 @@ export default function PendingInvoices() {
                           disabled={historyPage >= totalHistoryPages}
                           onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
                           className={`px-3 py-1.5 rounded-[8px] border border-border text-xs font-semibold flex items-center gap-1 transition-all ${historyPage >= totalHistoryPages
-                              ? 'bg-soft-cream/50 text-muted-gray/50 cursor-not-allowed'
-                              : 'bg-white hover:bg-sage-soft text-charcoal cursor-pointer shadow-2xs'
+                            ? 'bg-soft-cream/50 text-muted-gray/50 cursor-not-allowed'
+                            : 'bg-white hover:bg-sage-soft text-charcoal cursor-pointer shadow-2xs'
                             }`}
                         >
                           <span>Next</span>
@@ -3402,6 +3409,7 @@ export default function PendingInvoices() {
 
             {/* Actions */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 px-4 sm:px-6 py-3.5 sm:py-4 border-t border-border bg-white">
+
               <Button
                 variant="secondary"
                 className="w-full sm:w-auto"
@@ -3467,8 +3475,8 @@ export default function PendingInvoices() {
                 type="button"
                 onClick={() => setRetailPickerTab('drinks')}
                 className={`pb-2.5 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap shrink-0 ${retailPickerTab === 'drinks'
-                    ? 'border-charcoal text-charcoal'
-                    : 'border-transparent text-muted-gray hover:text-charcoal'
+                  ? 'border-charcoal text-charcoal'
+                  : 'border-transparent text-muted-gray hover:text-charcoal'
                   }`}
               >
                 <Coffee size={14} />
@@ -3478,8 +3486,8 @@ export default function PendingInvoices() {
                 type="button"
                 onClick={() => setRetailPickerTab('cosmetics')}
                 className={`pb-2.5 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap shrink-0 ${retailPickerTab === 'cosmetics'
-                    ? 'border-charcoal text-charcoal'
-                    : 'border-transparent text-muted-gray hover:text-charcoal'
+                  ? 'border-charcoal text-charcoal'
+                  : 'border-transparent text-muted-gray hover:text-charcoal'
                   }`}
               >
                 <Sparkles size={14} />
@@ -3581,8 +3589,8 @@ export default function PendingInvoices() {
                             setTimeout(() => setRetailAddedNotice(''), 3000);
                           }}
                           className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${isOutOfStock || qty > product.stock
-                              ? 'bg-border/50 text-muted-gray cursor-not-allowed'
-                              : 'bg-sage-soft hover:bg-sage hover:text-white text-charcoal cursor-pointer border border-sage/30'
+                            ? 'bg-border/50 text-muted-gray cursor-not-allowed'
+                            : 'bg-sage-soft hover:bg-sage hover:text-white text-charcoal cursor-pointer border border-sage/30'
                             }`}
                         >
                           <Plus size={13} strokeWidth={2.5} />
@@ -3697,8 +3705,8 @@ export default function PendingInvoices() {
                     type="button"
                     onClick={() => setNewSaleTab('drinks')}
                     className={`pb-2 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${newSaleTab === 'drinks'
-                        ? 'border-charcoal text-charcoal'
-                        : 'border-transparent text-muted-gray hover:text-charcoal'
+                      ? 'border-charcoal text-charcoal'
+                      : 'border-transparent text-muted-gray hover:text-charcoal'
                       }`}
                   >
                     <Coffee size={14} />
@@ -3708,8 +3716,8 @@ export default function PendingInvoices() {
                     type="button"
                     onClick={() => setNewSaleTab('cosmetics')}
                     className={`pb-2 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${newSaleTab === 'cosmetics'
-                        ? 'border-charcoal text-charcoal'
-                        : 'border-transparent text-muted-gray hover:text-charcoal'
+                      ? 'border-charcoal text-charcoal'
+                      : 'border-transparent text-muted-gray hover:text-charcoal'
                       }`}
                   >
                     <Sparkles size={14} />
@@ -3812,8 +3820,8 @@ export default function PendingInvoices() {
                               disabled={isOutOfStock || qty > remainingStock}
                               onClick={() => addToNewSaleCart(product, qty)}
                               className={`px-3 py-1.5 rounded-[8px] text-xs font-bold transition-all flex items-center gap-1 ${isOutOfStock || qty > remainingStock
-                                  ? 'bg-border/50 text-muted-gray cursor-not-allowed'
-                                  : 'bg-sage-soft hover:bg-sage hover:text-white text-charcoal cursor-pointer border border-sage/30'
+                                ? 'bg-border/50 text-muted-gray cursor-not-allowed'
+                                : 'bg-sage-soft hover:bg-sage hover:text-white text-charcoal cursor-pointer border border-sage/30'
                                 }`}
                             >
                               <Plus size={13} strokeWidth={2.5} />
@@ -3923,14 +3931,14 @@ export default function PendingInvoices() {
                         type="button"
                         onClick={() => setNewSalePaymentMethod(pm.key)}
                         className={`h-[42px] px-3 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 ${isSelected
-                            ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
-                            : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
+                          ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                          : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
                           }`}
                       >
                         <span
                           className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected
-                              ? 'border-sage bg-sage'
-                              : 'border-muted-gray/50 bg-white'
+                            ? 'border-sage bg-sage'
+                            : 'border-muted-gray/50 bg-white'
                             }`}
                         >
                           {isSelected && (
@@ -4047,8 +4055,8 @@ export default function PendingInvoices() {
                       type="button"
                       onClick={() => { setNewServiceClientType('walkin'); setNewServiceError(''); }}
                       className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceClientType === 'walkin'
-                          ? 'bg-white text-charcoal shadow-xs'
-                          : 'text-muted-gray hover:text-charcoal'
+                        ? 'bg-white text-charcoal shadow-xs'
+                        : 'text-muted-gray hover:text-charcoal'
                         }`}
                     >
                       Walk-in
@@ -4057,8 +4065,8 @@ export default function PendingInvoices() {
                       type="button"
                       onClick={() => { setNewServiceClientType('registered'); setNewServiceError(''); }}
                       className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceClientType === 'registered'
-                          ? 'bg-white text-charcoal shadow-xs'
-                          : 'text-muted-gray hover:text-charcoal'
+                        ? 'bg-white text-charcoal shadow-xs'
+                        : 'text-muted-gray hover:text-charcoal'
                         }`}
                     >
                       Registered Client
@@ -4503,8 +4511,8 @@ export default function PendingInvoices() {
                           type="button"
                           onClick={() => setNewServiceActionChoice('pending')}
                           className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pending'
-                              ? 'bg-[#4F6748] text-white shadow-xs'
-                              : 'text-muted-gray hover:text-charcoal'
+                            ? 'bg-[#4F6748] text-white shadow-xs'
+                            : 'text-muted-gray hover:text-charcoal'
                             }`}
                         >
                           Pending Invoice
@@ -4513,8 +4521,8 @@ export default function PendingInvoices() {
                           type="button"
                           onClick={() => setNewServiceActionChoice('pay_now')}
                           className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pay_now'
-                              ? 'bg-[#4F6748] text-white shadow-xs'
-                              : 'text-muted-gray hover:text-charcoal'
+                            ? 'bg-[#4F6748] text-white shadow-xs'
+                            : 'text-muted-gray hover:text-charcoal'
                             }`}
                         >
                           Collect Now
@@ -4536,8 +4544,8 @@ export default function PendingInvoices() {
                                 type="button"
                                 onClick={() => setNewServicePaymentMethod(pm.key)}
                                 className={`h-[40px] px-2.5 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${isSelected
-                                    ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
-                                    : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
+                                  ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                                  : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
                                   }`}
                               >
                                 <span
