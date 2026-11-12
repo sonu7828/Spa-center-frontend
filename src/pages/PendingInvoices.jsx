@@ -1815,7 +1815,6 @@ export default function PendingInvoices() {
           if (comm) generatedCommissions.push(comm);
         });
       }
-      Chan
       // 7. Mark invoice paid (NOT removed — moved to Paid Today & History)
       const paidInv = await markInvoicePaid(invoice.id, payment, {
         discount: discountAmount,
@@ -1843,13 +1842,11 @@ export default function PendingInvoices() {
       );
       setTimeout(() => setPaymentSuccessNotice(null), 6000);
 
-      // Automatically dispatch / prepare WhatsApp receipt with feedback link for paid invoice
-      const targetInvForReceipt = paidInv || invoice;
-      const targetClient = getClient(invoice.clientId);
-      const phoneOnFile = (invoice.clientPhone || invoice.phone || targetClient?.whatsapp || targetClient?.phone || '').trim();
-      if (phoneOnFile && phoneOnFile !== '+237' && phoneOnFile !== '+237 ') {
-        handleSendWhatsAppReceipt(targetInvForReceipt, true).catch(() => {});
-      }
+      // Feedback rating link is automatically dispatched by backend on payment collection
+      setWhatsAppFeedback((prev) => ({
+        ...prev,
+        [invoice.id]: '⭐ Feedback request sent to client on WhatsApp!',
+      }));
     } catch (err) {
       console.error('Payment collection error:', err);
       setPaymentSuccessNotice(`Payment error: ${err?.message || 'Could not complete payment'}`);
