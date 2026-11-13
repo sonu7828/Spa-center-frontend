@@ -635,6 +635,10 @@ export default function PendingInvoices() {
   const [newSaleTab, setNewSaleTab] = useState('drinks');
   const [newSaleQuantities, setNewSaleQuantities] = useState({});
   const [newSalePaymentMethod, setNewSalePaymentMethod] = useState('CASH');
+  const [newSaleIsSplit, setNewSaleIsSplit] = useState(false);
+  const [newSaleSplitCash, setNewSaleSplitCash] = useState('');
+  const [newSaleSplitMomo, setNewSaleSplitMomo] = useState('');
+  const [newSaleSplitOrange, setNewSaleSplitOrange] = useState('');
   const [newSaleNotice, setNewSaleNotice] = useState('');
 
   // Payment collecting loading states (prevents multiple clicks)
@@ -665,6 +669,10 @@ export default function PendingInvoices() {
   const [newServiceRetailTab, setNewServiceRetailTab] = useState('drinks');
   const [newServiceNotes, setNewServiceNotes] = useState('');
   const [newServicePaymentMethod, setNewServicePaymentMethod] = useState('CASH');
+  const [newServiceIsSplit, setNewServiceIsSplit] = useState(false);
+  const [newServiceSplitCash, setNewServiceSplitCash] = useState('');
+  const [newServiceSplitMomo, setNewServiceSplitMomo] = useState('');
+  const [newServiceSplitOrange, setNewServiceSplitOrange] = useState('');
   const [newServiceActionChoice, setNewServiceActionChoice] = useState('pending'); // 'pending' | 'pay_now'
   const [isSubmittingServiceInvoice, setIsSubmittingServiceInvoice] = useState(false);
   const [newServiceError, setNewServiceError] = useState('');
@@ -1036,6 +1044,10 @@ export default function PendingInvoices() {
     setNewSaleTab('drinks');
     setNewSaleQuantities({});
     setNewSalePaymentMethod('CASH');
+    setNewSaleIsSplit(false);
+    setNewSaleSplitCash('');
+    setNewSaleSplitMomo('');
+    setNewSaleSplitOrange('');
     setNewSaleNotice('');
     setShowNewRetailSaleModal(true);
   };
@@ -1043,6 +1055,10 @@ export default function PendingInvoices() {
   const closeNewRetailSaleModal = () => {
     setShowNewRetailSaleModal(false);
     setNewSaleCart([]);
+    setNewSaleIsSplit(false);
+    setNewSaleSplitCash('');
+    setNewSaleSplitMomo('');
+    setNewSaleSplitOrange('');
     setNewSaleNotice('');
   };
 
@@ -1112,9 +1128,39 @@ export default function PendingInvoices() {
 
   const newSaleTotal = newSaleCart.reduce((sum, it) => sum + it.price, 0);
 
+  const newSaleCashNum = parseInt(String(newSaleSplitCash || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newSaleMomoNum = parseInt(String(newSaleSplitMomo || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newSaleOrangeNum = parseInt(String(newSaleSplitOrange || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newSaleSplitTotal = newSaleCashNum + newSaleMomoNum + newSaleOrangeNum;
+  const newSaleSplitRemaining = newSaleTotal - newSaleSplitTotal;
+  const newSaleSplitIsValid = newSaleIsSplit
+    ? newSaleSplitTotal === newSaleTotal && newSaleTotal > 0
+    : true;
+
+  const handleQuickSplit5050NewSale = () => {
+    const half1 = Math.round(newSaleTotal / 2);
+    const half2 = newSaleTotal - half1;
+    setNewSaleIsSplit(true);
+    setNewSaleSplitCash(String(half1));
+    setNewSaleSplitMomo(String(half2));
+    setNewSaleSplitOrange('');
+  };
+
+  const handleClearSplitNewSale = () => {
+    setNewSaleSplitCash('');
+    setNewSaleSplitMomo('');
+    setNewSaleSplitOrange('');
+  };
+
   const handleCollectNewSale = async () => {
     if (newSaleCart.length === 0 || newSaleTotal <= 0) return;
     if (isCollectingNewSale) return;
+
+    if (newSaleIsSplit && !newSaleSplitIsValid) {
+      setNewSaleNotice('Split amounts must exactly match the total sale amount.');
+      setTimeout(() => setNewSaleNotice(''), 4000);
+      return;
+    }
 
     // Revalidate stock before completing the sale
     for (const cartItem of newSaleCart) {
@@ -1137,11 +1183,24 @@ export default function PendingInvoices() {
 
       const clientName = selectedClient ? selectedClient.name : 'Walk in';
 
+      // Build split list if split mode active
+      const splits = [];
+      if (newSaleIsSplit) {
+        if (newSaleCashNum > 0) splits.push({ amount: newSaleCashNum, method: 'CASH', paymentMethod: 'CASH' });
+        if (newSaleMomoNum > 0) splits.push({ amount: newSaleMomoNum, method: 'MTN_MOMO', paymentMethod: 'MTN_MOMO' });
+        if (newSaleOrangeNum > 0) splits.push({ amount: newSaleOrangeNum, method: 'ORANGE_MONEY', paymentMethod: 'ORANGE_MONEY' });
+      }
+
+      const effectivePaymentMethod = newSaleIsSplit
+        ? splits.map((s) => `${s.paymentMethod.replace(/_/g, ' ')} (${s.amount.toLocaleString('en-US')})`).join(' + ')
+        : newSalePaymentMethod;
+
       // 1. Create paid invoice in shared state & backend
       const paidInvoice = await createRetailSaleInvoice({
         client: selectedClient,
         items: newSaleCart,
-        paymentMethod: newSalePaymentMethod,
+        paymentMethod: effectivePaymentMethod,
+        splits: newSaleIsSplit ? splits : [],
       });
 
       // 2. Deduct retail stock (deducted ONLY after successful payment)
@@ -1150,7 +1209,7 @@ export default function PendingInvoices() {
       // 3. Contribute to daily totals (no double counting)
       recordRetailSale({
         amount: newSaleTotal,
-        payment: newSalePaymentMethod,
+        payment: effectivePaymentMethod,
         items: newSaleCart,
         clientName,
         isWalkIn: !selectedClient,
@@ -1165,7 +1224,7 @@ export default function PendingInvoices() {
       setExpandedId(paidInvoice?.id);
       setReceiptInvoice(paidInvoice);
       setPaymentSuccessNotice(
-        `Retail sale completed for ${clientName} (${newSaleTotal.toLocaleString('en-US')} FCFA via ${newSalePaymentMethod}). Receipt opened.`
+        `Retail sale completed for ${clientName} (${newSaleTotal.toLocaleString('en-US')} FCFA via ${effectivePaymentMethod}). Receipt opened.`
       );
       setTimeout(() => setPaymentSuccessNotice(null), 5000);
     } catch (err) {
@@ -1189,6 +1248,30 @@ export default function PendingInvoices() {
   }, 0);
 
   const newServiceGrandTotal = newServiceLinesTotal + newServiceRetailTotal;
+
+  const newServiceCashNum = parseInt(String(newServiceSplitCash || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newServiceMomoNum = parseInt(String(newServiceSplitMomo || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newServiceOrangeNum = parseInt(String(newServiceSplitOrange || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newServiceSplitTotal = newServiceCashNum + newServiceMomoNum + newServiceOrangeNum;
+  const newServiceSplitRemaining = newServiceGrandTotal - newServiceSplitTotal;
+  const newServiceSplitIsValid = newServiceIsSplit
+    ? newServiceSplitTotal === newServiceGrandTotal && newServiceGrandTotal > 0
+    : true;
+
+  const handleQuickSplit5050NewService = () => {
+    const half1 = Math.round(newServiceGrandTotal / 2);
+    const half2 = newServiceGrandTotal - half1;
+    setNewServiceIsSplit(true);
+    setNewServiceSplitCash(String(half1));
+    setNewServiceSplitMomo(String(half2));
+    setNewServiceSplitOrange('');
+  };
+
+  const handleClearSplitNewService = () => {
+    setNewServiceSplitCash('');
+    setNewServiceSplitMomo('');
+    setNewServiceSplitOrange('');
+  };
 
   // Multi-technician analysis for newServiceLines
   const newServiceTechSummary = useMemo(() => {
@@ -1274,6 +1357,10 @@ export default function PendingInvoices() {
     setNewServiceRetailTab('drinks');
     setNewServiceNotes('');
     setNewServicePaymentMethod('CASH');
+    setNewServiceIsSplit(false);
+    setNewServiceSplitCash('');
+    setNewServiceSplitMomo('');
+    setNewServiceSplitOrange('');
     setNewServiceActionChoice('pending');
     setNewServiceError('');
     setShowNewServiceModal(true);
@@ -1311,6 +1398,10 @@ export default function PendingInvoices() {
 
   const closeNewServiceModal = () => {
     setShowNewServiceModal(false);
+    setNewServiceIsSplit(false);
+    setNewServiceSplitCash('');
+    setNewServiceSplitMomo('');
+    setNewServiceSplitOrange('');
     setNewServiceError('');
   };
 
@@ -1494,6 +1585,11 @@ export default function PendingInvoices() {
       return;
     }
 
+    if (collectNow && newServiceIsSplit && !newServiceSplitIsValid) {
+      setNewServiceError('Split amounts must exactly match the invoice grand total.');
+      return;
+    }
+
     // 3. Retail stock validation
     for (const item of newServiceRetailCart) {
       const source = item.type === 'drink' ? drinks : cosmetics;
@@ -1545,6 +1641,18 @@ export default function PendingInvoices() {
           };
         });
 
+      // Build split list if split mode active and collecting now
+      const splits = [];
+      if (collectNow && newServiceIsSplit) {
+        if (newServiceCashNum > 0) splits.push({ amount: newServiceCashNum, method: 'CASH', paymentMethod: 'CASH' });
+        if (newServiceMomoNum > 0) splits.push({ amount: newServiceMomoNum, method: 'MTN_MOMO', paymentMethod: 'MTN_MOMO' });
+        if (newServiceOrangeNum > 0) splits.push({ amount: newServiceOrangeNum, method: 'ORANGE_MONEY', paymentMethod: 'ORANGE_MONEY' });
+      }
+
+      const effectivePaymentMethod = collectNow && newServiceIsSplit
+        ? splits.map((s) => `${s.paymentMethod.replace(/_/g, ' ')} (${s.amount.toLocaleString('en-US')})`).join(' + ')
+        : newServicePaymentMethod;
+
       // Create invoice via InvoiceContext
       const invoice = await createWalkInServiceInvoice({
         client: resolvedClient,
@@ -1554,7 +1662,8 @@ export default function PendingInvoices() {
         services: formattedServices,
         retailItems: newServiceRetailCart,
         status: collectNow ? 'PAID' : 'PENDING_PAYMENT',
-        paymentMethod: collectNow ? newServicePaymentMethod : null,
+        paymentMethod: collectNow ? effectivePaymentMethod : null,
+        splits: collectNow && newServiceIsSplit ? splits : [],
         notes: newServiceNotes,
         introducedBy: refStaff ? refStaff.name : null,
         introducedById: refStaff ? refStaff.id : null,
@@ -1573,7 +1682,7 @@ export default function PendingInvoices() {
         if (newServiceRetailCart.length > 0 && typeof recordRetailSale === 'function') {
           recordRetailSale({
             amount: newServiceRetailTotal,
-            payment: newServicePaymentMethod,
+            payment: effectivePaymentMethod,
             items: newServiceRetailCart,
             clientName,
             isWalkIn: !resolvedClient,
@@ -1603,7 +1712,7 @@ export default function PendingInvoices() {
               technician: item.technician,
               product: item.product,
               price: itemFinalPriceStr,
-              paymentMethod: newServicePaymentMethod,
+              paymentMethod: effectivePaymentMethod,
               date: today,
               time: timeStr,
               introducedBy: invoice.introducedBy,
@@ -1630,7 +1739,7 @@ export default function PendingInvoices() {
               servicePrice: itemPriceNum,
               clientName: invoice.clientName,
               date: today,
-              paymentMethod: newServicePaymentMethod,
+              paymentMethod: effectivePaymentMethod,
               invoiceId: invoice.id,
               introducedBy: invoice.introducedBy,
               introducedById: invoice.introducedById,
@@ -1672,7 +1781,7 @@ export default function PendingInvoices() {
         setExpandedId(invoice?.id);
         setReceiptInvoice(invoice);
         setPaymentSuccessNotice(
-          `Walk-in service completed for ${clientName} (${newServiceGrandTotal.toLocaleString('en-US')} FCFA via ${newServicePaymentMethod}). Receipt opened.`
+          `Walk-in service completed for ${clientName} (${newServiceGrandTotal.toLocaleString('en-US')} FCFA via ${effectivePaymentMethod}). Receipt opened.`
         );
         setTimeout(() => setPaymentSuccessNotice(null), 5000);
       } else {
@@ -4299,39 +4408,203 @@ export default function PendingInvoices() {
                 )}
               </div>
 
-              {/* 4. Payment Method */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray mb-1.5">
-                  Payment Method:
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {PAYMENT_METHODS.map((pm) => {
-                    const isSelected = newSalePaymentMethod === pm.key;
-                    return (
-                      <button
-                        key={pm.key}
-                        type="button"
-                        onClick={() => setNewSalePaymentMethod(pm.key)}
-                        className={`h-[42px] px-3 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 ${isSelected
-                          ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
-                          : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
-                          }`}
-                      >
-                        <span
-                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected
-                            ? 'border-sage bg-sage'
-                            : 'border-muted-gray/50 bg-white'
-                            }`}
-                        >
-                          {isSelected && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                          )}
-                        </span>
-                        <span>{pm.label}</span>
-                      </button>
-                    );
-                  })}
+              {/* 4. Payment Mode & Methods (Single vs Split) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray">
+                    Payment Mode:
+                  </label>
+                  {newSaleIsSplit && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8B6E58] bg-[#F5EFEB] px-2 py-0.5 rounded-full border border-[#D8C7BC]">
+                      <Layers size={12} />
+                      Split Active
+                    </span>
+                  )}
                 </div>
+
+                <div className="grid grid-cols-2 gap-2 p-1 bg-soft-cream/60 rounded-[12px] border border-border/80">
+                  <button
+                    type="button"
+                    onClick={() => setNewSaleIsSplit(false)}
+                    className={`py-2 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      !newSaleIsSplit
+                        ? 'bg-white text-charcoal shadow-2xs border border-border'
+                        : 'text-muted-gray hover:text-charcoal'
+                    }`}
+                  >
+                    <span>Single Payment</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewSaleIsSplit(true);
+                      if (newSaleSplitTotal === 0 && newSaleTotal > 0) {
+                        handleQuickSplit5050NewSale();
+                      }
+                    }}
+                    className={`py-2 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      newSaleIsSplit
+                        ? 'bg-charcoal text-white shadow-2xs border border-charcoal font-bold'
+                        : 'text-muted-gray hover:text-charcoal'
+                    }`}
+                  >
+                    <Layers size={13} />
+                    <span>Split Payment</span>
+                  </button>
+                </div>
+
+                {!newSaleIsSplit ? (
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray mb-1.5">
+                      Payment Method:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {PAYMENT_METHODS.map((pm) => {
+                        const isSelected = newSalePaymentMethod === pm.key;
+                        return (
+                          <button
+                            key={pm.key}
+                            type="button"
+                            onClick={() => setNewSalePaymentMethod(pm.key)}
+                            className={`h-[42px] px-3 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 ${
+                              isSelected
+                                ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                                : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
+                            }`}
+                          >
+                            <span
+                              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                                isSelected
+                                  ? 'border-sage bg-sage'
+                                  : 'border-muted-gray/50 bg-white'
+                              }`}
+                            >
+                              {isSelected && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                              )}
+                            </span>
+                            <span>{pm.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-warm-ivory/50 rounded-[14px] border border-border/90 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                      <span className="text-xs font-bold text-charcoal flex items-center gap-1.5">
+                        <Layers size={13} className="text-sage" />
+                        Enter Amounts per Method
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleQuickSplit5050NewSale}
+                          className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-border rounded-[6px] text-charcoal hover:bg-soft-cream cursor-pointer transition-colors shadow-2xs"
+                        >
+                          50 / 50 Cash & MoMo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearSplitNewSale}
+                          className="px-2 py-0.5 text-[11px] font-medium text-muted-gray hover:text-rose-600 cursor-pointer transition-colors"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {/* Cash */}
+                      <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-sage focus-within:ring-1 focus-within:ring-sage/30 transition-all">
+                        <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                          <span>💵 Cash (FCFA)</span>
+                          {newSaleCashNum > 0 && (
+                            <span className="text-sage font-mono text-[10px]">
+                              {((newSaleCashNum / (newSaleTotal || 1)) * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={newSaleSplitCash}
+                          onChange={(e) => setNewSaleSplitCash(e.target.value.replace(/[^0-9]/g, ''))}
+                          className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                        />
+                      </div>
+
+                      {/* MTN MoMo */}
+                      <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400/30 transition-all">
+                        <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                          <span>📱 MTN MoMo</span>
+                          {newSaleMomoNum > 0 && (
+                            <span className="text-amber-600 font-mono text-[10px]">
+                              {((newSaleMomoNum / (newSaleTotal || 1)) * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={newSaleSplitMomo}
+                          onChange={(e) => setNewSaleSplitMomo(e.target.value.replace(/[^0-9]/g, ''))}
+                          className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                        />
+                      </div>
+
+                      {/* Orange Money */}
+                      <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-orange-400 focus-within:ring-1 focus-within:ring-orange-400/30 transition-all">
+                        <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                          <span>🍊 Orange Money</span>
+                          {newSaleOrangeNum > 0 && (
+                            <span className="text-orange-600 font-mono text-[10px]">
+                              {((newSaleOrangeNum / (newSaleTotal || 1)) * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={newSaleSplitOrange}
+                          onChange={(e) => setNewSaleSplitOrange(e.target.value.replace(/[^0-9]/g, ''))}
+                          className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Split summary bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-border/70 text-xs">
+                      <div className="flex items-center gap-3">
+                        <span className="text-muted-gray text-[11px]">Allocated:</span>
+                        <span className="font-extrabold text-charcoal">
+                          {newSaleSplitTotal.toLocaleString('en-US')} / {newSaleTotal.toLocaleString('en-US')} FCFA
+                        </span>
+                      </div>
+                      <div>
+                        {newSaleSplitIsValid ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 size={12} />
+                            Exact Match
+                          </span>
+                        ) : newSaleSplitRemaining > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <AlertTriangle size={12} />
+                            Remaining: {newSaleSplitRemaining.toLocaleString('en-US')} FCFA
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            <AlertCircle size={12} />
+                            Over by: {Math.abs(newSaleSplitRemaining).toLocaleString('en-US')} FCFA
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -4357,7 +4630,12 @@ export default function PendingInvoices() {
                 </Button>
                 <Button
                   className="flex-1 sm:flex-none min-w-[200px]"
-                  disabled={newSaleCart.length === 0 || newSaleTotal <= 0 || isCollectingNewSale}
+                  disabled={
+                    newSaleCart.length === 0 ||
+                    newSaleTotal <= 0 ||
+                    isCollectingNewSale ||
+                    (newSaleIsSplit && !newSaleSplitIsValid)
+                  }
                   onClick={handleCollectNewSale}
                 >
                   {isCollectingNewSale ? (
@@ -4913,34 +5191,197 @@ export default function PendingInvoices() {
                     </div>
 
                     {newServiceActionChoice === 'pay_now' ? (
-                      <div>
-                        <label className="block text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1.5">
-                          Payment Method:
-                        </label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {PAYMENT_METHODS.map((pm) => {
-                            const isSelected = newServicePaymentMethod === pm.key;
-                            return (
-                              <button
-                                key={pm.key}
-                                type="button"
-                                onClick={() => setNewServicePaymentMethod(pm.key)}
-                                className={`h-[40px] px-2.5 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${isSelected
-                                  ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
-                                  : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
-                                  }`}
-                              >
-                                <span
-                                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-sage bg-sage' : 'border-muted-gray/50 bg-white'
-                                    }`}
-                                >
-                                  {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                                </span>
-                                <span>{pm.label}</span>
-                              </button>
-                            );
-                          })}
+                      <div className="space-y-3">
+                        {/* Mode Selector */}
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray">
+                            Payment Mode:
+                          </label>
+                          {newServiceIsSplit && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8B6E58] bg-[#F5EFEB] px-2 py-0.5 rounded-full border border-[#D8C7BC]">
+                              <Layers size={12} />
+                              Split Active
+                            </span>
+                          )}
                         </div>
+
+                        <div className="grid grid-cols-2 gap-2 p-1 bg-soft-cream/60 rounded-[12px] border border-border/80">
+                          <button
+                            type="button"
+                            onClick={() => setNewServiceIsSplit(false)}
+                            className={`py-2 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              !newServiceIsSplit
+                                ? 'bg-white text-charcoal shadow-2xs border border-border'
+                                : 'text-muted-gray hover:text-charcoal'
+                            }`}
+                          >
+                            <span>Single Payment</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewServiceIsSplit(true);
+                              if (newServiceSplitTotal === 0 && newServiceGrandTotal > 0) {
+                                handleQuickSplit5050NewService();
+                              }
+                            }}
+                            className={`py-2 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              newServiceIsSplit
+                                ? 'bg-charcoal text-white shadow-2xs border border-charcoal font-bold'
+                                : 'text-muted-gray hover:text-charcoal'
+                            }`}
+                          >
+                            <Layers size={13} />
+                            <span>Split Payment</span>
+                          </button>
+                        </div>
+
+                        {!newServiceIsSplit ? (
+                          <div>
+                            <label className="block text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1.5">
+                              Payment Method:
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                              {PAYMENT_METHODS.map((pm) => {
+                                const isSelected = newServicePaymentMethod === pm.key;
+                                return (
+                                  <button
+                                    key={pm.key}
+                                    type="button"
+                                    onClick={() => setNewServicePaymentMethod(pm.key)}
+                                    className={`h-[40px] px-2.5 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${isSelected
+                                      ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                                      : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
+                                      }`}
+                                  >
+                                    <span
+                                      className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-sage bg-sage' : 'border-muted-gray/50 bg-white'
+                                        }`}
+                                    >
+                                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                    </span>
+                                    <span>{pm.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3.5 bg-warm-ivory/50 rounded-[14px] border border-border/90 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                              <span className="text-xs font-bold text-charcoal flex items-center gap-1.5">
+                                <Layers size={13} className="text-sage" />
+                                Enter Amounts per Method
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={handleQuickSplit5050NewService}
+                                  className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-border rounded-[6px] text-charcoal hover:bg-soft-cream cursor-pointer transition-colors shadow-2xs"
+                                >
+                                  50 / 50 Cash & MoMo
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleClearSplitNewService}
+                                  className="px-2 py-0.5 text-[11px] font-medium text-muted-gray hover:text-rose-600 cursor-pointer transition-colors"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                              {/* Cash */}
+                              <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-sage focus-within:ring-1 focus-within:ring-sage/30 transition-all">
+                                <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                                  <span>💵 Cash (FCFA)</span>
+                                  {newServiceCashNum > 0 && (
+                                    <span className="text-sage font-mono text-[10px]">
+                                      {((newServiceCashNum / (newServiceGrandTotal || 1)) * 100).toFixed(0)}%
+                                    </span>
+                                  )}
+                                </label>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="0"
+                                  value={newServiceSplitCash}
+                                  onChange={(e) => setNewServiceSplitCash(e.target.value.replace(/[^0-9]/g, ''))}
+                                  className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                                />
+                              </div>
+
+                              {/* MTN MoMo */}
+                              <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400/30 transition-all">
+                                <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                                  <span>📱 MTN MoMo</span>
+                                  {newServiceMomoNum > 0 && (
+                                    <span className="text-amber-600 font-mono text-[10px]">
+                                      {((newServiceMomoNum / (newServiceGrandTotal || 1)) * 100).toFixed(0)}%
+                                    </span>
+                                  )}
+                                </label>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="0"
+                                  value={newServiceSplitMomo}
+                                  onChange={(e) => setNewServiceSplitMomo(e.target.value.replace(/[^0-9]/g, ''))}
+                                  className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                                />
+                              </div>
+
+                              {/* Orange Money */}
+                              <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-orange-400 focus-within:ring-1 focus-within:ring-orange-400/30 transition-all">
+                                <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                                  <span>🍊 Orange Money</span>
+                                  {newServiceOrangeNum > 0 && (
+                                    <span className="text-orange-600 font-mono text-[10px]">
+                                      {((newServiceOrangeNum / (newServiceGrandTotal || 1)) * 100).toFixed(0)}%
+                                    </span>
+                                  )}
+                                </label>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="0"
+                                  value={newServiceSplitOrange}
+                                  onChange={(e) => setNewServiceSplitOrange(e.target.value.replace(/[^0-9]/g, ''))}
+                                  className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Reconciliation Bar */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-border/70 text-xs">
+                              <div className="flex items-center gap-3">
+                                <span className="text-muted-gray text-[11px]">Allocated:</span>
+                                <span className="font-extrabold text-charcoal">
+                                  {newServiceSplitTotal.toLocaleString('en-US')} / {newServiceGrandTotal.toLocaleString('en-US')} FCFA
+                                </span>
+                              </div>
+                              <div>
+                                {newServiceSplitIsValid ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <CheckCircle2 size={12} />
+                                    Exact Match
+                                  </span>
+                                ) : newServiceSplitRemaining > 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    <AlertTriangle size={12} />
+                                    Remaining: {newServiceSplitRemaining.toLocaleString('en-US')} FCFA
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                    <AlertCircle size={12} />
+                                    Over by: {Math.abs(newServiceSplitRemaining).toLocaleString('en-US')} FCFA
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <p className="text-[11px] text-muted-gray">
@@ -4976,7 +5417,11 @@ export default function PendingInvoices() {
                 {newServiceActionChoice === 'pay_now' && !isMarketer && !isTechnician ? (
                   <Button
                     className="flex-1 sm:flex-none min-w-[210px]"
-                    disabled={isSubmittingServiceInvoice || newServiceGrandTotal <= 0}
+                    disabled={
+                      isSubmittingServiceInvoice ||
+                      newServiceGrandTotal <= 0 ||
+                      (newServiceIsSplit && !newServiceSplitIsValid)
+                    }
                     onClick={() => handleSubmitWalkInServiceInvoice(true)}
                   >
                     {isSubmittingServiceInvoice ? (

@@ -44,10 +44,20 @@ const SEED_INVOICES = [];
 export function formatBackendInvoice(inv, allUsers = []) {
   if (!inv) return null;
   const dateStr = inv.date ? inv.date.split('T')[0] : '';
-  const firstPayment = inv.payments?.[0];
-  const paymentMethodDisplay = firstPayment?.paymentMethod
-    ? firstPayment.paymentMethod.replace(/_/g, ' ')
-    : null;
+  const paymentsList = inv.payments || [];
+  const firstPayment = paymentsList[0];
+  const paymentMethodDisplay =
+    paymentsList.length > 1
+      ? paymentsList
+          .map((p) => {
+            const raw = String(p.paymentMethod || '').replace(/_/g, ' ');
+            const label = raw.includes('ORANGE') ? 'ORANGE MONEY' : raw.includes('MTN') || raw.includes('MOMO') ? 'MTN MOMO' : 'CASH';
+            return `${label} (${Number(p.amount || 0).toLocaleString('en-US')})`;
+          })
+          .join(' + ')
+      : firstPayment?.paymentMethod
+      ? firstPayment.paymentMethod.replace(/_/g, ' ')
+      : null;
 
   // Helper to detect if a timestamp is merely midnight UTC or date-only (e.g. "2026-11-02T00:00:00.000Z")
   const isMidnightOrDateOnly = (t) => {
@@ -912,7 +922,7 @@ export function InvoiceProvider({ children }) {
 
   // Create a completed Retail-Only sale invoice directly (Walk-in or Client)
   const createRetailSaleInvoice = useCallback(
-    async ({ client, clientId, clientName, items, paymentMethod, discount = 0 }) => {
+    async ({ client, clientId, clientName, items, paymentMethod, discount = 0, splits = [] }) => {
       const today = new Date().toISOString().slice(0, 10);
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], {
@@ -944,13 +954,37 @@ export function InvoiceProvider({ children }) {
       const total = formattedItems.reduce((sum, it) => sum + it.price, 0);
       const finalTotal = Math.max(0, total - (discount || 0));
 
-      const rawMethod = String(paymentMethod || 'CASH').toUpperCase();
+      const validSplits = (splits || []).filter((s) => Number(s.amount) > 0);
+      const isSplit = validSplits.length > 0;
+      const splitMethodsStr = isSplit
+        ? validSplits
+            .map((s) => {
+              const m = String(s.method || s.paymentMethod || 'CASH').toUpperCase();
+              const label = m.includes('ORANGE') ? 'ORANGE MONEY' : m.includes('MTN') || m.includes('MOMO') ? 'MTN MOMO' : 'CASH';
+              return `${label} (${Number(s.amount).toLocaleString('en-US')})`;
+            })
+            .join(' + ')
+        : null;
+
+      const rawMethod = String(paymentMethod || (validSplits[0]?.paymentMethod || validSplits[0]?.method) || 'CASH').toUpperCase();
       const backendMethod =
         rawMethod.includes('MTN') || rawMethod.includes('MOMO')
           ? 'MTN_MOMO'
           : rawMethod.includes('ORANGE')
           ? 'ORANGE_MONEY'
           : 'CASH';
+
+      const backendPayments = isSplit
+        ? validSplits.map((s) => {
+            const rawM = String(s.method || s.paymentMethod || 'CASH').toUpperCase();
+            const bm = rawM.includes('MTN') || rawM.includes('MOMO') ? 'MTN_MOMO' : rawM.includes('ORANGE') ? 'ORANGE_MONEY' : 'CASH';
+            return {
+              amount: Number(s.amount),
+              paymentMethod: bm,
+              notes: 'Retail sale split payment',
+            };
+          })
+        : undefined;
 
       // Build backend payload for retail products
       const retailProductsPayload = [];
@@ -977,12 +1011,24 @@ export function InvoiceProvider({ children }) {
             clientId: targetClientId,
             discount: discount || 0,
             status: 'PAID',
-            paymentMethod: backendMethod,
+            paymentMethod: backendPayments?.[0]?.paymentMethod || backendMethod,
+            payments: backendPayments,
             retailProducts: retailProductsPayload,
           });
 
           const invData = res?.data?.invoice || res?.data || res;
           if (invData && invData.id) {
+            // Fallback: If backend hasn't populated payments yet, record them via paymentsApi
+            if (isSplit && (!invData.payments || invData.payments.length === 0)) {
+              for (const bp of backendPayments) {
+                await paymentsApi.create({
+                  invoiceId: invData.id,
+                  amount: bp.amount,
+                  paymentMethod: bp.paymentMethod,
+                  notes: bp.notes,
+                }).catch(() => {});
+              }
+            }
             backendInvoice = formatBackendInvoice(invData, allUsers);
           }
         } catch (err) {
@@ -1004,7 +1050,16 @@ export function InvoiceProvider({ children }) {
         paidAmount: finalTotal,
         remainingAmount: 0,
         discount: discount || 0,
-        paymentMethod: paymentMethod || 'CASH',
+        paymentMethod: splitMethodsStr || paymentMethod || 'CASH',
+        isSplit,
+        splits: validSplits,
+        payments: isSplit
+          ? validSplits.map((s) => ({
+              amount: Number(s.amount),
+              paymentMethod: s.method || s.paymentMethod,
+              paidAt: now.toISOString(),
+            }))
+          : [{ amount: finalTotal, paymentMethod: paymentMethod || 'CASH', paidAt: now.toISOString() }],
         paidAt: now.toISOString(),
         paidTime: timeStr,
         pointsEarned: 0,
@@ -1016,7 +1071,7 @@ export function InvoiceProvider({ children }) {
       setInvoices((prev) => [newInvoice, ...prev.filter((inv) => String(inv.id) !== String(newInvoice.id))]);
       return newInvoice;
     },
-    []
+    [allUsers]
   );
 
   // Create a Walk-In / Direct Service Invoice (Pending or Instant Paid)
@@ -1030,6 +1085,7 @@ export function InvoiceProvider({ children }) {
       retailItems = [],
       status = 'PENDING_PAYMENT',
       paymentMethod = 'CASH',
+      splits = [],
       notes = '',
       introducedBy = null,
       introducedById = null,
@@ -1088,6 +1144,18 @@ export function InvoiceProvider({ children }) {
       const finalTotal = Math.max(0, total - (discount || 0));
       const isPaid = status === 'PAID';
 
+      const validSplits = (splits || []).filter((s) => Number(s.amount) > 0);
+      const isSplit = isPaid && validSplits.length > 0;
+      const splitMethodsStr = isSplit
+        ? validSplits
+            .map((s) => {
+              const m = String(s.method || s.paymentMethod || 'CASH').toUpperCase();
+              const label = m.includes('ORANGE') ? 'ORANGE MONEY' : m.includes('MTN') || m.includes('MOMO') ? 'MTN MOMO' : 'CASH';
+              return `${label} (${Number(s.amount).toLocaleString('en-US')})`;
+            })
+            .join(' + ')
+        : null;
+
       const resolvedClientName = client?.name?.trim() || clientName?.trim() || 'Walk in';
       const resolvedClientId = client?.id || clientId || null;
       const resolvedPhone = client?.phone || clientPhone || '';
@@ -1097,6 +1165,26 @@ export function InvoiceProvider({ children }) {
       );
       const invoiceTechId = firstTechItem?.technicianId || (userRole === 'technician' ? user?.id : null);
       const invoiceTechName = firstTechItem?.technician || (userRole === 'technician' ? (user?.name || '') : 'Staff');
+
+      const rawMethod = String(paymentMethod || (validSplits[0]?.paymentMethod || validSplits[0]?.method) || 'CASH').toUpperCase();
+      const backendMethod =
+        rawMethod.includes('MTN') || rawMethod.includes('MOMO')
+          ? 'MTN_MOMO'
+          : rawMethod.includes('ORANGE')
+          ? 'ORANGE_MONEY'
+          : 'CASH';
+
+      const backendPayments = isSplit
+        ? validSplits.map((s) => {
+            const rawM = String(s.method || s.paymentMethod || 'CASH').toUpperCase();
+            const bm = rawM.includes('MTN') || rawM.includes('MOMO') ? 'MTN_MOMO' : rawM.includes('ORANGE') ? 'ORANGE_MONEY' : 'CASH';
+            return {
+              amount: Number(s.amount),
+              paymentMethod: bm,
+              notes: 'Walk-in service split payment',
+            };
+          })
+        : undefined;
 
       const newInvoice = {
         id: generatedId,
@@ -1119,10 +1207,20 @@ export function InvoiceProvider({ children }) {
         finalTotal,
         paidAmount: isPaid ? finalTotal : 0,
         remainingAmount: isPaid ? 0 : finalTotal,
-        paymentMethod: isPaid ? paymentMethod : null,
+        paymentMethod: isPaid ? (splitMethodsStr || paymentMethod) : null,
+        isSplit,
+        splits: isSplit ? validSplits : [],
         paidAt: isPaid ? now.toISOString() : null,
         paidTime: isPaid ? timeStr : null,
-        payments: isPaid ? [{ amount: finalTotal, paymentMethod, paidAt: now.toISOString() }] : [],
+        payments: isPaid
+          ? isSplit
+            ? validSplits.map((s) => ({
+                amount: Number(s.amount),
+                paymentMethod: s.method || s.paymentMethod,
+                paidAt: now.toISOString(),
+              }))
+            : [{ amount: finalTotal, paymentMethod, paidAt: now.toISOString() }]
+          : [],
         pointsEarned: 0,
         pointsRedeemed: 0,
         notes: notes || null,
@@ -1134,14 +1232,6 @@ export function InvoiceProvider({ children }) {
       };
 
       // Directly create invoice in central backend MySQL database
-      const rawMethod = String(paymentMethod || 'CASH').toUpperCase();
-      const backendMethod =
-        rawMethod.includes('MTN') || rawMethod.includes('MOMO')
-          ? 'MTN_MOMO'
-          : rawMethod.includes('ORANGE')
-          ? 'ORANGE_MONEY'
-          : 'CASH';
-
       const mappedServices = cleanServiceItems.map((s) => {
         const lineTechId = isUUID(s.technicianId)
           ? s.technicianId
@@ -1184,7 +1274,8 @@ export function InvoiceProvider({ children }) {
         phone: resolvedPhone || undefined,
         date: today,
         status: isPaid ? 'PAID' : 'PENDING_PAYMENT',
-        paymentMethod: isPaid ? backendMethod : undefined,
+        paymentMethod: isPaid ? (backendPayments?.[0]?.paymentMethod || backendMethod) : undefined,
+        payments: isPaid ? backendPayments : undefined,
         discount: discount || 0,
         ...(finalServicesPayload.length > 0 ? { services: finalServicesPayload } : {}),
         ...(validRetailProducts.length > 0 ? { retailProducts: validRetailProducts } : {}),
@@ -1194,6 +1285,18 @@ export function InvoiceProvider({ children }) {
       const createdBackend = res?.data?.invoice || res?.data || res;
       if (!createdBackend || !createdBackend.id) {
         throw new Error('Failed to create invoice in database');
+      }
+
+      // Fallback: If backend hasn't populated payments yet, record them via paymentsApi
+      if (isSplit && (!createdBackend.payments || createdBackend.payments.length === 0)) {
+        for (const bp of backendPayments) {
+          await paymentsApi.create({
+            invoiceId: createdBackend.id,
+            amount: bp.amount,
+            paymentMethod: bp.paymentMethod,
+            notes: bp.notes,
+          }).catch(() => {});
+        }
       }
 
       const formatted = formatBackendInvoice(createdBackend, allUsers);
