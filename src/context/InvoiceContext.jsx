@@ -501,6 +501,182 @@ export function InvoiceProvider({ children }) {
     [refreshInvoices]
   );
 
+  // Reception records SPLIT payment across multiple payment methods (Cash, MTN MoMo, Orange Money)
+  const recordSplitPayment = useCallback(
+    async (invoiceId, splits = [], paymentDetails = {}) => {
+      let paidInvoice = null;
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      const validSplits = (splits || []).filter((s) => Number(s.amount) > 0);
+      const totalPaidAmount = validSplits.reduce((sum, s) => sum + Number(s.amount), 0);
+      const discount = Number(paymentDetails.discount || 0);
+      const finalTotal = paymentDetails.finalTotal !== undefined ? paymentDetails.finalTotal : totalPaidAmount;
+
+      let targetInv = null;
+      setInvoices((prev) => {
+        targetInv = prev.find((inv) => String(inv.id) === String(invoiceId));
+        return prev;
+      });
+
+      let backendInvoiceId = invoiceId;
+
+      // 1. If invoiceId is a UUID in the backend, record each split payment
+      if (isUUID(invoiceId)) {
+        if (discount > 0) {
+          try {
+            await invoicesApi.update(invoiceId, { discount });
+          } catch (e) {
+            console.warn('Backend discount update note:', e.message);
+          }
+        }
+
+        for (let i = 0; i < validSplits.length; i++) {
+          const sp = validSplits[i];
+          const rawMethod = String(sp.method || 'CASH').toUpperCase();
+          const backendMethod =
+            rawMethod.includes('MTN') || rawMethod.includes('MOMO')
+              ? 'MTN_MOMO'
+              : rawMethod.includes('ORANGE')
+              ? 'ORANGE_MONEY'
+              : 'CASH';
+
+          try {
+            await paymentsApi.create({
+              invoiceId,
+              amount: Number(sp.amount),
+              paymentMethod: backendMethod,
+              notes: i === 0 ? (paymentDetails.notes || 'Split Payment from POS') : undefined,
+            });
+          } catch (pErr) {
+            console.warn(`Backend split payment record error (${sp.method}):`, pErr.message);
+          }
+        }
+      } else if (targetInv) {
+        // 2. If invoiceId is local (not UUID), sync to backend database as PAID
+        try {
+          const cleanServices = (targetInv.items || [])
+            .filter((it) => it.type !== 'drink' && it.type !== 'cosmetic')
+            .map((s) => ({
+              serviceId: isUUID(s.serviceId) ? s.serviceId : null,
+              name: String(s.service || s.name || 'Spa Service').trim(),
+              price: Math.max(0, Number(s.price) || 0),
+              technicianId: isUUID(s.technicianId) ? s.technicianId : null,
+              quantity: Math.max(1, parseInt(s.quantity || s.qty, 10) || 1),
+            }));
+
+          const cleanRetail = (targetInv.items || [])
+            .filter((it) => it.type === 'drink' || it.type === 'cosmetic')
+            .map((r) => ({
+              retailProductId: isUUID(r.productId || r.id) ? (r.productId || r.id) : null,
+              name: String(r.name || r.service || 'Retail Item').trim(),
+              price: Math.max(0, Number(r.price || r.unitPrice) || 0),
+              quantity: Math.max(1, parseInt(r.qty || r.quantity, 10) || 1),
+            }));
+
+          const nonUuidRetailAsServices = cleanRetail
+            .filter((r) => !r.retailProductId)
+            .map((r) => ({
+              serviceId: null,
+              name: r.name,
+              price: r.price,
+              technicianId: null,
+              quantity: r.quantity,
+            }));
+
+          const validRetailProducts = cleanRetail.filter((r) => r.retailProductId);
+          const finalServicesPayload = [...cleanServices, ...nonUuidRetailAsServices];
+          const todayIso = new Date().toISOString().slice(0, 10);
+
+          const res = await invoicesApi.create({
+            clientId: isUUID(targetInv.clientId) ? targetInv.clientId : null,
+            clientName: targetInv.clientName || 'Walk in',
+            clientPhone: targetInv.clientPhone || targetInv.phone || undefined,
+            phone: targetInv.clientPhone || targetInv.phone || undefined,
+            date: targetInv.date || todayIso,
+            status: 'PAID',
+            paymentMethod: 'CASH',
+            discount: discount,
+            ...(finalServicesPayload.length > 0 ? { services: finalServicesPayload } : {}),
+            ...(validRetailProducts.length > 0 ? { retailProducts: validRetailProducts } : {}),
+          });
+
+          const createdBackend = res?.data?.invoice || res?.data || res;
+          if (createdBackend && createdBackend.id) {
+            backendInvoiceId = createdBackend.id;
+            for (let i = 0; i < validSplits.length; i++) {
+              const sp = validSplits[i];
+              const rawMethod = String(sp.method || 'CASH').toUpperCase();
+              const backendMethod =
+                rawMethod.includes('MTN') || rawMethod.includes('MOMO')
+                  ? 'MTN_MOMO'
+                  : rawMethod.includes('ORANGE')
+                  ? 'ORANGE_MONEY'
+                  : 'CASH';
+              await paymentsApi.create({
+                invoiceId: backendInvoiceId,
+                amount: Number(sp.amount),
+                paymentMethod: backendMethod,
+              }).catch(() => {});
+            }
+          }
+        } catch (createErr) {
+          console.warn('Backend sync for non-UUID split invoice failed:', createErr.message);
+        }
+      }
+
+      // Format clean method display e.g. "CASH (10,000) + MTN MOMO (5,000)"
+      const splitMethodsStr = validSplits
+        .map((s) => {
+          const m = String(s.method).toUpperCase();
+          const label = m.includes('ORANGE') ? 'ORANGE MONEY' : m.includes('MTN') || m.includes('MOMO') ? 'MTN MOMO' : 'CASH';
+          return `${label} (${Number(s.amount).toLocaleString('en-US')})`;
+        })
+        .join(' + ');
+
+      setInvoices((prev) =>
+        prev.map((inv) => {
+          if (
+            (inv.id === invoiceId || String(inv.id) === String(invoiceId) || inv.id === backendInvoiceId) &&
+            (inv.status === 'PENDING_PAYMENT' || inv.status === 'DRAFT')
+          ) {
+            paidInvoice = {
+              ...inv,
+              id: backendInvoiceId,
+              status: 'PAID',
+              paymentMethod: splitMethodsStr || 'SPLIT',
+              isSplit: true,
+              splits: validSplits,
+              payments: validSplits.map((s) => ({
+                amount: Number(s.amount),
+                paymentMethod: s.method,
+                paidAt: now.toISOString(),
+              })),
+              paidAt: now.toISOString(),
+              paidTime: timeStr,
+              discount: discount,
+              finalTotal: finalTotal,
+              paidAmount: finalTotal,
+              remainingAmount: 0,
+              pointsEarned: paymentDetails.pointsEarned || 0,
+              pointsRedeemed: paymentDetails.pointsRedeemed || 0,
+            };
+            return paidInvoice;
+          }
+          return inv;
+        })
+      );
+
+      refreshInvoices().catch(() => {});
+
+      return paidInvoice;
+    },
+    [refreshInvoices]
+  );
+
   // Record partial payment
   const recordPartialPayment = useCallback(
     async ({ invoiceId, amount, paymentMethod, notes }) => {
@@ -1407,6 +1583,7 @@ export function InvoiceProvider({ children }) {
         submitInvoiceByClient,
         submitAppointmentInvoice,
         markInvoicePaid,
+        recordSplitPayment,
         recordPartialPayment,
         getInvoice,
         getPendingInvoices,

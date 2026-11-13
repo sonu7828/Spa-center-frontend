@@ -64,7 +64,21 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
       : subtotal - discount;
   
   const formatPaymentMethod = (pm) => {
+    if (Array.isArray(invoice.payments) && invoice.payments.length > 1) {
+      return invoice.payments
+        .map((p) => {
+          const rawMethod = String(p.paymentMethod || 'CASH').toUpperCase();
+          const label = rawMethod.includes('MTN')
+            ? 'MTN MOMO'
+            : rawMethod.includes('ORANGE')
+            ? 'ORANGE MONEY'
+            : 'CASH';
+          return `${label}: ${Number(p.amount || 0).toLocaleString('en-US')} FCFA`;
+        })
+        .join(' + ');
+    }
     const p = String(pm || 'cash').trim().toUpperCase();
+    if (p.includes('+') || p.includes(':')) return p;
     if (p.includes('MTN')) return 'MTN MOMO';
     if (p.includes('ORANGE')) return 'ORANGE MONEY';
     return 'CASH';
