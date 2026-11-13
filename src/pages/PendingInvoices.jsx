@@ -1757,12 +1757,17 @@ export default function PendingInvoices() {
       const discountAmount = loyaltyDiscountAmount + prospectDiscountAmount;
       const finalTotal = Math.max(0, invoice.total - discountAmount);
 
-      const splitData = getInvoiceSplitData(invoice.id, finalTotal);
+      const paidSoFar = Array.isArray(invoice.payments)
+        ? invoice.payments.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+        : Number(invoice.paidAmount || 0);
+      const remainingDue = Math.max(0, finalTotal - paidSoFar);
+
+      const splitData = getInvoiceSplitData(invoice.id, remainingDue);
       let splitList = [];
       if (splitData.isSplit) {
         if (!splitData.isValid) {
           setPaymentSuccessNotice(
-            `Cannot collect: Split amounts (${splitData.totalSplit.toLocaleString()} FCFA) must match Net Payable (${finalTotal.toLocaleString()} FCFA).`
+            `Cannot collect: Split amounts (${splitData.totalSplit.toLocaleString()} FCFA) must match Net Due (${remainingDue.toLocaleString()} FCFA).`
           );
           setTimeout(() => setPaymentSuccessNotice(null), 5000);
           setCollectingId(null);
@@ -1945,7 +1950,8 @@ export default function PendingInvoices() {
       if (splitData.isSplit && splitList.length > 0) {
         paidInv = await recordSplitPayment(invoice.id, splitList, {
           discount: discountAmount,
-          finalTotal,
+          finalTotal: remainingDue,
+          amount: remainingDue,
           pointsEarned: earnedPts,
           pointsRedeemed: validPtsToRedeem,
           notes: `Split payment: ${payment}`,
@@ -1953,7 +1959,8 @@ export default function PendingInvoices() {
       } else {
         paidInv = await markInvoicePaid(invoice.id, payment, {
           discount: discountAmount,
-          finalTotal,
+          finalTotal: remainingDue,
+          amount: remainingDue,
           pointsEarned: earnedPts,
           pointsRedeemed: validPtsToRedeem,
         });
@@ -1974,7 +1981,7 @@ export default function PendingInvoices() {
       setActiveTab('paid-today');
       setExpandedId(paidInv?.id || invoice.id);
       setPaymentSuccessNotice(
-        `Payment collected for ${invoice.clientName} (${finalTotal.toLocaleString('en-US')} FCFA via ${payment.toUpperCase()}).${commNotice} Moved to Paid Today.`
+        `Payment collected for ${invoice.clientName} (${remainingDue.toLocaleString('en-US')} FCFA via ${payment.toUpperCase()}).${commNotice} Moved to Paid Today.`
       );
       setTimeout(() => setPaymentSuccessNotice(null), 6000);
 
@@ -2341,8 +2348,14 @@ export default function PendingInvoices() {
                 const prospectDiscountAmount = Math.round((Number(invoice.total || 0) * prospectPercent) / 100);
                 const discountAmount = loyaltyDiscountAmount + prospectDiscountAmount;
                 const finalTotal = Math.max(0, invoice.total - discountAmount);
+
+                const paidSoFar = Array.isArray(invoice.payments)
+                  ? invoice.payments.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+                  : Number(invoice.paidAmount || 0);
+                const remainingDue = Math.max(0, finalTotal - paidSoFar);
+
                 const isSplit = isInvoiceSplit(invoice.id);
-                const splitData = getInvoiceSplitData(invoice.id, finalTotal);
+                const splitData = getInvoiceSplitData(invoice.id, remainingDue);
                 const invNum = formatInvoiceNumber(invoice);
 
                 const techItems = invoice.items
@@ -2404,12 +2417,30 @@ export default function PendingInvoices() {
 
                       <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 w-full sm:w-auto pt-2 sm:pt-0 border-t border-border/40 sm:border-0">
                         <div className="flex items-center gap-2.5">
-                          <span className="text-sm font-bold text-charcoal">
-                            {invoice.total.toLocaleString('en-US')}{' '}
-                            <span className="text-xs font-normal">FCFA</span>
-                          </span>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-[6px] bg-warning-soft text-warning border border-warning/30">
-                            Pending
+                          {paidSoFar > 0 ? (
+                            <div className="text-right">
+                              <span className="text-sm font-extrabold text-charcoal block">
+                                {remainingDue.toLocaleString('en-US')}{' '}
+                                <span className="text-xs font-normal">FCFA</span>
+                              </span>
+                              <span className="text-[10px] text-muted-gray font-medium">
+                                Due ({paidSoFar.toLocaleString('en-US')} paid)
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm font-bold text-charcoal">
+                              {invoice.total.toLocaleString('en-US')}{' '}
+                              <span className="text-xs font-normal">FCFA</span>
+                            </span>
+                          )}
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-[6px] ${
+                              paidSoFar > 0
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-warning-soft text-warning border border-warning/30'
+                            }`}
+                          >
+                            {paidSoFar > 0 ? 'Partial' : 'Pending'}
                           </span>
                         </div>
                         {isExpanded ? (
@@ -2423,6 +2454,21 @@ export default function PendingInvoices() {
                     {/* Expanded Review & Payment Section */}
                     {isExpanded && (
                       <div className="px-5 pb-5 pt-0 border-t border-border">
+                        {/* Partial Payment Notice Banner */}
+                        {paidSoFar > 0 && (
+                          <div className="mt-4 mb-2 p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-[12px] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-2">
+                              <Clock size={16} className="text-amber-600 shrink-0" />
+                              <div>
+                                <span className="font-bold text-amber-950">Partial Payment Already Recorded: </span>
+                                <span className="text-amber-800 font-semibold">{paidSoFar.toLocaleString('en-US')} FCFA paid</span>
+                              </div>
+                            </div>
+                            <span className="font-extrabold text-amber-900 bg-amber-100 px-2.5 py-1 rounded-[6px] border border-amber-200 text-right sm:text-left">
+                              Remaining to Settle: {remainingDue.toLocaleString('en-US')} FCFA
+                            </span>
+                          </div>
+                        )}
                         {/* Invoice Items (Services + Drinks + Cosmetics) */}
                         <div className="mt-4 mb-4">
                           <div className="flex items-center justify-between mb-2">
@@ -2678,7 +2724,7 @@ export default function PendingInvoices() {
                                   <div className="flex items-center gap-1.5">
                                     <button
                                       type="button"
-                                      onClick={() => handleQuickSplit5050(invoice.id, finalTotal)}
+                                      onClick={() => handleQuickSplit5050(invoice.id, remainingDue)}
                                       className="px-2.5 py-1 text-[11px] font-semibold bg-white border border-border rounded-[7px] text-charcoal hover:bg-soft-cream cursor-pointer transition-colors shadow-2xs"
                                     >
                                       50 / 50 Cash & MoMo
@@ -2700,7 +2746,7 @@ export default function PendingInvoices() {
                                       <span>💵 Cash (FCFA)</span>
                                       {splitData.cashNum > 0 && (
                                         <span className="text-sage font-mono text-[10px]">
-                                          {((splitData.cashNum / (finalTotal || 1)) * 100).toFixed(0)}%
+                                          {((splitData.cashNum / (remainingDue || 1)) * 100).toFixed(0)}%
                                         </span>
                                       )}
                                     </label>
@@ -2720,7 +2766,7 @@ export default function PendingInvoices() {
                                       <span>📱 MTN MoMo (FCFA)</span>
                                       {splitData.momoNum > 0 && (
                                         <span className="text-amber-600 font-mono text-[10px]">
-                                          {((splitData.momoNum / (finalTotal || 1)) * 100).toFixed(0)}%
+                                          {((splitData.momoNum / (remainingDue || 1)) * 100).toFixed(0)}%
                                         </span>
                                       )}
                                     </label>
@@ -2740,7 +2786,7 @@ export default function PendingInvoices() {
                                       <span>🍊 Orange Money (FCFA)</span>
                                       {splitData.orangeNum > 0 && (
                                         <span className="text-orange-600 font-mono text-[10px]">
-                                          {((splitData.orangeNum / (finalTotal || 1)) * 100).toFixed(0)}%
+                                          {((splitData.orangeNum / (remainingDue || 1)) * 100).toFixed(0)}%
                                         </span>
                                       )}
                                     </label>
@@ -2760,10 +2806,10 @@ export default function PendingInvoices() {
                                   <div className="flex items-center gap-4 flex-wrap">
                                     <div>
                                       <span className="text-muted-gray text-[10px] uppercase font-bold block">
-                                        Net Payable
+                                        Net Due to Settle
                                       </span>
                                       <span className="font-extrabold text-charcoal">
-                                        {finalTotal.toLocaleString('en-US')} FCFA
+                                        {remainingDue.toLocaleString('en-US')} FCFA
                                       </span>
                                     </div>
                                     <div>
@@ -2830,7 +2876,7 @@ export default function PendingInvoices() {
                                       <>
                                         <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
                                         <span>
-                                          Collect Split Payment ({finalTotal.toLocaleString('en-US')} FCFA)
+                                          Collect Split Payment ({remainingDue.toLocaleString('en-US')} FCFA)
                                         </span>
                                       </>
                                     ) : (
@@ -2847,12 +2893,7 @@ export default function PendingInvoices() {
                                     <>
                                       <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
                                       <span>
-                                        Collect Payment (
-                                        {(discountAmount > 0
-                                          ? finalTotal
-                                          : invoice.total
-                                        ).toLocaleString('en-US')}{' '}
-                                        FCFA)
+                                        Collect Payment ({remainingDue.toLocaleString('en-US')} FCFA)
                                       </span>
                                     </>
                                   )}
@@ -2867,7 +2908,7 @@ export default function PendingInvoices() {
                                   </span>
                                 </div>
                                 <span className="font-bold text-charcoal">
-                                  {(discountAmount > 0 ? finalTotal : invoice.total).toLocaleString('en-US')} FCFA
+                                  {remainingDue.toLocaleString('en-US')} FCFA
                                 </span>
                               </div>
                             )}
