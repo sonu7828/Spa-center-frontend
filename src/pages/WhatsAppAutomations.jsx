@@ -649,49 +649,24 @@ export default function WhatsAppAutomations() {
          ===================================================================== */}
       {activeTab === 'holidays' && (
         <div className="space-y-6">
-          {/* Universal Meta Template Hero Card */}
-          <div className="bg-white border border-border rounded-[16px] p-5 shadow-card space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-border/70">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-[12px] bg-sage-soft border border-sage/30 flex items-center justify-center text-[#4F6748] shrink-0 mt-0.5">
-                  <PartyPopper size={20} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base sm:text-lg font-bold text-charcoal">
-                      Universal Meta Template: <code className="text-xs px-2 py-0.5 bg-soft-cream rounded text-sage font-mono">omega_holiday_greeting</code>
-                    </h3>
-                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-full border border-emerald-200 flex items-center gap-1">
-                      <CheckCircle size={11} /> Meta Approved
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-gray mt-1">
-                    Standardized WhatsApp message automatically dispatched at <strong>09:00 AM (Africa/Douala WAT)</strong>.
-                    Fixed dates repeat every year; variable dates update per year. Strictly <strong>0 duplicate messages</strong> per client per holiday.
-                  </p>
-                </div>
+          {/* Holiday Greetings Header */}
+          <div className="bg-white border border-border rounded-[16px] p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[12px] bg-sage-soft border border-sage/30 flex items-center justify-center text-[#4F6748] shrink-0">
+                <PartyPopper size={20} />
               </div>
-            </div>
-
-            {/* Template Bubble Preview */}
-            <div className="bg-[#FAF8F5] border border-border/80 rounded-[12px] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="space-y-1.5 font-sans text-xs text-charcoal leading-relaxed max-w-2xl bg-white p-3.5 rounded-[10px] border border-border/60 shadow-2xs">
-                <p className="font-semibold text-charcoal">Hi <span className="text-sage font-bold">{'{NAME}'}</span>,</p>
-                <p>Happy <span className="text-sage font-bold">{'{OCCASION}'}</span> from OMEGA SPA! 🌸 Wishing you and your loved ones happiness, peace, good health and joy.</p>
-                <p className="text-muted-gray">Thank you for being part of our family. We truly appreciate your trust and support.</p>
-                <p className="font-semibold text-charcoal pt-1">Warm wishes,<br />Team OMEGA SPA ❤️</p>
-              </div>
-
-              <div className="text-xs space-y-1.5 text-muted-gray shrink-0">
-                <div className="flex items-center gap-2 font-medium">
-                  <Check size={14} className="text-sage" /> Parameter 1: <strong>Client Full Name</strong>
+              <div>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-bold text-charcoal">
+                    Annual Holiday & Occasion Greetings
+                  </h2>
+                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-full border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle size={11} /> Meta Approved
+                  </span>
                 </div>
-                <div className="flex items-center gap-2 font-medium">
-                  <Check size={14} className="text-sage" /> Parameter 2: <strong>Occasion / Holiday Name</strong>
-                </div>
-                <div className="flex items-center gap-2 font-medium">
-                  <Check size={14} className="text-sage" /> Dispatch Channel: <strong>Meta Cloud API</strong>
-                </div>
+                <p className="text-xs text-muted-gray mt-0.5">
+                  Automated dispatches at 09:00 AM (Africa/Douala WAT) · 16 Fixed & 8 Variable Occasions
+                </p>
               </div>
             </div>
           </div>
