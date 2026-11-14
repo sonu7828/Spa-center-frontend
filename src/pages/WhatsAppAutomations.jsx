@@ -109,7 +109,6 @@ export default function WhatsAppAutomations() {
     holidaysLoading,
     updateHoliday,
     testSendHoliday,
-    triggerTodayHolidays,
   } = useWhatsApp();
 
   // Holidays state
@@ -117,7 +116,6 @@ export default function WhatsAppAutomations() {
   const [dateChangeModal, setDateChangeModal] = useState({ isOpen: false, holiday: null, date: '' });
   const [lastTestPhone, setLastTestPhone] = useState(() => localStorage.getItem('omega_wa_test_phone') || '+918319399018');
   const [testSendModal, setTestSendModal] = useState({ isOpen: false, holiday: null, phone: '', clientName: '' });
-  const [triggeringHolidays, setTriggeringHolidays] = useState(false);
   const [sendingTestGreeting, setSendingTestGreeting] = useState(false);
   const [savingHolidayDate, setSavingHolidayDate] = useState(false);
   const [togglingHolidayId, setTogglingHolidayId] = useState(null);
@@ -672,34 +670,6 @@ export default function WhatsAppAutomations() {
                     Fixed dates repeat every year; variable dates update per year. Strictly <strong>0 duplicate messages</strong> per client per holiday.
                   </p>
                 </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  onClick={async () => {
-                    setTriggeringHolidays(true);
-                    try {
-                      const res = await triggerTodayHolidays();
-                      setAlertNotice({
-                        type: 'success',
-                        message: res?.message || "Today's holiday greetings check executed successfully!",
-                      });
-                    } catch (e) {
-                      setAlertNotice({
-                        type: 'error',
-                        message: e?.message || "Failed to trigger today's holiday check",
-                      });
-                    } finally {
-                      setTriggeringHolidays(false);
-                    }
-                  }}
-                  disabled={triggeringHolidays}
-                  className="h-9 text-xs"
-                >
-                  {triggeringHolidays ? <Loader2 size={13} className="animate-spin" /> : <Clock size={13} />}
-                  Check & Trigger Today
-                </Button>
               </div>
             </div>
 
