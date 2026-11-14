@@ -221,9 +221,8 @@ export default function WhatsAppAutomations() {
     }
   };
 
-  // Trigger Daily Close handler (Manager only)
+  // Trigger Daily Close handler (Manager & Reception)
   const handleTriggerDailyClose = async () => {
-    if (!isManager) return;
     setTriggeringDailyClose(true);
     try {
       const savedBossPhone = localStorage.getItem('omega_boss_phone');
@@ -391,17 +390,15 @@ export default function WhatsAppAutomations() {
             {processingReminders ? 'Running...' : 'Run Reminders (24h/2h)'}
           </Button>
 
-          {isManager && (
-            <Button
-              variant="secondary"
-              onClick={handleTriggerDailyClose}
-              disabled={triggeringDailyClose}
-              className="h-9 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
-            >
-              <TrendingUp size={13} className={triggeringDailyClose ? 'animate-spin text-sage' : ''} />
-              {triggeringDailyClose ? 'Sending...' : 'Trigger Daily Close'}
-            </Button>
-          )}
+          <Button
+            variant="secondary"
+            onClick={handleTriggerDailyClose}
+            disabled={triggeringDailyClose}
+            className="h-9 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
+          >
+            <TrendingUp size={13} className={triggeringDailyClose ? 'animate-spin text-sage' : ''} />
+            {triggeringDailyClose ? 'Sending...' : 'Trigger Daily Close'}
+          </Button>
         </div>
       </div>
 
