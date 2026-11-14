@@ -112,6 +112,10 @@ export function WhatsAppProvider({ children }) {
     }
   });
 
+  // Holiday & Occasion Greetings state
+  const [holidays, setHolidays] = useState([]);
+  const [holidaysLoading, setHolidaysLoading] = useState(false);
+
   const role = (user?.role || '').toLowerCase();
   const isManager = role === 'manager';
   const isReception = role === 'reception';
@@ -254,13 +258,58 @@ export function WhatsAppProvider({ children }) {
     }
   }, []);
 
+  // Fetch all 24 fixed and variable holidays
+  const fetchHolidays = useCallback(async () => {
+    if (!isAuthenticated || !hasAccess) return;
+    setHolidaysLoading(true);
+    try {
+      const res = await whatsappApi.getHolidays();
+      if (res?.data && Array.isArray(res.data)) {
+        setHolidays(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch holidays:', err.message);
+    } finally {
+      setHolidaysLoading(false);
+    }
+  }, [isAuthenticated, hasAccess]);
+
+  // Update a holiday (toggle active, change timing, or update variable date for year)
+  const updateHoliday = useCallback(async (id, data) => {
+    try {
+      const res = await whatsappApi.updateHoliday(id, data);
+      if (res?.data) {
+        setHolidays((prev) =>
+          prev.map((h) => (h.id === id || h.code === id ? res.data : h))
+        );
+      }
+      return res;
+    } catch (err) {
+      console.warn('Failed to update holiday:', err.message);
+      throw err;
+    }
+  }, []);
+
+  // Send a test holiday greeting
+  const testSendHoliday = useCallback(async (id, data = {}) => {
+    return whatsappApi.testSendHoliday(id, data);
+  }, []);
+
+  // Trigger today's holiday check and dispatch
+  const triggerTodayHolidays = useCallback(async () => {
+    const res = await whatsappApi.triggerTodayHolidays();
+    await fetchLogs();
+    return res;
+  }, [fetchLogs]);
+
   // Initial load
   useEffect(() => {
     if (hasAccess) {
       fetchAutomations();
       fetchLogs();
+      fetchHolidays();
     }
-  }, [hasAccess, fetchAutomations, fetchLogs]);
+  }, [hasAccess, fetchAutomations, fetchLogs, fetchHolidays]);
 
   // 3. Update automation configuration (Manager only) with Optimistic UI
   const updateAutomation = useCallback(
@@ -465,6 +514,12 @@ export function WhatsAppProvider({ children }) {
     generateInvoiceMessage,
     sendSpecialUpdate,
     specialUpdates,
+    holidays,
+    holidaysLoading,
+    fetchHolidays,
+    updateHoliday,
+    testSendHoliday,
+    triggerTodayHolidays,
   };
 
   return <WhatsAppContext.Provider value={value}>{children}</WhatsAppContext.Provider>;

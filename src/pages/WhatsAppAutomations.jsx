@@ -52,6 +52,10 @@ import {
   ChevronRight,
   Trash2,
   Loader2,
+  Calendar,
+  Send,
+  Edit3,
+  PartyPopper,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -101,7 +105,24 @@ export default function WhatsAppAutomations() {
     retryMessage,
     processReminders,
     triggerDailyClose,
+    holidays = [],
+    holidaysLoading,
+    updateHoliday,
+    testSendHoliday,
+    triggerTodayHolidays,
   } = useWhatsApp();
+
+  // Holidays state
+  const [selectedHolidayYear, setSelectedHolidayYear] = useState(() => new Date().getFullYear());
+  const [dateChangeModal, setDateChangeModal] = useState({ isOpen: false, holiday: null, date: '' });
+  const [testSendModal, setTestSendModal] = useState({ isOpen: false, holiday: null, phone: '', clientName: '' });
+  const [triggeringHolidays, setTriggeringHolidays] = useState(false);
+  const [sendingTestGreeting, setSendingTestGreeting] = useState(false);
+  const [savingHolidayDate, setSavingHolidayDate] = useState(false);
+  const [togglingHolidayId, setTogglingHolidayId] = useState(null);
+
+  const fixedHolidays = useMemo(() => holidays.filter((h) => h.category === 'fixed'), [holidays]);
+  const variableHolidays = useMemo(() => holidays.filter((h) => h.category === 'variable'), [holidays]);
 
   const role = (user?.role || '').toLowerCase();
   const isManager = role === 'manager';
@@ -394,6 +415,18 @@ export default function WhatsAppAutomations() {
         </button>
 
         <button
+          onClick={() => setActiveTab('holidays')}
+          className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
+            activeTab === 'holidays'
+              ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
+              : 'text-muted-gray hover:text-charcoal'
+          }`}
+        >
+          <Calendar size={14} className="text-sage" />
+          Holidays & Occasions ({holidays.length || 24})
+        </button>
+
+        <button
           onClick={() => setActiveTab('logs')}
           className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
             activeTab === 'logs'
@@ -613,7 +646,307 @@ export default function WhatsAppAutomations() {
       )}
 
       {/* =====================================================================
-          TAB 2: MESSAGE AUDIT LOGS
+          TAB 2: HOLIDAYS & OCCASIONS (UNIVERSAL META TEMPLATE)
+         ===================================================================== */}
+      {activeTab === 'holidays' && (
+        <div className="space-y-6">
+          {/* Universal Meta Template Hero Card */}
+          <div className="bg-white border border-border rounded-[16px] p-5 shadow-card space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-border/70">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-[12px] bg-sage-soft border border-sage/30 flex items-center justify-center text-[#4F6748] shrink-0 mt-0.5">
+                  <PartyPopper size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-bold text-charcoal">
+                      Universal Meta Template: <code className="text-xs px-2 py-0.5 bg-soft-cream rounded text-sage font-mono">omega_holiday_greeting</code>
+                    </h3>
+                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-full border border-emerald-200 flex items-center gap-1">
+                      <CheckCircle size={11} /> Meta Approved
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-gray mt-1">
+                    Standardized WhatsApp message automatically dispatched at <strong>09:00 AM (Africa/Douala WAT)</strong>.
+                    Fixed dates repeat every year; variable dates update per year. Strictly <strong>0 duplicate messages</strong> per client per holiday.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  onClick={async () => {
+                    setTriggeringHolidays(true);
+                    try {
+                      const res = await triggerTodayHolidays();
+                      setAlertNotice({
+                        type: 'success',
+                        message: res?.message || "Today's holiday greetings check executed successfully!",
+                      });
+                    } catch (e) {
+                      setAlertNotice({
+                        type: 'error',
+                        message: e?.message || "Failed to trigger today's holiday check",
+                      });
+                    } finally {
+                      setTriggeringHolidays(false);
+                    }
+                  }}
+                  disabled={triggeringHolidays}
+                  className="h-9 text-xs"
+                >
+                  {triggeringHolidays ? <Loader2 size={13} className="animate-spin" /> : <Clock size={13} />}
+                  Check & Trigger Today
+                </Button>
+              </div>
+            </div>
+
+            {/* Template Bubble Preview */}
+            <div className="bg-[#FAF8F5] border border-border/80 rounded-[12px] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-1.5 font-sans text-xs text-charcoal leading-relaxed max-w-2xl bg-white p-3.5 rounded-[10px] border border-border/60 shadow-2xs">
+                <p className="font-semibold text-charcoal">Hi <span className="text-sage font-bold">{'{NAME}'}</span>,</p>
+                <p>Happy <span className="text-sage font-bold">{'{OCCASION}'}</span> from OMEGA SPA! 🌸 Wishing you and your loved ones happiness, peace, good health and joy.</p>
+                <p className="text-muted-gray">Thank you for being part of our family. We truly appreciate your trust and support.</p>
+                <p className="font-semibold text-charcoal pt-1">Warm wishes,<br />Team OMEGA SPA ❤️</p>
+              </div>
+
+              <div className="text-xs space-y-1.5 text-muted-gray shrink-0">
+                <div className="flex items-center gap-2 font-medium">
+                  <Check size={14} className="text-sage" /> Parameter 1: <strong>Client Full Name</strong>
+                </div>
+                <div className="flex items-center gap-2 font-medium">
+                  <Check size={14} className="text-sage" /> Parameter 2: <strong>Occasion / Holiday Name</strong>
+                </div>
+                <div className="flex items-center gap-2 font-medium">
+                  <Check size={14} className="text-sage" /> Dispatch Channel: <strong>Meta Cloud API</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 1: FIXED DATES (16 Occasions) */}
+          <div className="bg-white border border-border rounded-[16px] p-5 shadow-card space-y-4">
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-border/70">
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-charcoal flex items-center gap-2">
+                  <Calendar size={16} className="text-sage" />
+                  1. Fixed Annual Dates ({fixedHolidays.length})
+                </h3>
+                <p className="text-xs text-muted-gray">
+                  These occasions fall on the exact same calendar date every year and automatically repeat without any manual intervention.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {fixedHolidays.map((h) => {
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const monthLabel = h.fixedMonth ? monthNames[h.fixedMonth - 1] : '';
+                const dayLabel = String(h.fixedDay || 1).padStart(2, '0');
+                const isToggling = togglingHolidayId === h.id;
+
+                return (
+                  <div
+                    key={h.id}
+                    className={`border rounded-[12px] p-3.5 flex flex-col justify-between gap-2.5 transition-all ${
+                      h.isActive
+                        ? 'bg-white border-border/80 shadow-2xs hover:border-sage/40'
+                        : 'bg-soft-cream/30 border-border/40 opacity-70'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-11 h-11 rounded-[8px] bg-sage-soft border border-sage/30 flex flex-col items-center justify-center shrink-0 leading-tight">
+                          <span className="text-[10px] uppercase font-bold text-sage">{monthLabel}</span>
+                          <span className="text-sm font-extrabold text-charcoal">{dayLabel}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-charcoal leading-snug line-clamp-2" title={h.name}>
+                            {h.name}
+                          </h4>
+                          <span className="text-[10px] text-muted-gray">Fixed recurring</span>
+                        </div>
+                      </div>
+
+                      {/* Active Toggle Switch */}
+                      <button
+                        type="button"
+                        disabled={!isManager || isToggling}
+                        onClick={async () => {
+                          setTogglingHolidayId(h.id);
+                          try {
+                            await updateHoliday(h.id, { isActive: !h.isActive });
+                          } catch (e) {
+                            setAlertNotice({ type: 'error', message: 'Failed to update holiday status' });
+                          } finally {
+                            setTogglingHolidayId(null);
+                          }
+                        }}
+                        className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer shrink-0 mt-1 ${
+                          h.isActive ? 'bg-sage' : 'bg-muted-gray/30'
+                        }`}
+                        title={h.isActive ? 'Active (Click to pause)' : 'Paused (Click to activate)'}
+                      >
+                        <span
+                          className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.75 transition-transform ${
+                            h.isActive ? 'right-0.75' : 'left-0.75'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px]">
+                      <span className="text-muted-gray font-mono">09:00 WAT</span>
+                      <button
+                        type="button"
+                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: '', clientName: '' })}
+                        className="text-sage hover:text-charcoal font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Send size={11} /> Test Send
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* SECTION 2: VARIABLE DATES (8 Occasions) */}
+          <div className="bg-white border border-border rounded-[16px] p-5 shadow-card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/70">
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-charcoal flex items-center gap-2">
+                  <Calendar size={16} className="text-sage" />
+                  2. Variable Annual Dates ({variableHolidays.length})
+                </h3>
+                <p className="text-xs text-muted-gray">
+                  These dates change every year (Islamic lunar Eid holidays, Easter, Mother's Day, etc.). Managers can update or confirm the exact date for each year.
+                </p>
+              </div>
+
+              {/* Year Selector */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-semibold text-charcoal">Year:</span>
+                <div className="flex bg-soft-cream p-1 rounded-[8px] border border-border">
+                  {[2026, 2027, 2028].map((yr) => (
+                    <button
+                      key={yr}
+                      type="button"
+                      onClick={() => setSelectedHolidayYear(yr)}
+                      className={`px-3 py-1 rounded-[6px] text-xs font-bold transition-all cursor-pointer ${
+                        selectedHolidayYear === yr
+                          ? 'bg-charcoal text-white shadow-2xs'
+                          : 'text-muted-gray hover:text-charcoal'
+                      }`}
+                    >
+                      {yr}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {variableHolidays.map((h) => {
+                const yearKey = String(selectedHolidayYear);
+                const assignedDateStr = h.variableDates?.[yearKey] || '';
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                let monthLabel = 'TBD';
+                let dayLabel = '--';
+                if (assignedDateStr) {
+                  const parts = assignedDateStr.split('-');
+                  if (parts.length === 3) {
+                    const mIdx = parseInt(parts[1], 10) - 1;
+                    monthLabel = monthNames[mIdx] || 'TBD';
+                    dayLabel = parts[2];
+                  }
+                }
+                const isToggling = togglingHolidayId === h.id;
+
+                return (
+                  <div
+                    key={h.id}
+                    className={`border rounded-[12px] p-3.5 flex flex-col justify-between gap-2.5 transition-all ${
+                      h.isActive
+                        ? 'bg-white border-border/80 shadow-2xs hover:border-sage/40'
+                        : 'bg-soft-cream/30 border-border/40 opacity-70'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-11 h-11 rounded-[8px] bg-amber-50 border border-amber-200/60 flex flex-col items-center justify-center shrink-0 leading-tight">
+                          <span className="text-[10px] uppercase font-bold text-amber-800">{monthLabel}</span>
+                          <span className="text-sm font-extrabold text-charcoal">{dayLabel}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-charcoal leading-snug line-clamp-2" title={h.name}>
+                            {h.name}
+                          </h4>
+                          <span className="text-[10px] text-muted-gray font-mono">
+                            {assignedDateStr ? assignedDateStr : 'Date Not Set'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Active Toggle Switch */}
+                      <button
+                        type="button"
+                        disabled={!isManager || isToggling}
+                        onClick={async () => {
+                          setTogglingHolidayId(h.id);
+                          try {
+                            await updateHoliday(h.id, { isActive: !h.isActive });
+                          } catch (e) {
+                            setAlertNotice({ type: 'error', message: 'Failed to update holiday status' });
+                          } finally {
+                            setTogglingHolidayId(null);
+                          }
+                        }}
+                        className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer shrink-0 mt-1 ${
+                          h.isActive ? 'bg-sage' : 'bg-muted-gray/30'
+                        }`}
+                        title={h.isActive ? 'Active' : 'Paused'}
+                      >
+                        <span
+                          className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.75 transition-transform ${
+                            h.isActive ? 'right-0.75' : 'left-0.75'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px]">
+                      {isManager ? (
+                        <button
+                          type="button"
+                          onClick={() => setDateChangeModal({ isOpen: true, holiday: h, date: assignedDateStr })}
+                          className="px-2 py-1 rounded-[6px] bg-soft-cream hover:bg-soft-cream/80 text-charcoal border border-border/70 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Edit3 size={11} className="text-sage" /> Change Date
+                        </button>
+                      ) : (
+                        <span className="text-muted-gray">Manager only</span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: '', clientName: '' })}
+                        className="text-sage hover:text-charcoal font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Send size={11} /> Test Send
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          TAB 3: MESSAGE AUDIT LOGS
          ===================================================================== */}
       {activeTab === 'logs' && (
         <div className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card space-y-4">
@@ -876,6 +1209,172 @@ export default function WhatsAppAutomations() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+    
+      {/* ── Modal: Change Variable Holiday Date ── */}
+      {dateChangeModal.isOpen && dateChangeModal.holiday && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/50 backdrop-blur-xs">
+          <div className="bg-white rounded-[16px] max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Calendar size={18} className="text-sage" />
+                <h3 className="text-sm font-bold text-charcoal">Set {dateChangeModal.holiday.name} Date</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDateChangeModal({ isOpen: false, holiday: null, date: '' })}
+                className="text-muted-gray hover:text-charcoal cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-charcoal block mb-1">
+                  Selected Year: <strong>{selectedHolidayYear}</strong>
+                </label>
+                <input
+                  type="date"
+                  value={dateChangeModal.date}
+                  onChange={(e) => setDateChangeModal((prev) => ({ ...prev, date: e.target.value }))}
+                  className="w-full h-10 px-3 border border-border rounded-[8px] text-xs font-medium text-charcoal outline-none focus:border-sage"
+                />
+              </div>
+              <p className="text-[11px] text-muted-gray leading-normal">
+                WhatsApp greeting will automatically dispatch to clients on this date at 09:00 AM WAT.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setDateChangeModal({ isOpen: false, holiday: null, date: '' })}
+                className="h-9 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={!dateChangeModal.date || savingHolidayDate}
+                onClick={async () => {
+                  setSavingHolidayDate(true);
+                  try {
+                    await updateHoliday(dateChangeModal.holiday.id, {
+                      year: selectedHolidayYear,
+                      date: dateChangeModal.date,
+                    });
+                    setAlertNotice({
+                      type: 'success',
+                      message: `Date for ${dateChangeModal.holiday.name} (${selectedHolidayYear}) updated to ${dateChangeModal.date}!`,
+                    });
+                    setDateChangeModal({ isOpen: false, holiday: null, date: '' });
+                  } catch (e) {
+                    setAlertNotice({ type: 'error', message: 'Failed to update holiday date.' });
+                  } finally {
+                    setSavingHolidayDate(false);
+                  }
+                }}
+                className="h-9 text-xs"
+              >
+                {savingHolidayDate ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                Save Date
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Test Send Holiday Greeting ── */}
+      {testSendModal.isOpen && testSendModal.holiday && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/50 backdrop-blur-xs">
+          <div className="bg-white rounded-[16px] max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Send size={18} className="text-sage" />
+                <h3 className="text-sm font-bold text-charcoal">Test Send: {testSendModal.holiday.name}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTestSendModal({ isOpen: false, holiday: null, phone: '', clientName: '' })}
+                className="text-muted-gray hover:text-charcoal cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-charcoal block mb-1">
+                  Recipient WhatsApp Phone Number <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  placeholder="+237 6XX XXX XXX"
+                  value={testSendModal.phone}
+                  onChange={(e) => setTestSendModal((prev) => ({ ...prev, phone: e.target.value }))}
+                  className="w-full h-10 px-3 border border-border rounded-[8px] text-xs font-medium text-charcoal outline-none focus:border-sage"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-charcoal block mb-1">
+                  Test Client Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Marie Claire"
+                  value={testSendModal.clientName}
+                  onChange={(e) => setTestSendModal((prev) => ({ ...prev, clientName: e.target.value }))}
+                  className="w-full h-10 px-3 border border-border rounded-[8px] text-xs font-medium text-charcoal outline-none focus:border-sage"
+                />
+              </div>
+
+              {/* Live Preview */}
+              <div className="p-3 bg-[#FAF8F5] border border-border rounded-[8px] text-xs text-charcoal leading-relaxed font-sans">
+                <p className="font-semibold">Hi {testSendModal.clientName || 'Cher Client'},</p>
+                <p className="mt-1">Happy {testSendModal.holiday.name} from OMEGA SPA! 🌸 Wishing you and your loved ones happiness, peace, good health and joy.</p>
+                <p className="mt-1 text-muted-gray">Thank you for being part of our family. We truly appreciate your trust and support.</p>
+                <p className="mt-1 font-semibold">Warm wishes,<br />Team OMEGA SPA ❤️</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setTestSendModal({ isOpen: false, holiday: null, phone: '', clientName: '' })}
+                className="h-9 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={!testSendModal.phone || sendingTestGreeting}
+                onClick={async () => {
+                  setSendingTestGreeting(true);
+                  try {
+                    const res = await testSendHoliday(testSendModal.holiday.id, {
+                      phone: testSendModal.phone,
+                      clientName: testSendModal.clientName,
+                    });
+                    setAlertNotice({
+                      type: 'success',
+                      message: res?.message || `Test greeting dispatched to ${testSendModal.phone}!`,
+                    });
+                    setTestSendModal({ isOpen: false, holiday: null, phone: '', clientName: '' });
+                  } catch (e) {
+                    setAlertNotice({ type: 'error', message: e?.message || 'Failed to dispatch test greeting' });
+                  } finally {
+                    setSendingTestGreeting(false);
+                  }
+                }}
+                className="h-9 text-xs"
+              >
+                {sendingTestGreeting ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                Send Test Greeting
+              </Button>
+            </div>
           </div>
         </div>
       )}

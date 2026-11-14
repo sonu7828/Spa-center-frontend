@@ -576,6 +576,21 @@ export const whatsappApi = {
       method: 'POST',
       body: JSON.stringify({}),
     }),
+  getHolidays: () => apiRequest('/whatsapp/holidays'),
+  updateHoliday: (id, data) =>
+    apiRequest('/whatsapp/holidays/' + id, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  testSendHoliday: (id, data = {}) =>
+    apiRequest('/whatsapp/holidays/' + id + '/test-send', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  triggerTodayHolidays: () =>
+    apiRequest('/whatsapp/holidays/trigger-today', {
+      method: 'POST',
+    }),
 };
 
 export const feedbackApi = {
