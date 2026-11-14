@@ -318,31 +318,6 @@ export default function WhatsAppAutomations() {
       <PageHeader
         title="WhatsApp Automation & Logs"
         subtitle="Automated client engagement engine, transactional receipts, and real-time delivery audit logs."
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              onClick={handleProcessReminders}
-              disabled={processingReminders}
-              className="h-9 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
-            >
-              <RotateCw size={14} className={processingReminders ? 'animate-spin' : ''} />
-              {processingReminders ? 'Processing...' : 'Run Reminders (24h/2h)'}
-            </Button>
-
-            {isManager && (
-              <Button
-                variant="secondary"
-                onClick={handleTriggerDailyClose}
-                disabled={triggeringDailyClose}
-                className="h-9 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
-              >
-                <TrendingUp size={14} className={triggeringDailyClose ? 'animate-spin text-sage' : ''} />
-                {triggeringDailyClose ? 'Sending...' : 'Trigger Daily Close'}
-              </Button>
-            )}
-          </div>
-        }
       />
 
       {/* ── Top Notification Banner ── */}
@@ -363,43 +338,71 @@ export default function WhatsAppAutomations() {
         </div>
       )}
 
-      {/* ── Top Navigation Tabs ── */}
-      <div className="flex items-center gap-1.5 p-1 bg-soft-cream/80 border border-border rounded-[12px] max-w-fit shadow-2xs">
-        <button
-          onClick={() => setActiveTab('automations')}
-          className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
-            activeTab === 'automations'
-              ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
-              : 'text-muted-gray hover:text-charcoal'
-          }`}
-        >
-          <Sparkles size={14} className="text-sage" />
-          Automations Engine ({automations.length})
-        </button>
+      {/* ── Top Navigation Tabs & Operational Actions ── */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1.5 p-1 bg-soft-cream/80 border border-border rounded-[12px] max-w-fit shadow-2xs">
+          <button
+            onClick={() => setActiveTab('automations')}
+            className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
+              activeTab === 'automations'
+                ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <Sparkles size={14} className="text-sage" />
+            Automations Engine ({automations.length})
+          </button>
 
-        <button
-          onClick={() => setActiveTab('holidays')}
-          className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
-            activeTab === 'holidays'
-              ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
-              : 'text-muted-gray hover:text-charcoal'
-          }`}
-        >
-          <Calendar size={14} className="text-sage" />
-          Holidays & Occasions ({holidays.length || 24})
-        </button>
+          <button
+            onClick={() => setActiveTab('holidays')}
+            className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
+              activeTab === 'holidays'
+                ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <Calendar size={14} className="text-sage" />
+            Holidays & Occasions ({holidays.length || 24})
+          </button>
 
-        <button
-          onClick={() => setActiveTab('logs')}
-          className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
-            activeTab === 'logs'
-              ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
-              : 'text-muted-gray hover:text-charcoal'
-          }`}
-        >
-          <FileText size={14} className="text-sage" />
-          Message Audit Logs ({pagination.total})
-        </button>
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
+              activeTab === 'logs'
+                ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <FileText size={14} className="text-sage" />
+            Message Audit Logs ({pagination.total})
+          </button>
+        </div>
+
+        {/* Operational Actions directly on the right of tabs */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={handleProcessReminders}
+            disabled={processingReminders}
+            className="h-9 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
+          >
+            <RotateCw size={13} className={processingReminders ? 'animate-spin' : ''} />
+            {processingReminders ? 'Running...' : 'Run Reminders (24h/2h)'}
+          </Button>
+
+          {isManager && (
+            <Button
+              variant="secondary"
+              onClick={handleTriggerDailyClose}
+              disabled={triggeringDailyClose}
+              className="h-9 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
+            >
+              <TrendingUp size={13} className={triggeringDailyClose ? 'animate-spin text-sage' : ''} />
+              {triggeringDailyClose ? 'Sending...' : 'Trigger Daily Close'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* =====================================================================
