@@ -27,7 +27,7 @@ const MANAGER_ROUTES = [
   '/', '/dashboard', '/clients', '/clients/new', '/clients/:id',
   '/appointments', '/appointments/new', '/appointments/:id',
   '/appointments/:id/late', '/appointments/:id/no-show', '/appointments/:id/close',
-  '/stock', '/stock-photos', '/technicians/daily', '/summary', '/referrals', '/rebooking', '/daily-close',
+  '/stock', '/stock-photos', '/technicians/daily', '/summary', '/referrals', '/rebooking', '/daily-close', '/reports',
   '/staff', '/job-seekers', '/services', '/cleaning-records', '/loyalty-settings', '/social-media',
   '/whatsapp-automations', '/client-feedback', '/invoices', '/products',
   '/retail', '/shared-work', '/expenses', '/expenses/new', '/attendance', '/attendance/manager',
@@ -42,7 +42,7 @@ const RECEPTION_ROUTES = [
   '/whatsapp-automations', '/client-feedback',
   '/services', '/products', '/retail', '/stock', '/stock-photos',
   '/staff', '/job-seekers', '/attendance/manager', '/technicians/daily', '/summary', '/shared-work',
-  '/cleaning-records', '/loyalty-settings', '/social-media', '/daily-close',
+  '/cleaning-records', '/loyalty-settings', '/social-media', '/daily-close', '/reports',
 ];
 
 const TECHNICIAN_ROUTES = [

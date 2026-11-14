@@ -474,6 +474,7 @@ export const reportsApi = {
   getRevenue: (params = 'today') => apiRequest('/reports/revenue' + buildReportQuery(params)),
   getAppointments: (params = 'today') => apiRequest('/reports/appointments' + buildReportQuery(params)),
   getTopServices: (params = 'today') => apiRequest('/reports/top-services' + buildReportQuery(params)),
+  getServicePerformance: (params = '30d') => apiRequest('/reports/service-performance' + buildReportQuery(params)),
   getTechnicians: (params = 'today') => apiRequest('/reports/technicians' + buildReportQuery(params)),
   getMyPerformance: (params = 'today') => apiRequest('/reports/technicians/me' + buildReportQuery(params)),
   getTechnicianMe: (params = 'today') => apiRequest('/reports/technicians/me' + buildReportQuery(params)),

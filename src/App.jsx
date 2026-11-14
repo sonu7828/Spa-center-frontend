@@ -78,6 +78,7 @@ import Expenses from './pages/Expenses';
 import Attendance from './pages/Attendance';
 import AttendanceManager from './pages/AttendanceManager';
 import JobSeekers from './pages/JobSeekers';
+import Reports from './pages/Reports';
 
 /**
  * ProtectedRoute — Redirects to /login if not authenticated,
@@ -170,6 +171,7 @@ export default function App() {
                             <Route path="referrals" element={<Referrals />} />
                             <Route path="rebooking" element={<Rebooking />} />
                             <Route path="daily-close" element={<DailyClose />} />
+                            <Route path="reports" element={<Reports />} />
                             <Route path="staff" element={<Staff />} />
                             <Route path="job-seekers" element={<JobSeekers />} />
                             <Route path="services" element={<Services />} />

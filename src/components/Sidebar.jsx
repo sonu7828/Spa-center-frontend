@@ -35,6 +35,7 @@ import {
   Receipt,
   Clock,
   Briefcase,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth, isMarketerUser } from '../context/AuthContext';
 
@@ -63,6 +64,7 @@ const navSections = [
       { to: '/staff',            label: 'Staff',           icon: UserCog,        roles: ['manager', 'reception'] },
       { to: '/job-seekers',      label: 'Job Seekers',     icon: Briefcase,      roles: ['manager', 'reception'] },
       { to: '/daily-close',      label: 'Daily Close',     icon: FileCheck,      roles: ['manager', 'reception'] },
+      { to: '/reports',          label: 'Reports',         icon: BarChart3,      roles: ['manager', 'reception'] },
       { to: '/attendance/manager', label: 'Staff Attendance', icon: Clock,        roles: ['manager', 'reception'] },
       { to: '/attendance',       label: 'My Attendance',   icon: Clock,          roles: ['technician', 'reception'] },
     ],
