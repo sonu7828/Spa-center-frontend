@@ -828,13 +828,22 @@ export default function WhatsAppAutomations() {
               {/* Year Selector */}
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs font-semibold text-charcoal">Year:</span>
-                <div className="flex bg-soft-cream p-1 rounded-[8px] border border-border">
-                  {[2026, 2027, 2028].map((yr) => (
+                <div className="flex items-center bg-soft-cream p-1 rounded-[8px] border border-border gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHolidayYear((prev) => Math.max(2025, prev - 1))}
+                    title="Previous Year"
+                    className="w-6 h-6 rounded flex items-center justify-center text-muted-gray hover:text-charcoal hover:bg-white transition-colors cursor-pointer"
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+
+                  {[2026, 2027, 2028, 2029, 2030].map((yr) => (
                     <button
                       key={yr}
                       type="button"
                       onClick={() => setSelectedHolidayYear(yr)}
-                      className={`px-3 py-1 rounded-[6px] text-xs font-bold transition-all cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-[6px] text-xs font-bold transition-all cursor-pointer ${
                         selectedHolidayYear === yr
                           ? 'bg-charcoal text-white shadow-2xs'
                           : 'text-muted-gray hover:text-charcoal'
@@ -843,6 +852,24 @@ export default function WhatsAppAutomations() {
                       {yr}
                     </button>
                   ))}
+
+                  {selectedHolidayYear > 2030 && (
+                    <button
+                      type="button"
+                      className="px-2.5 py-1 rounded-[6px] text-xs font-bold bg-charcoal text-white shadow-2xs"
+                    >
+                      {selectedHolidayYear}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHolidayYear((prev) => prev + 1)}
+                    title="Next Year"
+                    className="w-6 h-6 rounded flex items-center justify-center text-muted-gray hover:text-charcoal hover:bg-white transition-colors cursor-pointer"
+                  >
+                    <ChevronRight size={13} />
+                  </button>
                 </div>
               </div>
             </div>
