@@ -149,6 +149,15 @@ export default function Reports() {
             <div className="flex items-center bg-white border border-[#E8E2D9] rounded-xl p-1 shadow-xs">
               <button
                 type="button"
+                onClick={() => setPeriod('today')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                  period === 'today' ? 'bg-[#5B6E58] text-white shadow-xs' : 'text-[#7D7871] hover:text-[#2D2D2A]'
+                }`}
+              >
+                Today
+              </button>
+              <button
+                type="button"
                 onClick={() => setPeriod('weekly')}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                   period === 'weekly' || period === '7d' ? 'bg-[#5B6E58] text-white shadow-xs' : 'text-[#7D7871] hover:text-[#2D2D2A]'
@@ -164,15 +173,6 @@ export default function Reports() {
                 }`}
               >
                 ⭐ Last 30 Days
-              </button>
-              <button
-                type="button"
-                onClick={() => setPeriod('monthly')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                  period === 'monthly' ? 'bg-[#5B6E58] text-white shadow-xs' : 'text-[#7D7871] hover:text-[#2D2D2A]'
-                }`}
-              >
-                This Month
               </button>
               <button
                 type="button"
@@ -497,7 +497,7 @@ export default function Reports() {
               {searchQuery && <p className="text-xs text-[#7D7871] mt-1">Try clearing your search query.</p>}
             </div>
           ) : (
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[640px]">
               <thead>
                 <tr className="bg-[#FAF8F5] border-b border-[#E8E2D9] text-[11px] font-bold text-[#7D7871] uppercase tracking-wider">
                   <th className="py-3 px-4 sm:px-6 w-14">Rank</th>
