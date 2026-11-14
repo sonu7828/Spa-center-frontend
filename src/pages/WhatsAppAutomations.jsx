@@ -114,8 +114,7 @@ export default function WhatsAppAutomations() {
   // Holidays state
   const [selectedHolidayYear, setSelectedHolidayYear] = useState(() => new Date().getFullYear());
   const [dateChangeModal, setDateChangeModal] = useState({ isOpen: false, holiday: null, date: '' });
-  const [lastTestPhone, setLastTestPhone] = useState(() => localStorage.getItem('omega_wa_test_phone') || '+918319399018');
-  const [testSendModal, setTestSendModal] = useState({ isOpen: false, holiday: null, phone: '', clientName: '' });
+  const [testSendModal, setTestSendModal] = useState({ isOpen: false, holiday: null, phone: '+237', clientName: '' });
   const [sendingTestGreeting, setSendingTestGreeting] = useState(false);
   const [savingHolidayDate, setSavingHolidayDate] = useState(false);
   const [togglingHolidayId, setTogglingHolidayId] = useState(null);
@@ -710,7 +709,7 @@ export default function WhatsAppAutomations() {
                       <span className="text-muted-gray font-mono">09:00 WAT</span>
                       <button
                         type="button"
-                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: lastTestPhone, clientName: 'Sunu' })}
+                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: '+237', clientName: '' })}
                         className="text-sage hover:text-charcoal font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <Send size={11} /> Test Send
@@ -868,7 +867,7 @@ export default function WhatsAppAutomations() {
 
                       <button
                         type="button"
-                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: lastTestPhone, clientName: 'Sunu' })}
+                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: '+237', clientName: '' })}
                         className="text-sage hover:text-charcoal font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <Send size={11} /> Test Send
@@ -1235,7 +1234,7 @@ export default function WhatsAppAutomations() {
               </div>
               <button
                 type="button"
-                onClick={() => setTestSendModal({ isOpen: false, holiday: null, phone: '', clientName: '' })}
+                onClick={() => setTestSendModal({ isOpen: false, holiday: null, phone: '+237', clientName: '' })}
                 className="text-muted-gray hover:text-charcoal cursor-pointer"
               >
                 <X size={16} />
@@ -1281,21 +1280,19 @@ export default function WhatsAppAutomations() {
             <div className="flex items-center justify-end gap-2 pt-2">
               <Button
                 variant="secondary"
-                onClick={() => setTestSendModal({ isOpen: false, holiday: null, phone: '', clientName: '' })}
+                onClick={() => setTestSendModal({ isOpen: false, holiday: null, phone: '+237', clientName: '' })}
                 className="h-9 text-xs"
               >
                 Cancel
               </Button>
               <Button
-                disabled={!testSendModal.phone || sendingTestGreeting}
+                disabled={!testSendModal.phone || testSendModal.phone.trim() === '+237' || testSendModal.phone.trim() === '+' || sendingTestGreeting}
                 onClick={async () => {
                   setSendingTestGreeting(true);
                   try {
-                    localStorage.setItem('omega_wa_test_phone', testSendModal.phone);
-                    setLastTestPhone(testSendModal.phone);
                     const res = await testSendHoliday(testSendModal.holiday.id, {
-                      phone: testSendModal.phone,
-                      clientName: testSendModal.clientName,
+                      phone: testSendModal.phone.trim(),
+                      clientName: testSendModal.clientName.trim() || undefined,
                     });
                     if (res?.data?.success === false || res?.success === false) {
                       setAlertNotice({
@@ -1307,7 +1304,7 @@ export default function WhatsAppAutomations() {
                         type: 'success',
                         message: res?.message || `Test greeting dispatched to ${testSendModal.phone}!`,
                       });
-                      setTestSendModal({ isOpen: false, holiday: null, phone: testSendModal.phone, clientName: '' });
+                      setTestSendModal({ isOpen: false, holiday: null, phone: '+237', clientName: '' });
                     }
                   } catch (e) {
                     setAlertNotice({ type: 'error', message: e?.message || 'Failed to dispatch test greeting' });
