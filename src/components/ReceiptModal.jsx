@@ -101,26 +101,145 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
   const cosmeticItems = (invoice.items || []).filter((it) => it.type === 'cosmetic');
 
   const handlePrint = () => {
-    const origTitle = document.title;
-    document.title = ' ';
-    window.print();
+    const printEl = document.getElementById('omega-receipt-print');
+    if (!printEl) {
+      window.print();
+      return;
+    }
+
+    // Create an invisible iframe for isolated single-page printing
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('style', 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;');
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    doc.open();
+    doc.write('<!DOCTYPE html><html><head><title>Receipt ' + invNumber + '</title>');
+
+    // Clone all stylesheets and style tags so fonts, variables & Tailwind match
+    document.querySelectorAll('link[rel="stylesheet"], style').forEach((styleNode) => {
+      doc.write(styleNode.outerHTML);
+    });
+
+    // Add print styles to ensure strict single-page layout with no background bleed
+    doc.write(`
+      <style>
+        @page {
+          size: A4 portrait;
+          margin: 8mm 10mm;
+        }
+        * {
+          box-sizing: border-box !important;
+        }
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          height: auto !important;
+          min-height: 0 !important;
+          font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        #omega-receipt-print {
+          width: 100% !important;
+          max-width: 620px !important;
+          margin: 0 auto !important;
+          border: 1px solid #E8E1D9 !important;
+          border-radius: 12px !important;
+          overflow: hidden !important;
+          box-shadow: none !important;
+          background: #ffffff !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          page-break-after: avoid !important;
+          break-after: avoid !important;
+        }
+        .receipt-header-bar {
+          background: #2E2F31 !important;
+          color: #ffffff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .receipt-total-row {
+          background: #f5f1ec !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .receipt-paid-badge {
+          background: #EDF4EE !important;
+          color: #4a8c5c !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .no-print {
+          display: none !important;
+        }
+      </style>
+    `);
+
+    doc.write('</head><body>');
+    doc.write(printEl.outerHTML);
+    doc.write('</body></html>');
+    doc.close();
+
     setTimeout(() => {
-      document.title = origTitle;
-    }, 1000);
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.warn('Iframe print failed, falling back to window.print():', err);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 2000);
+      }
+    }, 300);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-charcoal/50 backdrop-blur-xs overflow-hidden">
-      {/* ── Print-only CSS ── */}
+      {/* ── Print-only CSS (Fallback for Ctrl+P) ── */}
       <style>{`
         @media print {
-          /* Hide everything */
+          @page {
+            size: A4 portrait;
+            margin: 8mm 10mm;
+          }
+
           html, body {
             margin: 0 !important;
             padding: 0 !important;
             background: #fff !important;
+            height: 100% !important;
+            max-height: 100% !important;
+            overflow: hidden !important;
           }
+
           body * { visibility: hidden !important; }
+
+          /* Cancel fixed positioning and viewport limits on modal containers to avoid page repetition */
+          div[class*="fixed"],
+          div[class*="inset-0"] {
+            position: static !important;
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            background: transparent !important;
+            box-shadow: none !important;
+          }
 
           /* Show only receipt */
           #omega-receipt-print, #omega-receipt-print * {
@@ -130,23 +249,26 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
           #omega-receipt-print {
             position: absolute !important;
             top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
             width: 100% !important;
-            max-width: 100% !important;
+            max-width: 620px !important;
             height: auto !important;
-            margin: 0 !important;
-            padding: 30px 36px !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
             background: #fff !important;
             color: #1a1a1a !important;
             box-shadow: none !important;
-            border: none !important;
-            border-radius: 0 !important;
+            border: 1px solid #E8E1D9 !important;
+            border-radius: 12px !important;
+            overflow: hidden !important;
             font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif !important;
-            font-size: 13pt !important;
-            line-height: 1.5 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
           }
 
           .receipt-header-bar {
@@ -170,11 +292,6 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
           }
 
           .no-print { display: none !important; }
-
-          @page {
-            size: auto;
-            margin: 0mm !important;
-          }
         }
       `}</style>
 
