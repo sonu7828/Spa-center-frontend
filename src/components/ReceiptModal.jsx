@@ -107,9 +107,17 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
       return;
     }
 
-    // Create an invisible iframe for isolated single-page printing
+    // Create an isolated iframe for clean single-page printing
     const iframe = document.createElement('iframe');
-    iframe.setAttribute('style', 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '800px';
+    iframe.style.height = '1000px';
+    iframe.style.border = 'none';
+    iframe.style.opacity = '0.001';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.zIndex = '-9999';
     document.body.appendChild(iframe);
 
     const doc = iframe.contentWindow?.document;
@@ -121,8 +129,11 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
     doc.open();
     doc.write('<!DOCTYPE html><html><head><title>Receipt ' + invNumber + '</title>');
 
-    // Clone all stylesheets and style tags so fonts, variables & Tailwind match
+    // Clone all external stylesheets and style tags, skipping any conflicting print rules
     document.querySelectorAll('link[rel="stylesheet"], style').forEach((styleNode) => {
+      if (styleNode.textContent && styleNode.textContent.includes('body * { visibility: hidden')) {
+        return;
+      }
       doc.write(styleNode.outerHTML);
     });
 
@@ -142,17 +153,20 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
           background: #ffffff !important;
           height: auto !important;
           min-height: 0 !important;
+          overflow: visible !important;
           font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
         #omega-receipt-print {
+          position: static !important;
+          transform: none !important;
           width: 100% !important;
           max-width: 620px !important;
           margin: 0 auto !important;
           border: 1px solid #E8E1D9 !important;
           border-radius: 12px !important;
-          overflow: hidden !important;
+          overflow: visible !important;
           box-shadow: none !important;
           background: #ffffff !important;
           page-break-inside: avoid !important;
@@ -202,7 +216,7 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
           }
         }, 2000);
       }
-    }, 300);
+    }, 400);
   };
 
   return (
