@@ -165,8 +165,6 @@ export default function WhatsAppAutomations() {
     );
   }
 
-  const activeAutomationsCount = automations.filter((a) => a.isActive).length;
-
   const showNotification = (msg, isError = false) => {
     setAlertNotice({ message: msg, isError });
     setTimeout(() => setAlertNotice(null), 5000);
@@ -320,6 +318,31 @@ export default function WhatsAppAutomations() {
       <PageHeader
         title="WhatsApp Automation & Logs"
         subtitle="Automated client engagement engine, transactional receipts, and real-time delivery audit logs."
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={handleProcessReminders}
+              disabled={processingReminders}
+              className="h-9 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
+            >
+              <RotateCw size={14} className={processingReminders ? 'animate-spin' : ''} />
+              {processingReminders ? 'Processing...' : 'Run Reminders (24h/2h)'}
+            </Button>
+
+            {isManager && (
+              <Button
+                variant="secondary"
+                onClick={handleTriggerDailyClose}
+                disabled={triggeringDailyClose}
+                className="h-9 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
+              >
+                <TrendingUp size={14} className={triggeringDailyClose ? 'animate-spin text-sage' : ''} />
+                {triggeringDailyClose ? 'Sending...' : 'Trigger Daily Close'}
+              </Button>
+            )}
+          </div>
+        }
       />
 
       {/* ── Top Notification Banner ── */}
@@ -339,65 +362,6 @@ export default function WhatsAppAutomations() {
           <span>{alertNotice.message}</span>
         </div>
       )}
-
-      {/* ── KPI Summary & Operational Actions ── */}
-      <div className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-3 w-full lg:w-auto">
-          <div className="px-3.5 py-2.5 bg-soft-cream/60 rounded-[12px] border border-border/70 text-center sm:text-left">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">
-              Automations
-            </span>
-            <span className="text-lg sm:text-xl font-extrabold text-charcoal block mt-0.5">
-              {automations.length} Engine
-            </span>
-          </div>
-
-          <div className="px-3.5 py-2.5 bg-sage-soft rounded-[12px] border border-sage/30 text-center sm:text-left">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#4F6748] block">
-              Active Status
-            </span>
-            <span className="text-lg sm:text-xl font-extrabold text-[#4F6748] block mt-0.5">
-              {activeAutomationsCount} / {automations.length} ON
-            </span>
-          </div>
-
-          <div className="px-3.5 py-2.5 bg-warm-ivory rounded-[12px] border border-border/70 text-center sm:text-left">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">
-              Total Logged
-            </span>
-            <span className="text-lg sm:text-xl font-extrabold text-charcoal block mt-0.5">
-              {pagination.total} Msgs
-            </span>
-          </div>
-        </div>
-
-        {/* Global Trigger Actions */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-border/50">
-          <Button
-            variant="secondary"
-            onClick={handleProcessReminders}
-            disabled={processingReminders}
-            className="h-10 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
-          >
-            <RotateCw size={14} className={processingReminders ? 'animate-spin' : ''} />
-            {processingReminders ? 'Processing...' : 'Run Reminders (24h/2h)'}
-          </Button>
-
-          {isManager && (
-            <Button
-              variant="secondary"
-              onClick={handleTriggerDailyClose}
-              disabled={triggeringDailyClose}
-              className="h-10 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
-            >
-              <TrendingUp size={14} />
-              {triggeringDailyClose ? 'Sending...' : 'Trigger Daily Close'}
-            </Button>
-          )}
-
-        </div>
-      </div>
 
       {/* ── Top Navigation Tabs ── */}
       <div className="flex items-center gap-1.5 p-1 bg-soft-cream/80 border border-border rounded-[12px] max-w-fit shadow-2xs">
