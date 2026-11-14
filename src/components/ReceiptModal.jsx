@@ -136,14 +136,14 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
             max-width: 100% !important;
             height: auto !important;
             margin: 0 !important;
-            padding: 24px 32px !important;
+            padding: 30px 36px !important;
             background: #fff !important;
             color: #1a1a1a !important;
             box-shadow: none !important;
             border: none !important;
             border-radius: 0 !important;
             font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif !important;
-            font-size: 11pt !important;
+            font-size: 13pt !important;
             line-height: 1.5 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
@@ -203,25 +203,25 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
           <div
             id="omega-receipt-print"
             style={{ fontFamily: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif" }}
-            className="bg-white border border-border rounded-[14px] w-full max-w-[460px] shadow-card"
+            className="bg-white border border-border rounded-[14px] w-full max-w-[500px] shadow-card"
           >
 
             {/* ═══════ TOP BAR ═══════ */}
-            <div className="receipt-header-bar bg-charcoal text-white px-4 sm:px-6 py-4 sm:py-5">
-              <div className="flex items-center justify-between gap-2">
+            <div className="receipt-header-bar bg-charcoal text-white px-5 sm:px-7 py-5 sm:py-6">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h1 style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '2px', margin: 0 }}>
+                  <h1 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '2px', margin: 0 }}>
                     OMEGA SPA
                   </h1>
-                  <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0', letterSpacing: '1px' }}>
+                  <p style={{ fontSize: '12px', opacity: 0.7, margin: '3px 0 0', letterSpacing: '1px' }}>
                     DOUALA, CAMEROON
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: '10px', opacity: 0.6, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  <p style={{ fontSize: '12px', opacity: 0.6, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>
                     Official Receipt
                   </p>
-                  <p style={{ fontSize: '14px', fontWeight: 700, margin: '2px 0 0', letterSpacing: '0.5px' }}>
+                  <p style={{ fontSize: '16px', fontWeight: 700, margin: '3px 0 0', letterSpacing: '0.5px' }}>
                     {invNumber}
                   </p>
                 </div>
@@ -229,46 +229,46 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
             </div>
 
             {/* ═══════ DATE / CLIENT INFO ═══════ */}
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #E8E1D9' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <div style={{ padding: '16px 22px', borderBottom: '1px solid #E8E1D9' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <tbody>
                   <tr>
-                    <td style={{ padding: '4px 0', color: '#76736F', width: '100px', verticalAlign: 'top' }}>Date</td>
-                    <td style={{ padding: '4px 0', fontWeight: 600, color: '#2E2F31' }}>{dateStr}</td>
+                    <td style={{ padding: '5px 0', color: '#76736F', width: '120px', verticalAlign: 'top', fontSize: '13.5px' }}>Date</td>
+                    <td style={{ padding: '5px 0', fontWeight: 600, color: '#2E2F31', fontSize: '14px' }}>{dateStr}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '4px 0', color: '#76736F' }}>Time</td>
-                    <td style={{ padding: '4px 0', fontWeight: 600, color: '#2E2F31' }}>{timeStr}</td>
+                    <td style={{ padding: '5px 0', color: '#76736F', fontSize: '13.5px' }}>Time</td>
+                    <td style={{ padding: '5px 0', fontWeight: 600, color: '#2E2F31', fontSize: '14px' }}>{timeStr}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '4px 0', color: '#76736F' }}>Client</td>
-                    <td style={{ padding: '4px 0', fontWeight: 700, color: '#2E2F31', fontSize: '13px' }}>
+                    <td style={{ padding: '5px 0', color: '#76736F', fontSize: '13.5px' }}>Client</td>
+                    <td style={{ padding: '5px 0', fontWeight: 700, color: '#2E2F31', fontSize: '15px' }}>
                       {invoice.clientName && invoice.clientName.trim().toLowerCase() !== 'client'
                         ? invoice.clientName
                         : (invoice.clientId ? 'Client' : 'Walk in')}
                     </td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '4px 0', color: '#76736F' }}>Technician(s)</td>
-                    <td style={{ padding: '4px 0', fontWeight: 600, color: '#2E2F31' }}>{technicians}</td>
+                    <td style={{ padding: '5px 0', color: '#76736F', fontSize: '13.5px' }}>Technician(s)</td>
+                    <td style={{ padding: '5px 0', fontWeight: 600, color: '#2E2F31', fontSize: '14px' }}>{technicians}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             {/* ═══════ SERVICES & RETAIL ITEMS ═══════ */}
-            <div style={{ padding: '14px 18px' }}>
-              <p style={{ fontSize: '10px', fontWeight: 700, color: '#76736F', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '10px' }}>
+            <div style={{ padding: '16px 22px' }}>
+              <p style={{ fontSize: '12px', fontWeight: 700, color: '#76736F', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '12px' }}>
                 Items & Services Rendered
               </p>
-              <div className="overflow-x-auto w-full space-y-3">
+              <div className="overflow-x-auto w-full space-y-4">
                 {/* 1. SERVICES (if any) */}
                 {serviceItems.length > 0 && (
                   <div>
-                    <div style={{ padding: '4px 0', borderBottom: '1px solid #2E2F31', fontSize: '10px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    <div style={{ padding: '5px 0', borderBottom: '1px solid #2E2F31', fontSize: '12px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
                       SERVICES ({serviceItems.length})
                     </div>
-                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '14px' }}>
                       <tbody>
                         {serviceItems.map((item, idx) => {
                           const priceNum =
@@ -277,13 +277,13 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                               : parseInt(String(item.price).replace(/[^0-9]/g, ''), 10) || 0;
                           return (
                             <tr key={idx} style={{ borderBottom: '1px solid #E8E1D9' }}>
-                              <td style={{ padding: '8px 0', fontWeight: 600, color: '#2E2F31' }}>
-                                <div>{item.service || item.name}</div>
-                                <div style={{ fontSize: '10px', color: '#76736F', fontWeight: 400 }}>
+                              <td style={{ padding: '10px 0', fontWeight: 600, color: '#2E2F31' }}>
+                                <div style={{ fontSize: '14px' }}>{item.service || item.name}</div>
+                                <div style={{ fontSize: '12px', color: '#76736F', fontWeight: 400, marginTop: '2px' }}>
                                   Tech: {item.technician || 'Staff'} {item.product ? `· ${item.product}` : ''}
                                 </div>
                               </td>
-                              <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap', fontSize: '15px' }}>
                                 {priceNum.toLocaleString('en-US')} FCFA
                               </td>
                             </tr>
@@ -297,10 +297,10 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                 {/* 2. DRINKS (if any) */}
                 {drinkItems.length > 0 && (
                   <div>
-                    <div style={{ padding: '4px 0', borderBottom: '1px solid #2E2F31', fontSize: '10px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    <div style={{ padding: '5px 0', borderBottom: '1px solid #2E2F31', fontSize: '12px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
                       DRINKS ({drinkItems.length})
                     </div>
-                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '14px' }}>
                       <tbody>
                         {drinkItems.map((item, idx) => {
                           const priceNum =
@@ -311,13 +311,13 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                           const unitPrice = item.unitPrice || Math.round(priceNum / qty);
                           return (
                             <tr key={idx} style={{ borderBottom: '1px solid #E8E1D9' }}>
-                              <td style={{ padding: '8px 0', fontWeight: 600, color: '#2E2F31' }}>
-                                <div>{item.name || item.service}</div>
-                                <div style={{ fontSize: '10px', color: '#76736F', fontWeight: 400 }}>
+                              <td style={{ padding: '10px 0', fontWeight: 600, color: '#2E2F31' }}>
+                                <div style={{ fontSize: '14px' }}>{item.name || item.service}</div>
+                                <div style={{ fontSize: '12px', color: '#76736F', fontWeight: 400, marginTop: '2px' }}>
                                   Qty: {qty} {qty > 1 ? `· (${unitPrice.toLocaleString('en-US')} FCFA each)` : '· Retail Drink'}
                                 </div>
                               </td>
-                              <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap', fontSize: '15px' }}>
                                 {priceNum.toLocaleString('en-US')} FCFA
                               </td>
                             </tr>
@@ -331,10 +331,10 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                 {/* 3. COSMETICS (if any) */}
                 {cosmeticItems.length > 0 && (
                   <div>
-                    <div style={{ padding: '4px 0', borderBottom: '1px solid #2E2F31', fontSize: '10px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    <div style={{ padding: '5px 0', borderBottom: '1px solid #2E2F31', fontSize: '12px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
                       COSMETICS ({cosmeticItems.length})
                     </div>
-                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '14px' }}>
                       <tbody>
                         {cosmeticItems.map((item, idx) => {
                           const priceNum =
@@ -345,13 +345,13 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                           const unitPrice = item.unitPrice || Math.round(priceNum / qty);
                           return (
                             <tr key={idx} style={{ borderBottom: '1px solid #E8E1D9' }}>
-                              <td style={{ padding: '8px 0', fontWeight: 600, color: '#2E2F31' }}>
-                                <div>{item.name || item.service}</div>
-                                <div style={{ fontSize: '10px', color: '#76736F', fontWeight: 400 }}>
+                              <td style={{ padding: '10px 0', fontWeight: 600, color: '#2E2F31' }}>
+                                <div style={{ fontSize: '14px' }}>{item.name || item.service}</div>
+                                <div style={{ fontSize: '12px', color: '#76736F', fontWeight: 400, marginTop: '2px' }}>
                                   Qty: {qty} {qty > 1 ? `· (${unitPrice.toLocaleString('en-US')} FCFA each)` : '· Retail Cosmetic'}
                                 </div>
                               </td>
-                              <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap', fontSize: '15px' }}>
                                 {priceNum.toLocaleString('en-US')} FCFA
                               </td>
                             </tr>
@@ -365,13 +365,13 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
             </div>
 
             {/* ═══════ TOTALS ═══════ */}
-            <div style={{ padding: '0 18px 14px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <div style={{ padding: '0 22px 16px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <tbody>
                   {/* Subtotal (always show) */}
                   <tr style={{ borderTop: '1px solid #E8E1D9' }}>
-                    <td style={{ padding: '8px 0', color: '#76736F' }}>Subtotal</td>
-                    <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 600, color: '#2E2F31' }}>
+                    <td style={{ padding: '9px 0', color: '#76736F', fontSize: '14px' }}>Subtotal</td>
+                    <td style={{ padding: '9px 0', textAlign: 'right', fontWeight: 600, color: '#2E2F31', fontSize: '15px' }}>
                       {subtotal.toLocaleString('en-US')} FCFA
                     </td>
                   </tr>
@@ -379,10 +379,10 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                   {/* Discount (if applied) */}
                   {discount > 0 && (
                     <tr>
-                      <td style={{ padding: '6px 0', color: '#7FA285' }}>
+                      <td style={{ padding: '7px 0', color: '#7FA285', fontSize: '14px' }}>
                         {pointsRedeemed > 0 ? `Loyalty Discount (${pointsRedeemed} pts redeemed)` : 'Discount / Promo'}
                       </td>
-                      <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 600, color: '#7FA285' }}>
+                      <td style={{ padding: '7px 0', textAlign: 'right', fontWeight: 600, color: '#7FA285', fontSize: '15px' }}>
                         −{discount.toLocaleString('en-US')} FCFA
                       </td>
                     </tr>
@@ -390,10 +390,10 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
 
                   {/* Grand Total */}
                   <tr className="receipt-total-row" style={{ borderTop: '2px solid #2E2F31' }}>
-                    <td style={{ padding: '10px 8px', fontWeight: 800, fontSize: '14px', color: '#2E2F31' }}>
+                    <td style={{ padding: '12px 10px', fontWeight: 800, fontSize: '18px', color: '#2E2F31' }}>
                       TOTAL
                     </td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 800, fontSize: '14px', color: '#2E2F31' }}>
+                    <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 800, fontSize: '18px', color: '#2E2F31' }}>
                       {grandTotal.toLocaleString('en-US')} FCFA
                     </td>
                   </tr>
@@ -402,25 +402,25 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
             </div>
 
             {/* ═══════ PAYMENT & STATUS ═══════ */}
-            <div style={{ padding: '0 18px 14px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <div style={{ padding: '0 22px 16px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <tbody>
                   <tr style={{ borderTop: '1px solid #E8E1D9' }}>
-                    <td style={{ padding: '8px 0', color: '#76736F' }}>Payment Method</td>
-                    <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31' }}>
+                    <td style={{ padding: '9px 0', color: '#76736F', fontSize: '14px' }}>Payment Method</td>
+                    <td style={{ padding: '9px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', fontSize: '15px' }}>
                       {paymentMethodDisplay}
                     </td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '6px 0', color: '#76736F' }}>Status</td>
-                    <td style={{ padding: '6px 0', textAlign: 'right' }}>
+                    <td style={{ padding: '7px 0', color: '#76736F', fontSize: '14px' }}>Status</td>
+                    <td style={{ padding: '7px 0', textAlign: 'right' }}>
                       <span
                         className="receipt-paid-badge"
                         style={{
                           display: 'inline-block',
-                          padding: '3px 12px',
+                          padding: '4px 14px',
                           borderRadius: '6px',
-                          fontSize: '11px',
+                          fontSize: '13px',
                           fontWeight: 700,
                           backgroundColor: '#EDF4EE',
                           color: '#4a8c5c',
@@ -438,37 +438,37 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
             {/* ═══════ LOYALTY POINTS ═══════ */}
             {(invoice.clientId || clientLoyalty) && (
               <div style={{
-                margin: '0 18px 14px',
-                padding: '12px 14px',
+                margin: '0 22px 16px',
+                padding: '14px 16px',
                 backgroundColor: '#F6F1EB',
                 borderRadius: '10px',
-                fontSize: '11px',
+                fontSize: '13px',
               }}>
-                <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '10px', color: '#76736F', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '12px', color: '#76736F', textTransform: 'uppercase', letterSpacing: '1px' }}>
                   Loyalty Program
                 </p>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <tbody>
                     <tr>
-                      <td style={{ padding: '3px 0', color: '#2E2F31' }}>Points Earned This Visit</td>
-                      <td style={{ padding: '3px 0', textAlign: 'right', fontWeight: 700, color: '#7FA285' }}>
+                      <td style={{ padding: '4px 0', color: '#2E2F31' }}>Points Earned This Visit</td>
+                      <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 700, color: '#7FA285', fontSize: '14px' }}>
                         +{pointsEarned} pts
                       </td>
                     </tr>
                     {pointsRedeemed > 0 && (
                       <tr>
-                        <td style={{ padding: '3px 0', color: '#2E2F31' }}>Points Redeemed</td>
-                        <td style={{ padding: '3px 0', textAlign: 'right', fontWeight: 600, color: '#C77B6E' }}>
+                        <td style={{ padding: '4px 0', color: '#2E2F31' }}>Points Redeemed</td>
+                        <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 600, color: '#C77B6E', fontSize: '14px' }}>
                           −{pointsRedeemed} pts
                         </td>
                       </tr>
                     )}
                     {clientLoyalty && (
                       <tr style={{ borderTop: '1px solid #E8E1D9' }}>
-                        <td style={{ padding: '6px 0 3px', fontWeight: 600, color: '#2E2F31' }}>
+                        <td style={{ padding: '8px 0 4px', fontWeight: 600, color: '#2E2F31', fontSize: '13.5px' }}>
                           Current Balance
                         </td>
-                        <td style={{ padding: '6px 0 3px', textAlign: 'right', fontWeight: 800, color: '#2E2F31', fontSize: '13px' }}>
+                        <td style={{ padding: '8px 0 4px', textAlign: 'right', fontWeight: 800, color: '#2E2F31', fontSize: '15px' }}>
                           {clientLoyalty.balance} pts
                         </td>
                       </tr>
@@ -480,14 +480,14 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
 
             {/* ═══════ FOOTER ═══════ */}
             <div style={{
-              padding: '14px 18px 16px',
+              padding: '16px 22px 18px',
               borderTop: '1px solid #E8E1D9',
               textAlign: 'center',
             }}>
-              <p style={{ fontSize: '12px', fontWeight: 700, color: '#2E2F31', margin: '0 0 4px' }}>
+              <p style={{ fontSize: '15px', fontWeight: 700, color: '#2E2F31', margin: '0 0 4px' }}>
                 Thank you for visiting OMEGA SPA!
               </p>
-              <p style={{ fontSize: '11px', color: '#76736F', margin: 0 }}>
+              <p style={{ fontSize: '13px', color: '#76736F', margin: 0 }}>
                 We look forward to pampering you again soon.
               </p>
             </div>
