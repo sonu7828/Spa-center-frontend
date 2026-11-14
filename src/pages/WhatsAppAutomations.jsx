@@ -115,6 +115,7 @@ export default function WhatsAppAutomations() {
   // Holidays state
   const [selectedHolidayYear, setSelectedHolidayYear] = useState(() => new Date().getFullYear());
   const [dateChangeModal, setDateChangeModal] = useState({ isOpen: false, holiday: null, date: '' });
+  const [lastTestPhone, setLastTestPhone] = useState(() => localStorage.getItem('omega_wa_test_phone') || '+918319399018');
   const [testSendModal, setTestSendModal] = useState({ isOpen: false, holiday: null, phone: '', clientName: '' });
   const [triggeringHolidays, setTriggeringHolidays] = useState(false);
   const [sendingTestGreeting, setSendingTestGreeting] = useState(false);
@@ -800,7 +801,7 @@ export default function WhatsAppAutomations() {
                       <span className="text-muted-gray font-mono">09:00 WAT</span>
                       <button
                         type="button"
-                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: '', clientName: '' })}
+                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: lastTestPhone, clientName: 'Sunu' })}
                         className="text-sage hover:text-charcoal font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <Send size={11} /> Test Send
@@ -958,7 +959,7 @@ export default function WhatsAppAutomations() {
 
                       <button
                         type="button"
-                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: '', clientName: '' })}
+                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: lastTestPhone, clientName: 'Sunu' })}
                         className="text-sage hover:text-charcoal font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <Send size={11} /> Test Send
@@ -1381,15 +1382,24 @@ export default function WhatsAppAutomations() {
                 onClick={async () => {
                   setSendingTestGreeting(true);
                   try {
+                    localStorage.setItem('omega_wa_test_phone', testSendModal.phone);
+                    setLastTestPhone(testSendModal.phone);
                     const res = await testSendHoliday(testSendModal.holiday.id, {
                       phone: testSendModal.phone,
                       clientName: testSendModal.clientName,
                     });
-                    setAlertNotice({
-                      type: 'success',
-                      message: res?.message || `Test greeting dispatched to ${testSendModal.phone}!`,
-                    });
-                    setTestSendModal({ isOpen: false, holiday: null, phone: '', clientName: '' });
+                    if (res?.data?.success === false || res?.success === false) {
+                      setAlertNotice({
+                        type: 'error',
+                        message: res?.data?.error || res?.message || 'Failed to dispatch test greeting',
+                      });
+                    } else {
+                      setAlertNotice({
+                        type: 'success',
+                        message: res?.message || `Test greeting dispatched to ${testSendModal.phone}!`,
+                      });
+                      setTestSendModal({ isOpen: false, holiday: null, phone: testSendModal.phone, clientName: '' });
+                    }
                   } catch (e) {
                     setAlertNotice({ type: 'error', message: e?.message || 'Failed to dispatch test greeting' });
                   } finally {
