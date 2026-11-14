@@ -44,7 +44,7 @@ function formatFCFA(amount) {
 
 export default function Reports() {
   const { user } = useAuth();
-  const [period, setPeriod] = useState('30d');
+  const [period, setPeriod] = useState('monthly');
   const [customRange, setCustomRange] = useState({
     startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
@@ -149,18 +149,18 @@ export default function Reports() {
             <div className="flex items-center bg-white border border-[#E8E2D9] rounded-xl p-1 shadow-xs">
               <button
                 type="button"
-                onClick={() => setPeriod('7d')}
+                onClick={() => setPeriod('weekly')}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                  period === '7d' ? 'bg-[#5B6E58] text-white shadow-xs' : 'text-[#7D7871] hover:text-[#2D2D2A]'
+                  period === 'weekly' || period === '7d' ? 'bg-[#5B6E58] text-white shadow-xs' : 'text-[#7D7871] hover:text-[#2D2D2A]'
                 }`}
               >
                 Last 7 Days
               </button>
               <button
                 type="button"
-                onClick={() => setPeriod('30d')}
+                onClick={() => setPeriod('monthly')}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                  period === '30d' ? 'bg-[#5B6E58] text-white shadow-xs' : 'text-[#7D7871] hover:text-[#2D2D2A]'
+                  period === 'monthly' || period === '30d' ? 'bg-[#5B6E58] text-white shadow-xs' : 'text-[#7D7871] hover:text-[#2D2D2A]'
                 }`}
               >
                 ⭐ Last 30 Days
@@ -603,3 +603,4 @@ export default function Reports() {
     </div>
   );
 }
+
