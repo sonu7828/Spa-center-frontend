@@ -46,18 +46,33 @@ export function formatBackendInvoice(inv, allUsers = []) {
   const dateStr = inv.date ? inv.date.split('T')[0] : '';
   const paymentsList = inv.payments || [];
   const firstPayment = paymentsList[0];
-  const paymentMethodDisplay =
-    paymentsList.length > 1
-      ? paymentsList
-          .map((p) => {
-            const raw = String(p.paymentMethod || '').replace(/_/g, ' ');
-            const label = raw.includes('ORANGE') ? 'ORANGE MONEY' : raw.includes('MTN') || raw.includes('MOMO') ? 'MTN MOMO' : 'CASH';
-            return `${label} (${Number(p.amount || 0).toLocaleString('en-US')})`;
-          })
-          .join(' + ')
-      : firstPayment?.paymentMethod
-      ? firstPayment.paymentMethod.replace(/_/g, ' ')
-      : null;
+
+  let paymentMethodDisplay = null;
+  if (paymentsList.length > 1) {
+    paymentMethodDisplay = paymentsList
+      .map((p) => {
+        const raw = String(p.paymentMethod || '').replace(/_/g, ' ');
+        const label = raw.includes('ORANGE') ? 'ORANGE MONEY' : raw.includes('MTN') || raw.includes('MOMO') ? 'MTN MOMO' : 'CASH';
+        return `${label} (${Number(p.amount || 0).toLocaleString('en-US')})`;
+      })
+      .join(' + ');
+  } else if (Array.isArray(inv.splits) && inv.splits.length > 1) {
+    paymentMethodDisplay = inv.splits
+      .map((s) => {
+        const raw = String(s.method || s.paymentMethod || '').replace(/_/g, ' ');
+        const label = raw.includes('ORANGE') ? 'ORANGE MONEY' : raw.includes('MTN') || raw.includes('MOMO') ? 'MTN MOMO' : 'CASH';
+        return `${label} (${Number(s.amount || 0).toLocaleString('en-US')})`;
+      })
+      .join(' + ');
+  } else if (inv.paymentMethod && (inv.paymentMethod.includes('+') || inv.paymentMethod.includes(':'))) {
+    paymentMethodDisplay = inv.paymentMethod;
+  } else if (firstPayment?.notes && (firstPayment.notes.includes('+') || firstPayment.notes.toLowerCase().includes('split payment:'))) {
+    paymentMethodDisplay = firstPayment.notes.replace(/^Split payment:\s*/i, '').trim();
+  } else if (firstPayment?.paymentMethod) {
+    paymentMethodDisplay = firstPayment.paymentMethod.replace(/_/g, ' ');
+  } else if (inv.paymentMethod) {
+    paymentMethodDisplay = inv.paymentMethod;
+  }
 
   // Helper to detect if a timestamp is merely midnight UTC or date-only (e.g. "2026-11-02T00:00:00.000Z")
   const isMidnightOrDateOnly = (t) => {
@@ -162,6 +177,21 @@ export function formatBackendInvoice(inv, allUsers = []) {
     paidAmount: paidNum,
     remainingAmount: remainingNum,
     paymentMethod: paymentMethodDisplay,
+    isSplit: Boolean(
+      (paymentsList.length > 1) ||
+      (inv.splits && inv.splits.length > 1) ||
+      (paymentMethodDisplay && (paymentMethodDisplay.includes('+') || paymentMethodDisplay.includes(':')))
+    ),
+    splits:
+      (inv.splits && inv.splits.length > 0)
+        ? inv.splits
+        : paymentsList.length > 1
+        ? paymentsList.map((p) => ({
+            amount: Number(p.amount || 0),
+            method: p.paymentMethod,
+            paymentMethod: p.paymentMethod,
+          }))
+        : [],
     paidAt: rawPaymentTimestamp || firstPayment?.paidAt || inv.paidAt || inv.createdAt || null,
     paidTime: paidTime,
     payments: inv.payments || [],
@@ -526,6 +556,30 @@ export function InvoiceProvider({ children }) {
       const discount = Number(paymentDetails.discount || 0);
       const finalTotal = paymentDetails.finalTotal !== undefined ? paymentDetails.finalTotal : totalPaidAmount;
 
+      // Format clean method display e.g. "CASH (10,000) + MTN MOMO (5,000)"
+      const splitMethodsStr = validSplits
+        .map((s) => {
+          const m = String(s.method || s.paymentMethod || 'CASH').toUpperCase();
+          const label = m.includes('ORANGE') ? 'ORANGE MONEY' : m.includes('MTN') || m.includes('MOMO') ? 'MTN MOMO' : 'CASH';
+          return `${label} (${Number(s.amount).toLocaleString('en-US')})`;
+        })
+        .join(' + ');
+
+      const backendSplitsPayload = validSplits.map((sp, idx) => {
+        const rawMethod = String(sp.method || sp.paymentMethod || 'CASH').toUpperCase();
+        const backendMethod =
+          rawMethod.includes('MTN') || rawMethod.includes('MOMO')
+            ? 'MTN_MOMO'
+            : rawMethod.includes('ORANGE')
+            ? 'ORANGE_MONEY'
+            : 'CASH';
+        return {
+          amount: Number(sp.amount),
+          paymentMethod: backendMethod,
+          notes: idx === 0 ? (paymentDetails.notes || `Split payment: ${splitMethodsStr}`) : undefined,
+        };
+      });
+
       let targetInv = null;
       setInvoices((prev) => {
         targetInv = prev.find((inv) => String(inv.id) === String(invoiceId));
@@ -544,25 +598,16 @@ export function InvoiceProvider({ children }) {
           }
         }
 
-        for (let i = 0; i < validSplits.length; i++) {
-          const sp = validSplits[i];
-          const rawMethod = String(sp.method || 'CASH').toUpperCase();
-          const backendMethod =
-            rawMethod.includes('MTN') || rawMethod.includes('MOMO')
-              ? 'MTN_MOMO'
-              : rawMethod.includes('ORANGE')
-              ? 'ORANGE_MONEY'
-              : 'CASH';
-
+        for (const sp of backendSplitsPayload) {
           try {
             await paymentsApi.create({
               invoiceId,
-              amount: Number(sp.amount),
-              paymentMethod: backendMethod,
-              notes: i === 0 ? (paymentDetails.notes || 'Split Payment from POS') : undefined,
+              amount: sp.amount,
+              paymentMethod: sp.paymentMethod,
+              notes: sp.notes,
             });
           } catch (pErr) {
-            console.warn(`Backend split payment record error (${sp.method}):`, pErr.message);
+            console.warn(`Backend split payment record error (${sp.paymentMethod}):`, pErr.message);
           }
         }
       } else if (targetInv) {
@@ -608,28 +653,22 @@ export function InvoiceProvider({ children }) {
             phone: targetInv.clientPhone || targetInv.phone || undefined,
             date: targetInv.date || todayIso,
             status: 'PAID',
-            paymentMethod: 'CASH',
+            paymentMethod: backendSplitsPayload[0]?.paymentMethod || 'CASH',
+            payments: backendSplitsPayload,
             discount: discount,
             ...(finalServicesPayload.length > 0 ? { services: finalServicesPayload } : {}),
             ...(validRetailProducts.length > 0 ? { retailProducts: validRetailProducts } : {}),
           });
 
           const createdBackend = res?.data?.invoice || res?.data || res;
-          if (createdBackend && createdBackend.id) {
+          if (createdBackend && createdBackend.id && (!createdBackend.payments || createdBackend.payments.length === 0)) {
             backendInvoiceId = createdBackend.id;
-            for (let i = 0; i < validSplits.length; i++) {
-              const sp = validSplits[i];
-              const rawMethod = String(sp.method || 'CASH').toUpperCase();
-              const backendMethod =
-                rawMethod.includes('MTN') || rawMethod.includes('MOMO')
-                  ? 'MTN_MOMO'
-                  : rawMethod.includes('ORANGE')
-                  ? 'ORANGE_MONEY'
-                  : 'CASH';
+            for (const sp of backendSplitsPayload) {
               await paymentsApi.create({
                 invoiceId: backendInvoiceId,
-                amount: Number(sp.amount),
-                paymentMethod: backendMethod,
+                amount: sp.amount,
+                paymentMethod: sp.paymentMethod,
+                notes: sp.notes,
               }).catch(() => {});
             }
           }
@@ -637,15 +676,6 @@ export function InvoiceProvider({ children }) {
           console.warn('Backend sync for non-UUID split invoice failed:', createErr.message);
         }
       }
-
-      // Format clean method display e.g. "CASH (10,000) + MTN MOMO (5,000)"
-      const splitMethodsStr = validSplits
-        .map((s) => {
-          const m = String(s.method).toUpperCase();
-          const label = m.includes('ORANGE') ? 'ORANGE MONEY' : m.includes('MTN') || m.includes('MOMO') ? 'MTN MOMO' : 'CASH';
-          return `${label} (${Number(s.amount).toLocaleString('en-US')})`;
-        })
-        .join(' + ');
 
       setInvoices((prev) =>
         prev.map((inv) => {
@@ -1175,13 +1205,13 @@ export function InvoiceProvider({ children }) {
           : 'CASH';
 
       const backendPayments = isSplit
-        ? validSplits.map((s) => {
+        ? validSplits.map((s, idx) => {
             const rawM = String(s.method || s.paymentMethod || 'CASH').toUpperCase();
             const bm = rawM.includes('MTN') || rawM.includes('MOMO') ? 'MTN_MOMO' : rawM.includes('ORANGE') ? 'ORANGE_MONEY' : 'CASH';
             return {
               amount: Number(s.amount),
               paymentMethod: bm,
-              notes: 'Walk-in service split payment',
+              notes: idx === 0 ? `Split payment: ${splitMethodsStr}` : 'Walk-in service split payment',
             };
           })
         : undefined;
@@ -1310,6 +1340,16 @@ export function InvoiceProvider({ children }) {
         technician: formatted.technician || invoiceTechName,
         createdById: user?.id || null,
         createdByName: user?.name || null,
+        isSplit: isSplit || formatted.isSplit || false,
+        splits: isSplit ? validSplits : (formatted.splits || []),
+        paymentMethod: isSplit ? (splitMethodsStr || formatted.paymentMethod) : formatted.paymentMethod,
+        payments: isSplit && (!formatted.payments || formatted.payments.length <= 1)
+          ? validSplits.map((s) => ({
+              amount: Number(s.amount),
+              paymentMethod: s.method || s.paymentMethod,
+              paidAt: now.toISOString(),
+            }))
+          : formatted.payments,
       };
 
       setInvoices((prev) => [

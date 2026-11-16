@@ -95,6 +95,8 @@ function formatPaymentMethod(method) {
 
 function getInvoicePaymentDisplay(invoice) {
   if (!invoice) return 'CASH';
+
+  // 1. Multiple payments array from backend
   if (Array.isArray(invoice.payments) && invoice.payments.length > 1) {
     return invoice.payments
       .map(
@@ -103,9 +105,35 @@ function getInvoicePaymentDisplay(invoice) {
       )
       .join(' + ');
   }
-  if (Array.isArray(invoice.payments) && invoice.payments.length === 1) {
-    return formatPaymentMethod(invoice.payments[0].paymentMethod);
+
+  // 2. Explicit splits array on invoice
+  if (Array.isArray(invoice.splits) && invoice.splits.length > 1) {
+    return invoice.splits
+      .map(
+        (s) =>
+          `${formatPaymentMethod(s.method || s.paymentMethod)}: ${Number(s.amount || 0).toLocaleString('en-US')} FCFA`
+      )
+      .join(' + ');
   }
+
+  // 3. Formatted split string directly on invoice (e.g. "CASH (2,000) + MTN MOMO (1,240)")
+  const pmStr = String(invoice.paymentMethod || '').trim();
+  if (pmStr.includes('+') || pmStr.includes(':')) {
+    return pmStr;
+  }
+
+  // 4. Single payment with notes containing split breakdown
+  if (Array.isArray(invoice.payments) && invoice.payments.length === 1) {
+    const p0 = invoice.payments[0];
+    if (p0.notes && (p0.notes.includes('+') || p0.notes.toLowerCase().includes('split payment:'))) {
+      const cleaned = p0.notes.replace(/^Split payment:\s*/i, '').trim();
+      if (cleaned.includes('+') || cleaned.includes(':')) {
+        return cleaned;
+      }
+    }
+    return formatPaymentMethod(p0.paymentMethod);
+  }
+
   return formatPaymentMethod(invoice.paymentMethod);
 }
 

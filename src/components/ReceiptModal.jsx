@@ -64,6 +64,7 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
       : subtotal - discount;
   
   const formatPaymentMethod = (pm) => {
+    // 1. Multiple payments array from backend
     if (Array.isArray(invoice.payments) && invoice.payments.length > 1) {
       return invoice.payments
         .map((p) => {
@@ -77,8 +78,41 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
         })
         .join(' + ');
     }
-    const p = String(pm || 'cash').trim().toUpperCase();
+
+    // 2. Explicit splits array on invoice
+    if (Array.isArray(invoice.splits) && invoice.splits.length > 1) {
+      return invoice.splits
+        .map((s) => {
+          const rawMethod = String(s.method || s.paymentMethod || 'CASH').toUpperCase();
+          const label = rawMethod.includes('MTN')
+            ? 'MTN MOMO'
+            : rawMethod.includes('ORANGE')
+            ? 'ORANGE MONEY'
+            : 'CASH';
+          return `${label}: ${Number(s.amount || 0).toLocaleString('en-US')} FCFA`;
+        })
+        .join(' + ');
+    }
+
+    // 3. Formatted split string directly on invoice (e.g. "CASH (2,000) + MTN MOMO (1,240)")
+    const p = String(pm || invoice.paymentMethod || 'cash').trim().toUpperCase();
     if (p.includes('+') || p.includes(':')) return p;
+
+    // 4. Single payment with notes containing split breakdown
+    if (Array.isArray(invoice.payments) && invoice.payments.length === 1) {
+      const p0 = invoice.payments[0];
+      if (p0.notes && (p0.notes.includes('+') || p0.notes.toLowerCase().includes('split payment:'))) {
+        const cleaned = p0.notes.replace(/^Split payment:\s*/i, '').trim();
+        if (cleaned.includes('+') || cleaned.includes(':')) {
+          return cleaned.toUpperCase();
+        }
+      }
+      const raw = String(p0.paymentMethod || '').toUpperCase();
+      if (raw.includes('MTN')) return 'MTN MOMO';
+      if (raw.includes('ORANGE')) return 'ORANGE MONEY';
+      return 'CASH';
+    }
+
     if (p.includes('MTN')) return 'MTN MOMO';
     if (p.includes('ORANGE')) return 'ORANGE MONEY';
     return 'CASH';

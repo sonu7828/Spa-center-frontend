@@ -20,7 +20,10 @@ import { useAuth } from '../context/AuthContext';
 
 export default function RetailProducts() {
   const { user } = useAuth();
-  const isManager = user?.role === 'manager';
+  const userRole = (user?.role || '').toLowerCase();
+  const isManager = userRole === 'manager';
+  const isReception = userRole === 'reception';
+  const canManage = isManager || isReception;
 
   const {
     drinks,
@@ -200,7 +203,7 @@ export default function RetailProducts() {
         title="Retail Products"
         subtitle="Drinks and cosmetics sold to clients."
         action={
-          isManager && (
+          canManage && (
             <Button onClick={openAddModal}>
               <Plus size={16} strokeWidth={2} />
               {activeTab === 'drinks' ? 'Add Drink' : 'Add Cosmetic'}
@@ -337,13 +340,13 @@ export default function RetailProducts() {
                 <th className="py-3.5 px-5">Selling Price</th>
                 <th className="py-3.5 px-5">Current Stock</th>
                 <th className="py-3.5 px-5">Status</th>
-                {isManager && <th className="py-3.5 px-5 text-right">Actions</th>}
+                {canManage && <th className="py-3.5 px-5 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
               {currentProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={isManager ? 6 : 5} className="py-12 text-center text-sm text-muted-gray">
+                  <td colSpan={canManage ? 6 : 5} className="py-12 text-center text-sm text-muted-gray">
                     No {statusFilter === 'all' ? '' : statusFilter + ' '}products found in this category.
                   </td>
                 </tr>
@@ -381,14 +384,14 @@ export default function RetailProducts() {
                   <td className="py-3.5 px-5">
                     <button
                       type="button"
-                      disabled={!isManager}
+                      disabled={!canManage}
                       onClick={() => handleToggle(product)}
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-[11px] font-bold border transition-colors ${
                         product.active
                           ? 'bg-success-soft text-success border-success/30 hover:bg-success/10'
                           : 'bg-muted-gray/10 text-muted-gray border-border hover:bg-muted-gray/20'
-                      } ${isManager ? 'cursor-pointer' : 'cursor-default'}`}
-                      title={isManager ? 'Click to toggle Active / Inactive' : undefined}
+                      } ${canManage ? 'cursor-pointer' : 'cursor-default'}`}
+                      title={canManage ? 'Click to toggle Active / Inactive' : undefined}
                     >
                       {product.active ? (
                         <>
@@ -403,7 +406,7 @@ export default function RetailProducts() {
                       )}
                     </button>
                   </td>
-                  {isManager && (
+                  {canManage && (
                     <td className="py-3.5 px-5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
@@ -473,13 +476,13 @@ export default function RetailProducts() {
               <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/40">
                 <button
                   type="button"
-                  disabled={!isManager}
+                  disabled={!canManage}
                   onClick={() => handleToggle(product)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-xs font-bold border transition-colors ${
                     product.active
                       ? 'bg-success-soft text-success border-success/30'
                       : 'bg-muted-gray/10 text-muted-gray border-border'
-                  } ${isManager ? 'cursor-pointer' : 'cursor-default'}`}
+                  } ${canManage ? 'cursor-pointer' : 'cursor-default'}`}
                 >
                   {product.active ? (
                     <>
@@ -494,7 +497,7 @@ export default function RetailProducts() {
                   )}
                 </button>
 
-                {isManager && (
+                {canManage && (
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
