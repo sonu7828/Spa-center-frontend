@@ -162,6 +162,7 @@ export function formatBackendClient(c) {
     serviceHistory: combinedHistory.length > 0 ? combinedHistory : (c.serviceHistory || []),
     appointments: c.appointments || [],
     photos: mappedPhotos.length > 0 ? mappedPhotos : (c.photos || []),
+    loyaltyPoints: Number(c.loyaltyPoints) || 0,
   };
 }
 
@@ -173,7 +174,7 @@ export function ClientsProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch real clients from backend on mount
+  // Fetch real clients from backend on mount (all pages consolidated)
   const refreshClients = useCallback(async () => {
     if (!isAuthenticated || isCleaner) {
       setLoading(false);
@@ -183,10 +184,28 @@ export function ClientsProvider({ children }) {
     try {
       setLoading(true);
       setError(null);
-      const res = await clientsApi.getAll({ limit: 100, isActive: 'all' });
-      const backendClients = res?.data || [];
-      if (Array.isArray(backendClients)) {
-        const formatted = backendClients.map(formatBackendClient);
+      const res = await clientsApi.getAll({ limit: 500, isActive: 'all' });
+      let allFetched = Array.isArray(res?.data) ? [...res.data] : [];
+      const pagination = res?.pagination;
+
+      // If backend has multiple pages (e.g., hardcapped at 100 on Railway before update)
+      if (pagination && pagination.totalPages > 1 && allFetched.length < pagination.total) {
+        const remainingPromises = [];
+        for (let p = 2; p <= pagination.totalPages; p++) {
+          remainingPromises.push(
+            clientsApi.getAll({ page: p, limit: pagination.limit || 100, isActive: 'all' })
+          );
+        }
+        const extraResponses = await Promise.all(remainingPromises);
+        for (const extra of extraResponses) {
+          if (Array.isArray(extra?.data)) {
+            allFetched = allFetched.concat(extra.data);
+          }
+        }
+      }
+
+      if (Array.isArray(allFetched)) {
+        const formatted = allFetched.map(formatBackendClient);
         setClients(formatted);
       }
     } catch (err) {
@@ -261,11 +280,14 @@ export function ClientsProvider({ children }) {
         }
       }
 
-      // 2. Manager client creation: strictly normal DIRECT client with no referral attribution
-      const isClientFromManager =
-        isManager ||
-        clientData.source === 'DIRECT' ||
-        (clientData.clientSource === 'Direct' && !clientData.introducedBy);
+      // 2. Referral attribution payload preparation
+      // For Manager: if introducedById/introducedByEmployeeId is selected, send it. Otherwise null.
+      // For Staff: pass introducedById (backend also securely enforces it from auth session).
+      const rawIntroducedId = clientData.introducedById || clientData.introducedByEmployeeId || null;
+      const validIntroducedId =
+        rawIntroducedId && typeof rawIntroducedId === 'string' && rawIntroducedId.trim().length > 0
+          ? rawIntroducedId.trim()
+          : null;
 
       // 3. Backend creation
       const payload = {
@@ -275,18 +297,10 @@ export function ClientsProvider({ children }) {
         quartier: (clientData.quartier || '').trim() || null,
         birthday: clientData.birthday || null,
         anniversary: clientData.anniversary || null,
-        source: isClientFromManager
-          ? 'DIRECT'
-          : clientData.source || (clientData.introducedBy ? 'STAFF_REFERRAL' : 'DIRECT'),
-        introducedByEmployeeId:
-          !isClientFromManager &&
-          clientData.introducedById &&
-          typeof clientData.introducedById === 'string' &&
-          clientData.introducedById.includes('-')
-            ? clientData.introducedById
-            : null,
-        recommendedByName: isClientFromManager ? null : clientData.recommendedBy?.name || null,
-        recommendedByPhone: isClientFromManager ? null : clientData.recommendedBy?.phone || null,
+        source: validIntroducedId ? 'STAFF_REFERRAL' : (clientData.source || 'DIRECT'),
+        introducedByEmployeeId: validIntroducedId,
+        recommendedByName: clientData.recommendedBy?.name || clientData.recommendedByName || null,
+        recommendedByPhone: clientData.recommendedBy?.phone || clientData.recommendedByPhone || null,
       };
 
       try {
@@ -294,14 +308,9 @@ export function ClientsProvider({ children }) {
         const created = res?.data;
         if (created && created.id) {
           const formatted = formatBackendClient(created);
-          // Retain client-provided extra properties (only for eligible non-manager staff)
-          if (!isClientFromManager && clientData.introducedBy) {
+          // Retain introducing staff name if passed or fallback
+          if (!formatted.introducedBy && clientData.introducedBy) {
             formatted.introducedBy = clientData.introducedBy;
-          }
-          if (isClientFromManager) {
-            formatted.introducedBy = null;
-            formatted.introducedById = null;
-            formatted.clientSource = 'Direct';
           }
           if (clientData.firstAppointmentService) formatted.firstAppointmentService = clientData.firstAppointmentService;
           setClients((prev) => [formatted, ...prev]);
@@ -314,7 +323,7 @@ export function ClientsProvider({ children }) {
         throw err;
       }
     },
-    [clients, isManager]
+    [clients]
   );
 
   const updateClient = useCallback(async (id, updates) => {

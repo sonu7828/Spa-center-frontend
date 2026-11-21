@@ -101,6 +101,25 @@ export default function LoyaltySettings() {
       <PageHeader
         title="Loyalty Settings"
         subtitle={isManager ? "Configure rules for earning and redeeming loyalty points." : "View rules for earning and redeeming loyalty points (View Only)."}
+        action={
+          isManager ? (
+            <div className="flex items-center gap-3">
+              {saved && (
+                <span className="text-xs font-semibold text-success flex items-center gap-1.5 animate-fadeIn">
+                  <Check size={14} /> Settings Saved Successfully!
+                </span>
+              )}
+              <Button
+                type="button"
+                onClick={handleSave}
+                className="w-full sm:w-auto h-[42px] px-6 shadow-sm"
+              >
+                <Save size={16} strokeWidth={2} />
+                Save Settings
+              </Button>
+            </div>
+          ) : null
+        }
       />
 
       {!isManager && (
@@ -438,20 +457,7 @@ export default function LoyaltySettings() {
         </div>
         </fieldset>
 
-        {/* Save Button */}
-        {isManager && (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-2">
-            {saved && (
-              <span className="text-xs font-semibold text-success flex items-center justify-center gap-1.5 animate-fadeIn">
-                <Check size={14} /> Settings Saved Successfully!
-              </span>
-            )}
-            <Button type="submit" className="w-full sm:w-auto h-[44px] px-6">
-              <Save size={16} strokeWidth={2} />
-              Save Settings
-            </Button>
-          </div>
-        )}
+
       </form>
     </div>
   );

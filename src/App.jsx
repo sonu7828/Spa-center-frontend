@@ -26,7 +26,7 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AuthProvider, useAuth, isRouteAllowed, ROLE_HOME } from './context/AuthContext';
+import { AuthProvider, useAuth, isRouteAllowed, ROLE_HOME, getRoleHome } from './context/AuthContext';
 import { ClientsProvider } from './context/ClientsContext';
 import { AppointmentsProvider } from './context/AppointmentsContext';
 import { OperationsProvider } from './context/OperationsContext';
@@ -42,6 +42,7 @@ import { ExpensesProvider } from './context/ExpensesContext';
 import { AttendanceProvider } from './context/AttendanceContext';
 import { CommissionProvider } from './context/CommissionContext';
 import { ReportsProvider } from './context/ReportsContext';
+import { JobSeekersProvider } from './context/JobSeekersContext';
 import AppShell from './components/AppShell';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
@@ -56,6 +57,7 @@ import LateClient from './pages/LateClient';
 import NoShowFlow from './pages/NoShowFlow';
 import CloseService from './pages/CloseService';
 import Stock from './pages/Stock';
+import StockPhotos from './pages/StockPhotos';
 import TechnicianDailySummary from './pages/TechnicianDailySummary';
 import Referrals from './pages/Referrals';
 import Rebooking from './pages/Rebooking';
@@ -75,6 +77,8 @@ import SharedWork from './pages/SharedWork';
 import Expenses from './pages/Expenses';
 import Attendance from './pages/Attendance';
 import AttendanceManager from './pages/AttendanceManager';
+import JobSeekers from './pages/JobSeekers';
+import Reports from './pages/Reports';
 
 /**
  * ProtectedRoute — Redirects to /login if not authenticated,
@@ -88,8 +92,8 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!isRouteAllowed(user.role, location.pathname)) {
-    return <Navigate to={ROLE_HOME[user.role] || '/'} replace />;
+  if (!isRouteAllowed(user, location.pathname)) {
+    return <Navigate to={getRoleHome(user)} replace />;
   }
 
   return children;
@@ -101,7 +105,7 @@ function ProtectedRoute({ children }) {
 function LoginGuard({ children }) {
   const { user, isAuthenticated } = useAuth();
   if (isAuthenticated) {
-    return <Navigate to={ROLE_HOME[user.role] || '/'} replace />;
+    return <Navigate to={getRoleHome(user)} replace />;
   }
   return children;
 }
@@ -124,6 +128,7 @@ export default function App() {
                     <AttendanceProvider>
                     <CommissionProvider>
                     <ReportsProvider>
+                    <JobSeekersProvider>
                     <BrowserRouter>
                       <ErrorBoundary>
                         <Routes>
@@ -160,11 +165,15 @@ export default function App() {
                             <Route path="appointments/:id/no-show" element={<NoShowFlow />} />
                             <Route path="appointments/:id/close" element={<CloseService />} />
                             <Route path="stock" element={<Stock />} />
+                            <Route path="stock-photos" element={<StockPhotos />} />
                             <Route path="technicians/daily" element={<TechnicianDailySummary />} />
+                            <Route path="summary" element={<Navigate to="/technicians/daily" replace />} />
                             <Route path="referrals" element={<Referrals />} />
                             <Route path="rebooking" element={<Rebooking />} />
                             <Route path="daily-close" element={<DailyClose />} />
+                            <Route path="reports" element={<Reports />} />
                             <Route path="staff" element={<Staff />} />
+                            <Route path="job-seekers" element={<JobSeekers />} />
                             <Route path="services" element={<Services />} />
                             <Route path="social-media" element={<SocialMedia />} />
                             <Route path="cleaning" element={<CleaningUpload />} />
@@ -187,6 +196,7 @@ export default function App() {
                         </Routes>
                       </ErrorBoundary>
                     </BrowserRouter>
+                    </JobSeekersProvider>
                     </ReportsProvider>
                     </CommissionProvider>
                     </AttendanceProvider>

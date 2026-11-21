@@ -20,7 +20,7 @@
  * Source: WIREFRAME.md Screen 14 + Referral Commission Spec §1, §6, §7, §9
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp,
   Calendar,
@@ -34,6 +34,13 @@ import {
   X,
   Sliders,
   ShieldAlert,
+  Percent,
+  Coins,
+  Save,
+  Loader2,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -44,7 +51,10 @@ export default function Referrals() {
   const { user } = useAuth();
   const {
     commissionRate,
+    commissionFixedAmount,
+    commissionRuleMode,
     setCommissionRate,
+    setCommissionRule,
     commissions,
     summary,
     isLoading,
@@ -84,6 +94,24 @@ export default function Referrals() {
     setTimeout(() => setNotice(''), 3500);
   };
 
+  // Manager Referral Rule state (Percentage or Fixed Amount)
+  const [ruleMode, setRuleMode] = useState(
+    commissionRuleMode || (commissionFixedAmount ? 'fixed' : 'percentage')
+  );
+  const [customPercentInput, setCustomPercentInput] = useState(
+    commissionRate ? String(commissionRate) : '10'
+  );
+  const [customAmountInput, setCustomAmountInput] = useState(
+    commissionFixedAmount ? String(commissionFixedAmount) : '2000'
+  );
+  const [isSavingRule, setIsSavingRule] = useState(false);
+
+  useEffect(() => {
+    if (commissionRuleMode) setRuleMode(commissionRuleMode);
+    if (commissionRate) setCustomPercentInput(String(commissionRate));
+    if (commissionFixedAmount) setCustomAmountInput(String(commissionFixedAmount));
+  }, [commissionRuleMode, commissionRate, commissionFixedAmount]);
+
   // Cleaner access blocked
   if (isCleaner) {
     return (
@@ -99,33 +127,149 @@ export default function Referrals() {
     );
   }
 
-
   // Commission data
   const employeeSummaries = isTechnician
     ? []
     : getAllEmployeeSummaries();
 
   const allCommissionHistory = getCommissionHistory();
-  const filteredCommissionHistory = isTechnician
-    ? allCommissionHistory
-    : selectedStaffFilter === 'all'
-    ? allCommissionHistory
-    : allCommissionHistory.filter(
+
+  // Search, Status Filter & Pagination state for Commission History
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'APPROVED' | 'PENDING'
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to first page whenever search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedStaffFilter, statusFilter, pageSize]);
+
+  // Filtered list with staff, status, and full text search
+  const filteredCommissionHistory = useMemo(() => {
+    let list = allCommissionHistory;
+
+    // Staff filter (for manager / reception)
+    if (!isTechnician && selectedStaffFilter !== 'all') {
+      const staffLow = selectedStaffFilter.toLowerCase().trim();
+      list = list.filter(
         (c) =>
-          c.referralEmployee?.toLowerCase() === selectedStaffFilter.toLowerCase()
+          c.referralEmployee?.toLowerCase().trim() === staffLow ||
+          c.performingTechnician?.toLowerCase().trim() === staffLow
       );
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      list = list.filter(
+        (c) =>
+          c.rawStatus === statusFilter ||
+          c.status?.toUpperCase() === statusFilter.toUpperCase()
+      );
+    }
+
+    // Search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (c) =>
+          (c.performingTechnician && c.performingTechnician.toLowerCase().includes(q)) ||
+          (c.referralEmployee && c.referralEmployee.toLowerCase().includes(q)) ||
+          (c.service && c.service.toLowerCase().includes(q)) ||
+          (c.serviceCategory && c.serviceCategory.toLowerCase().includes(q)) ||
+          (c.client && c.client.toLowerCase().includes(q)) ||
+          (c.date && c.date.toLowerCase().includes(q)) ||
+          (c.status && c.status.toLowerCase().includes(q)) ||
+          (c.invoiceNumber && c.invoiceNumber.toLowerCase().includes(q)) ||
+          String(c.serviceAmount || '').includes(q) ||
+          String(c.commissionAmount || '').includes(q)
+      );
+    }
+
+    return list;
+  }, [allCommissionHistory, isTechnician, selectedStaffFilter, statusFilter, searchQuery]);
+
+  // Pagination metrics
+  const totalRecords = filteredCommissionHistory.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedCommissionHistory = useMemo(() => {
+    const startIdx = (safeCurrentPage - 1) * pageSize;
+    return filteredCommissionHistory.slice(startIdx, startIdx + pageSize);
+  }, [filteredCommissionHistory, safeCurrentPage, pageSize]);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (safeCurrentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (safeCurrentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', safeCurrentPage - 1, safeCurrentPage, safeCurrentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
 
   const totalCommissionPaid = summary?.totalEarned || allCommissionHistory.reduce(
     (sum, c) => sum + (c.commissionAmount || 0),
     0
   );
 
-  // Manager Rule Update
-  const handleUpdatePercentage = async (newPercentage) => {
+  // Manager Rule Updates (Percentage or Fixed Amount)
+  const handleApplyPercentage = async (rateVal) => {
     if (!isManager) return;
-    await setCommissionRate(newPercentage);
-    showToast(`Referral Commission Rule updated to ${newPercentage}%.`);
+    setIsSavingRule(true);
+    try {
+      const num = Number(rateVal);
+      if (isNaN(num) || num < 0) {
+        throw new Error('Please enter a valid percentage between 0 and 100');
+      }
+      const parsed = Math.min(100, Math.max(0, num));
+      setCustomPercentInput(String(parsed));
+      setRuleMode('percentage');
+      await setCommissionRule({
+        mode: 'percentage',
+        percentage: parsed,
+      });
+      showToast(`Referral Commission Rule updated to ${parsed}%.`);
+    } catch (err) {
+      showToast(err?.message || 'Failed to update commission percentage');
+    } finally {
+      setIsSavingRule(false);
+    }
   };
+
+  const handleApplyFixedAmount = async (amountVal) => {
+    if (!isManager) return;
+    setIsSavingRule(true);
+    try {
+      const num = Number(amountVal);
+      if (isNaN(num) || num < 0) {
+        throw new Error('Please enter a valid fixed amount');
+      }
+      const parsed = Math.max(0, Math.round(num));
+      setCustomAmountInput(String(parsed));
+      setRuleMode('fixed');
+      await setCommissionRule({
+        mode: 'fixed',
+        fixedAmount: parsed,
+      });
+      showToast(`Referral Commission Rule updated to ${parsed.toLocaleString()} FCFA (Fixed).`);
+    } catch (err) {
+      showToast(err?.message || 'Failed to update fixed commission');
+    } finally {
+      setIsSavingRule(false);
+    }
+  };
+
+  // Backward compatibility alias
+  const handleUpdatePercentage = handleApplyPercentage;
 
   // Manager Approve Action
   const handleApprove = async (commId) => {
@@ -345,43 +489,193 @@ export default function Referrals() {
                       Referral Commission Rule
                     </h2>
                     <p className="text-xs text-muted-gray">
-                      Commission rate percentage awarded from paid invoices.
+                      Configure how employees are rewarded when referred clients pay for services.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 bg-warm-ivory px-3.5 py-1.5 rounded-[10px] border border-border/80 self-start sm:self-auto">
-                  <span className="text-xs text-muted-gray">Default Rule:</span>
-                  <span className="text-base font-extrabold text-[#4F6748]">
-                    {commissionRate}%
+                <div className="flex items-center gap-2 bg-warm-ivory px-3.5 py-2 rounded-[12px] border border-border/80 self-start sm:self-auto shadow-2xs">
+                  <span className="text-xs text-muted-gray font-medium">Default Rule:</span>
+                  <span className="text-sm sm:text-base font-extrabold text-[#4F6748] font-mono flex items-center gap-1">
+                    {ruleMode === 'fixed' && commissionFixedAmount
+                      ? `${Number(commissionFixedAmount).toLocaleString()} FCFA (Fixed)`
+                      : `${commissionRate || 10}%`}
                   </span>
                 </div>
               </div>
 
-              <div className="mt-4 pt-1">
-                <label className="text-xs font-semibold text-charcoal block mb-2">
-                  Quick Commission Percentage
-                </label>
-                <div className="flex flex-wrap items-center gap-2.5">
-                  {[5, 10, 15].map((rate) => (
+              {/* Mode Toggle & Custom Setup */}
+              <div className="mt-5 space-y-4">
+                {/* 1. Choose Calculation Type */}
+                <div>
+                  <span className="text-xs font-semibold text-charcoal block mb-2">
+                    Commission Reward Mode
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
                     <button
-                      key={rate}
                       type="button"
-                      onClick={() => handleUpdatePercentage(rate)}
-                      className={`px-4 py-2.5 rounded-[10px] text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
-                        commissionRate === rate
-                          ? 'bg-sage text-white border-sage shadow-xs'
-                          : 'bg-soft-cream hover:bg-white text-charcoal border-border'
+                      onClick={() => setRuleMode('percentage')}
+                      className={`p-3 rounded-[12px] border transition-all text-left flex items-start gap-3 cursor-pointer ${
+                        ruleMode === 'percentage'
+                          ? 'bg-sage-soft/70 border-sage text-charcoal shadow-xs'
+                          : 'bg-white hover:bg-soft-cream/50 border-border text-muted-gray'
                       }`}
                     >
-                      {commissionRate === rate && <Check size={14} strokeWidth={2.5} />}
-                      <span>{rate}%</span>
+                      <div
+                        className={`p-2 rounded-[8px] shrink-0 ${
+                          ruleMode === 'percentage'
+                            ? 'bg-sage text-white'
+                            : 'bg-soft-cream text-charcoal'
+                        }`}
+                      >
+                        <Percent size={18} />
+                      </div>
+                      <div>
+                        <div className="text-xs sm:text-sm font-bold text-charcoal flex items-center gap-1.5">
+                          Percentage Commission (%)
+                          {ruleMode === 'percentage' && (
+                            <CheckCircle2 size={14} className="text-sage" />
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-gray mt-0.5">
+                          Calculated as a % share of the client's paid invoice total.
+                        </p>
+                      </div>
                     </button>
-                  ))}
+
+                    <button
+                      type="button"
+                      onClick={() => setRuleMode('fixed')}
+                      className={`p-3 rounded-[12px] border transition-all text-left flex items-start gap-3 cursor-pointer ${
+                        ruleMode === 'fixed'
+                          ? 'bg-sage-soft/70 border-sage text-charcoal shadow-xs'
+                          : 'bg-white hover:bg-soft-cream/50 border-border text-muted-gray'
+                      }`}
+                    >
+                      <div
+                        className={`p-2 rounded-[8px] shrink-0 ${
+                          ruleMode === 'fixed'
+                            ? 'bg-sage text-white'
+                            : 'bg-soft-cream text-charcoal'
+                        }`}
+                      >
+                        <Coins size={18} />
+                      </div>
+                      <div>
+                        <div className="text-xs sm:text-sm font-bold text-charcoal flex items-center gap-1.5">
+                          Fixed Amount (FCFA)
+                          {ruleMode === 'fixed' && (
+                            <CheckCircle2 size={14} className="text-sage" />
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-gray mt-0.5">
+                          A guaranteed flat cash reward per referred client invoice.
+                        </p>
+                      </div>
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[11px] text-muted-gray mt-2.5">
-                  Calculated automatically on invoice payment. Performing technician productivity remains 100% untouched.
-                </p>
+
+                {/* 2. Parameters for Percentage Mode */}
+                {ruleMode === 'percentage' ? (
+                  <div className="pt-3 border-t border-border/60">
+                    <label className="text-xs font-semibold text-charcoal block mb-2">
+                      Commission Percentage (%)
+                    </label>
+
+                    {/* Custom input box */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleApplyPercentage(customPercentInput);
+                      }}
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md"
+                    >
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          max="100"
+                          value={customPercentInput}
+                          onChange={(e) => setCustomPercentInput(e.target.value)}
+                          placeholder="e.g. 3, 7.5, 10"
+                          className="w-full px-3.5 py-2.5 pr-8 rounded-[10px] border border-border text-sm font-semibold text-charcoal focus:outline-none focus:border-sage bg-warm-ivory/30"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-gray">
+                          %
+                        </span>
+                      </div>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        disabled={isSavingRule || customPercentInput === ''}
+                        className="flex items-center justify-center gap-1.5 whitespace-nowrap py-2.5 px-4 rounded-[10px] text-xs font-bold cursor-pointer"
+                      >
+                        {isSavingRule ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Save size={14} />
+                        )}
+                        <span>Save Percentage</span>
+                      </Button>
+                    </form>
+
+                    <p className="text-[11px] text-muted-gray mt-2">
+                      Calculated automatically on invoice payment. Performing technician productivity remains 100% untouched.
+                    </p>
+                  </div>
+                ) : (
+                  /* 3. Parameters for Fixed Amount Mode */
+                  <div className="pt-3 border-t border-border/60">
+                    <label className="text-xs font-semibold text-charcoal block mb-2">
+                      Fixed Commission Reward Amount (FCFA)
+                    </label>
+
+                    {/* Custom input box */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleApplyFixedAmount(customAmountInput);
+                      }}
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md"
+                    >
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={customAmountInput}
+                          onChange={(e) => setCustomAmountInput(e.target.value)}
+                          placeholder="e.g. 1500, 2000, 3000"
+                          className="w-full px-3.5 py-2.5 pr-14 rounded-[10px] border border-border text-sm font-semibold text-charcoal focus:outline-none focus:border-sage bg-warm-ivory/30"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-gray">
+                          FCFA
+                        </span>
+                      </div>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        disabled={isSavingRule || customAmountInput === ''}
+                        className="flex items-center justify-center gap-1.5 whitespace-nowrap py-2.5 px-4 rounded-[10px] text-xs font-bold cursor-pointer"
+                      >
+                        {isSavingRule ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Save size={14} />
+                        )}
+                        <span>Save Fixed Amount</span>
+                      </Button>
+                    </form>
+
+                    <p className="text-[11px] text-muted-gray mt-2">
+                      Awarded as a flat cash commission per paid invoice of clients introduced by this employee, regardless of invoice total.
+                    </p>
+                  </div>
+                )}
               </div>
             </section>
           )}
@@ -456,139 +750,278 @@ export default function Referrals() {
 
           {/* ── Section 3: Commission History & Audit Ledger ── */}
           <section className="bg-white border border-border rounded-[16px] p-5 sm:p-6 shadow-card">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
               <div>
-                <h3 className="text-sm sm:text-base font-bold text-charcoal">
-                  Commission History
-                </h3>
-                <p className="text-xs text-muted-gray">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm sm:text-base font-bold text-charcoal">
+                    Commission History
+                  </h3>
+                  <span className="text-[11px] font-bold text-[#4F6748] bg-sage-soft px-2.5 py-0.5 rounded-full">
+                    {totalRecords} {totalRecords === 1 ? 'record' : 'records'}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-gray mt-0.5">
                   Ledger of paid services, commission amounts, bonuses, and approval status.
                 </p>
               </div>
 
-              {/* Filter */}
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                <Filter size={14} className="text-muted-gray" />
+              {/* Search Bar + Filters Toolbar */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search Input */}
+                <div className="relative min-w-[200px] sm:min-w-[240px]">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-gray" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search technician, service, date..."
+                    className="w-full pl-9 pr-7 py-1.5 text-xs rounded-[8px] bg-soft-cream border border-border text-charcoal placeholder-muted-gray focus:outline-none focus:border-sage transition-colors"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-gray hover:text-charcoal cursor-pointer p-0.5"
+                      title="Clear search"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Staff Filter (if manager/reception) */}
+                {!isTechnician && (
+                  <div className="flex items-center gap-1.5 bg-soft-cream border border-border rounded-[8px] px-2.5 py-1.5">
+                    <Filter size={13} className="text-muted-gray shrink-0" />
+                    <select
+                      value={selectedStaffFilter}
+                      onChange={(e) => setSelectedStaffFilter(e.target.value)}
+                      className="text-xs font-medium bg-transparent text-charcoal cursor-pointer outline-none"
+                    >
+                      <option value="all">All Employees</option>
+                      {employeeSummaries.map((emp) => (
+                        <option key={emp.id} value={emp.name}>
+                          {emp.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Status Filter */}
                 <select
-                  value={selectedStaffFilter}
-                  onChange={(e) => setSelectedStaffFilter(e.target.value)}
-                  className="px-3 py-1.5 rounded-[8px] text-xs font-medium bg-soft-cream border border-border text-charcoal cursor-pointer outline-none"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-2.5 py-1.5 rounded-[8px] text-xs font-medium bg-soft-cream border border-border text-charcoal cursor-pointer outline-none"
                 >
-                  <option value="all">All Employees</option>
-                  {employeeSummaries.map((emp) => (
-                    <option key={emp.id} value={emp.name}>
-                      {emp.name}
-                    </option>
-                  ))}
+                  <option value="all">All Status</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="APPROVED">Approved</option>
+                </select>
+
+                {/* Page Size Selector */}
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="px-2.5 py-1.5 rounded-[8px] text-xs font-medium bg-soft-cream border border-border text-charcoal cursor-pointer outline-none"
+                  title="Records per page"
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
                 </select>
               </div>
             </div>
 
             {filteredCommissionHistory.length === 0 ? (
-              <div className="py-8 text-center text-xs text-muted-gray bg-warm-ivory/50 rounded-[12px] border border-border/50">
-                {isLoading ? 'Loading commission records...' : 'No commission history recorded for the selected filter.'}
+              <div className="py-10 text-center text-xs text-muted-gray bg-warm-ivory/50 rounded-[12px] border border-border/50 flex flex-col items-center justify-center gap-2">
+                <p>
+                  {isLoading
+                    ? 'Loading commission records...'
+                    : searchQuery || statusFilter !== 'all' || selectedStaffFilter !== 'all'
+                    ? 'No commission history matches your current search or filter.'
+                    : 'No commission history recorded yet.'}
+                </p>
+                {(searchQuery || statusFilter !== 'all' || selectedStaffFilter !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                      setSelectedStaffFilter('all');
+                    }}
+                    className="text-xs font-bold text-sage hover:underline cursor-pointer"
+                  >
+                    Reset all filters
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-border bg-soft-cream/60 text-muted-gray uppercase font-semibold text-[10px] tracking-wider">
-                      <th className="py-2.5 px-3">Date</th>
-                      <th className="py-2.5 px-3">Technician</th>
-                      <th className="py-2.5 px-3">Service</th>
-                      <th className="py-2.5 px-3 text-right">Service Amount</th>
-                      <th className="py-2.5 px-3 text-center">Rate</th>
-                      <th className="py-2.5 px-3 text-right">Total Comm.</th>
-                      <th className="py-2.5 px-3 text-center">Status</th>
-                      {isManager && <th className="py-2.5 px-3 text-center">Actions</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {filteredCommissionHistory.map((item) => (
-                      <tr key={item.id} className="hover:bg-warm-ivory/40 transition-colors">
-                        <td className="py-3 px-3 font-mono text-muted-gray whitespace-nowrap">
-                          {item.date}
-                        </td>
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          <span className="font-bold text-[#4F6748] bg-sage-soft px-2 py-0.5 rounded-[4px]">
-                            {item.performingTechnician}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-charcoal whitespace-nowrap">
-                          {item.service}
-                        </td>
-                        <td className="py-3 px-3 text-right font-semibold text-charcoal whitespace-nowrap">
-                          {item.serviceAmount.toLocaleString('en-US')} FCFA
-                        </td>
-                        <td className="py-3 px-3 text-center font-mono text-muted-gray whitespace-nowrap">
-                          {item.commissionPercentage}%
-                        </td>
-                        <td className="py-3 px-3 text-right font-bold text-[#4F6748] whitespace-nowrap">
-                          {item.commissionAmount.toLocaleString('en-US')} FCFA
-                          {item.bonusAmount > 0 && (
-                            <span className="block text-[10px] text-emerald-600 font-normal">
-                              +{item.bonusAmount.toLocaleString('en-US')} bonus
+              <div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-border bg-soft-cream/60 text-muted-gray uppercase font-semibold text-[10px] tracking-wider">
+                        <th className="py-2.5 px-3">Date</th>
+                        <th className="py-2.5 px-3">Technician</th>
+                        <th className="py-2.5 px-3">Service</th>
+                        <th className="py-2.5 px-3 text-right">Service Amount</th>
+                        <th className="py-2.5 px-3 text-center">Rate</th>
+                        <th className="py-2.5 px-3 text-right">Total Comm.</th>
+                        <th className="py-2.5 px-3 text-center">Status</th>
+                        {isManager && <th className="py-2.5 px-3 text-center">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {paginatedCommissionHistory.map((item) => (
+                        <tr key={item.id} className="hover:bg-warm-ivory/40 transition-colors">
+                          <td className="py-3 px-3 font-mono text-muted-gray whitespace-nowrap">
+                            {item.date}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span className="font-bold text-[#4F6748] bg-sage-soft px-2 py-0.5 rounded-[4px]">
+                              {item.performingTechnician}
                             </span>
+                          </td>
+                          <td className="py-3 px-3 text-charcoal whitespace-nowrap">
+                            {item.service}
+                          </td>
+                          <td className="py-3 px-3 text-right font-semibold text-charcoal whitespace-nowrap">
+                            {item.serviceAmount.toLocaleString('en-US')} FCFA
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono text-muted-gray whitespace-nowrap">
+                            {item.commissionPercentage}%
+                          </td>
+                          <td className="py-3 px-3 text-right font-bold text-[#4F6748] whitespace-nowrap">
+                            {item.commissionAmount.toLocaleString('en-US')} FCFA
+                            {item.bonusAmount > 0 && (
+                              <span className="block text-[10px] text-emerald-600 font-normal">
+                                +{item.bonusAmount.toLocaleString('en-US')} bonus
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] font-bold text-[10px] border ${
+                                item.rawStatus === 'APPROVED' || item.rawStatus === 'PAID'
+                                  ? 'bg-success-soft text-success border-success/20'
+                                  : 'bg-warning-soft text-warning border-warning/20'
+                              }`}
+                            >
+                              <Check size={10} strokeWidth={2.5} />
+                              {item.status}
+                            </span>
+                          </td>
+                          {isManager && (
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {item.rawStatus === 'PENDING' && (
+                                  <button
+                                    onClick={() => handleApprove(item.id)}
+                                    className="px-2 py-1 rounded-[6px] text-[10px] font-bold bg-success-soft text-success hover:bg-success hover:text-white border border-success/30 transition-all cursor-pointer"
+                                    title="Approve Commission"
+                                  >
+                                    Approve
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setSelectedCommission(item);
+                                    setBonusAmount('');
+                                    setBonusReason('');
+                                    setModalError('');
+                                    setModalType('bonus');
+                                  }}
+                                  className="px-2 py-1 rounded-[6px] text-[10px] font-bold bg-sage-soft text-[#4F6748] hover:bg-sage hover:text-white border border-sage/30 transition-all cursor-pointer"
+                                  title="Add Bonus"
+                                >
+                                  + Bonus
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedCommission(item);
+                                    setAdjustRate(String(item.commissionPercentage));
+                                    setAdjustAmount('');
+                                    setAdjustReason('');
+                                    setModalError('');
+                                    setModalType('adjust');
+                                  }}
+                                  className="px-2 py-1 rounded-[6px] text-[10px] font-bold bg-soft-cream text-charcoal hover:bg-white border border-border transition-all cursor-pointer"
+                                  title="Adjust Rate or Amount"
+                                >
+                                  Adjust
+                                </button>
+                              </div>
+                            </td>
                           )}
-                        </td>
-                        <td className="py-3 px-3 text-center whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] font-bold text-[10px] border ${
-                              item.rawStatus === 'APPROVED' || item.rawStatus === 'PAID'
-                                ? 'bg-success-soft text-success border-success/20'
-                                : 'bg-warning-soft text-warning border-warning/20'
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Controls Footer */}
+                <div className="mt-4 pt-3.5 border-t border-border/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                  {/* Record range indicator */}
+                  <span className="text-muted-gray">
+                    Showing{' '}
+                    <strong className="text-charcoal font-semibold">
+                      {(safeCurrentPage - 1) * pageSize + 1}
+                    </strong>{' '}
+                    to{' '}
+                    <strong className="text-charcoal font-semibold">
+                      {Math.min(safeCurrentPage * pageSize, totalRecords)}
+                    </strong>{' '}
+                    of{' '}
+                    <strong className="text-charcoal font-semibold">{totalRecords}</strong> records
+                  </span>
+
+                  {/* Page Navigation */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={safeCurrentPage <= 1}
+                      className="px-2.5 py-1.5 rounded-[8px] border border-border text-xs font-semibold text-charcoal bg-soft-cream hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      <ChevronLeft size={14} />
+                      <span>Prev</span>
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      {getPageNumbers().map((num, idx) =>
+                        num === '...' ? (
+                          <span key={`dots-${idx}`} className="px-2 text-muted-gray font-bold">
+                            ...
+                          </span>
+                        ) : (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setCurrentPage(num)}
+                            className={`w-7 h-7 rounded-[8px] text-xs font-bold transition-all cursor-pointer ${
+                              safeCurrentPage === num
+                                ? 'bg-sage text-white shadow-xs'
+                                : 'bg-soft-cream hover:bg-white text-charcoal border border-border'
                             }`}
                           >
-                            <Check size={10} strokeWidth={2.5} />
-                            {item.status}
-                          </span>
-                        </td>
-                        {isManager && (
-                          <td className="py-3 px-3 text-center whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {item.rawStatus === 'PENDING' && (
-                                <button
-                                  onClick={() => handleApprove(item.id)}
-                                  className="px-2 py-1 rounded-[6px] text-[10px] font-bold bg-success-soft text-success hover:bg-success hover:text-white border border-success/30 transition-all cursor-pointer"
-                                  title="Approve Commission"
-                                >
-                                  Approve
-                                </button>
-                              )}
-                              <button
-                                onClick={() => {
-                                  setSelectedCommission(item);
-                                  setBonusAmount('');
-                                  setBonusReason('');
-                                  setModalError('');
-                                  setModalType('bonus');
-                                }}
-                                className="px-2 py-1 rounded-[6px] text-[10px] font-bold bg-sage-soft text-[#4F6748] hover:bg-sage hover:text-white border border-sage/30 transition-all cursor-pointer"
-                                title="Add Bonus"
-                              >
-                                + Bonus
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedCommission(item);
-                                  setAdjustRate(String(item.commissionPercentage));
-                                  setAdjustAmount('');
-                                  setAdjustReason('');
-                                  setModalError('');
-                                  setModalType('adjust');
-                                }}
-                                className="px-2 py-1 rounded-[6px] text-[10px] font-bold bg-soft-cream text-charcoal hover:bg-white border border-border transition-all cursor-pointer"
-                                title="Adjust Rate or Amount"
-                              >
-                                Adjust
-                              </button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                            {num}
+                          </button>
+                        )
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={safeCurrentPage >= totalPages}
+                      className="px-2.5 py-1.5 rounded-[8px] border border-border text-xs font-semibold text-charcoal bg-soft-cream hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      <span>Next</span>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </section>

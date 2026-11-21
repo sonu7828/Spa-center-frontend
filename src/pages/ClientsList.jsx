@@ -9,18 +9,19 @@
  * Source: WIREFRAME.md Screen 02, DESIGN-SYSTEM.md §17
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Search, Eye, RotateCcw, UserX, TriangleAlert, X } from 'lucide-react';
+import { UserPlus, Search, Eye, RotateCcw, UserX, TriangleAlert, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import { useClients } from '../context/ClientsContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isMarketerUser } from '../context/AuthContext';
 
 export default function ClientsList() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isMarketer = isMarketerUser(user) || (user?.role || '').toLowerCase() === 'marketer';
   const canManageStatus = user?.role === 'manager' || user?.role === 'reception';
   const { clients, setClientStatus } = useClients();
   const [search, setSearch] = useState('');
@@ -28,21 +29,43 @@ export default function ClientsList() {
   const [clientToDeactivate, setClientToDeactivate] = useState(null);
   const [clientToActivate, setClientToActivate] = useState(null);
 
-  const totalCount = clients.length;
+  // Derive marketer's own introduced clients
+  const myClients = useMemo(
+    () =>
+      clients.filter(
+        (c) =>
+          (c.introducedById && String(c.introducedById) === String(user?.id)) ||
+          (c.introducedBy && user?.name && c.introducedBy.toLowerCase().trim() === user.name.toLowerCase().trim())
+      ),
+    [clients, user]
+  );
+
+  // If Marketer, lock the client directory strictly to their own introduced clients
+  const displayedClients = useMemo(() => {
+    return isMarketer ? myClients : clients;
+  }, [isMarketer, myClients, clients]);
+
+  const totalCount = displayedClients.length;
   const activeCount = useMemo(
-    () => clients.filter((c) => c.status !== 'INACTIVE' && c.isActive !== false).length,
-    [clients]
+    () => displayedClients.filter((c) => c.status !== 'INACTIVE' && c.isActive !== false).length,
+    [displayedClients]
   );
   const inactiveCount = useMemo(
-    () => clients.filter((c) => c.status === 'INACTIVE' || c.isActive === false).length,
-    [clients]
+    () => displayedClients.filter((c) => c.status === 'INACTIVE' || c.isActive === false).length,
+    [displayedClients]
   );
 
   const filtered = useMemo(() => {
-    return clients.filter((c) => {
+    return displayedClients.filter((c) => {
       const isClientInactive = c.status === 'INACTIVE' || c.isActive === false;
       if (statusFilter === 'active' && isClientInactive) return false;
       if (statusFilter === 'inactive' && !isClientInactive) return false;
+      if (statusFilter === 'mine' && !isMarketer) {
+        const isMine =
+          (c.introducedById && String(c.introducedById) === String(user?.id)) ||
+          (c.introducedBy && user?.name && c.introducedBy.toLowerCase().trim() === user.name.toLowerCase().trim());
+        if (!isMine) return false;
+      }
 
       const q = search.toLowerCase().trim();
       if (!q) return true;
@@ -51,13 +74,51 @@ export default function ClientsList() {
         (c.phone && c.phone.includes(q))
       );
     });
-  }, [clients, search, statusFilter]);
+  }, [displayedClients, search, statusFilter, isMarketer, user]);
+
+  // ── 50/50 Pagination Logic ──
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset to first page when search query or status filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  const totalFiltered = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
+  const endIndex = Math.min(startIndex + PAGE_SIZE, totalFiltered);
+
+  const paginatedClients = useMemo(
+    () => filtered.slice(startIndex, endIndex),
+    [filtered, startIndex, endIndex]
+  );
+
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (safeCurrentPage <= 3) {
+      return [1, 2, 3, 4, '...', totalPages];
+    }
+    if (safeCurrentPage >= totalPages - 2) {
+      return [1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', safeCurrentPage - 1, safeCurrentPage, safeCurrentPage + 1, '...', totalPages];
+  }, [safeCurrentPage, totalPages]);
 
   return (
     <div>
       <PageHeader
-        title="Clients"
-        subtitle="Manage client profiles and service history."
+        title={isMarketer ? 'My Introduced Clients' : 'Clients'}
+        subtitle={
+          isMarketer
+            ? 'Track clients introduced by you and acquisition performance.'
+            : 'Manage client profiles and service history.'
+        }
         action={
           <Button onClick={() => navigate('/clients/new')}>
             <UserPlus size={16} strokeWidth={1.8} />
@@ -85,11 +146,19 @@ export default function ClientsList() {
 
         {/* Status Filter Tabs (Desktop: right side; Mobile: horizontal wrap/scroll) */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 shrink-0">
-          {[
-            { id: 'all', label: 'All Clients', count: totalCount },
-            { id: 'active', label: 'Active Clients', count: activeCount },
-            { id: 'inactive', label: 'Inactive Clients', count: inactiveCount },
-          ].map((f) => {
+          {(isMarketer
+            ? [
+                { id: 'all', label: 'My Clients', count: totalCount },
+                { id: 'active', label: 'Active', count: activeCount },
+                { id: 'inactive', label: 'Inactive', count: inactiveCount },
+              ]
+            : [
+                { id: 'all', label: 'All Clients', count: totalCount },
+                { id: 'active', label: 'Active Clients', count: activeCount },
+                { id: 'inactive', label: 'Inactive Clients', count: inactiveCount },
+                { id: 'mine', label: 'Introduced by Me', count: myClients.length },
+              ]
+          ).map((f) => {
             const isActive = statusFilter === f.id;
             return (
               <button
@@ -143,7 +212,7 @@ export default function ClientsList() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((client) => {
+              {paginatedClients.map((client) => {
                 const isInactive = client.status === 'INACTIVE' || client.isActive === false;
                 return (
                   <tr
@@ -151,7 +220,12 @@ export default function ClientsList() {
                     className="border-b border-border/40 last:border-b-0 hover:bg-soft-cream/20 transition-colors"
                   >
                     <td className="px-5 py-3.5 text-sm font-semibold text-charcoal">
-                      {client.name}
+                      <div>{client.name}</div>
+                      {client.introducedBy && (
+                        <div className="text-[10px] font-normal text-sage-hover font-sans">
+                          Ref: {client.introducedBy}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-sm text-muted-gray">
                       {client.phone}
@@ -212,7 +286,7 @@ export default function ClientsList() {
 
         {/* Tablet & Mobile Stacked Cards View (No horizontal scroll) */}
         <div className="block md:hidden divide-y divide-border/60">
-          {filtered.map((client) => {
+          {paginatedClients.map((client) => {
             const isInactive = client.status === 'INACTIVE' || client.isActive === false;
             return (
               <div
@@ -225,6 +299,11 @@ export default function ClientsList() {
                     <h4 className="text-sm font-bold text-charcoal leading-tight truncate">
                       {client.name}
                     </h4>
+                    {client.introducedBy && (
+                      <span className="text-[10px] font-medium text-sage-hover block truncate">
+                        Ref by: {client.introducedBy}
+                      </span>
+                    )}
                     <p className="text-xs text-muted-gray mt-0.5 truncate">
                       {client.phone}
                     </p>
@@ -295,9 +374,98 @@ export default function ClientsList() {
         </div>
 
         {/* Empty State */}
-        {filtered.length === 0 && (
-          <div className="p-8 text-center">
-            <p className="text-sm text-muted-gray">No clients found.</p>
+        {totalFiltered === 0 && (
+          <div className="p-8 sm:p-12 text-center">
+            {isMarketer ? (
+              <div className="max-w-md mx-auto space-y-3">
+                <div className="w-12 h-12 rounded-full bg-sage-soft text-sage flex items-center justify-center mx-auto border border-sage/20">
+                  <UserPlus size={22} />
+                </div>
+                <h3 className="text-base font-bold text-charcoal">
+                  {search ? 'No matching clients found' : 'No clients introduced yet'}
+                </h3>
+                <p className="text-xs text-muted-gray leading-relaxed">
+                  {search
+                    ? 'No clients match your search query. Try searching with another name or phone number.'
+                    : "You haven't introduced any clients yet. Click below to register your first client referral and start earning commission!"}
+                </p>
+                {!search && (
+                  <div className="pt-1">
+                    <Button onClick={() => navigate('/clients/new')} className="h-9 text-xs">
+                      <UserPlus size={14} />
+                      Register First Client
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-gray">No clients found.</p>
+            )}
+          </div>
+        )}
+
+        {/* ── 50/50 Pagination Bar ── */}
+        {totalFiltered > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-border bg-soft-cream/30 text-xs">
+            <div className="text-muted-gray font-medium">
+              Showing <span className="font-semibold text-charcoal">{startIndex + 1}</span> to{' '}
+              <span className="font-semibold text-charcoal">{endIndex}</span> of{' '}
+              <span className="font-semibold text-charcoal">{totalFiltered}</span> clients
+              {totalFiltered !== totalCount && (
+                <span className="text-muted-gray/70 ml-1">
+                  (filtered from {totalCount} total)
+                </span>
+              )}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-border bg-white text-charcoal hover:bg-soft-cream disabled:opacity-40 disabled:cursor-not-allowed font-medium transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  title="Previous Page"
+                >
+                  <ChevronLeft size={14} />
+                  <span className="hidden sm:inline">Previous</span>
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  {pageNumbers.map((p, idx) =>
+                    p === '...' ? (
+                      <span key={`dots-${idx}`} className="px-1.5 text-muted-gray font-bold select-none">
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setCurrentPage(p)}
+                        className={`min-w-[32px] h-[32px] rounded-[8px] text-xs font-bold transition cursor-pointer flex items-center justify-center ${
+                          safeCurrentPage === p
+                            ? 'bg-charcoal text-white shadow-xs'
+                            : 'bg-white border border-border/80 text-muted-gray hover:text-charcoal hover:bg-soft-cream'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-border bg-white text-charcoal hover:bg-soft-cream disabled:opacity-40 disabled:cursor-not-allowed font-medium transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  title="Next Page"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

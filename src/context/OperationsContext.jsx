@@ -19,7 +19,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { stockApi } from '../services/api';
-import { useAuth } from './AuthContext';
+import { useAuth, isMarketerUser } from './AuthContext';
 
 const OperationsContext = createContext();
 
@@ -124,7 +124,11 @@ function formatActivity(act) {
 
 export function OperationsProvider({ children }) {
   const { isAuthenticated, user } = useAuth();
-  const isCleaner = (user?.role || '').toLowerCase() === 'cleaner';
+  const userRole = (user?.role || '').toLowerCase();
+  const isCleaner = userRole === 'cleaner';
+  const isMarketer = userRole === 'marketer' || isMarketerUser(user);
+  const canAccessStock = isAuthenticated && ['manager', 'reception', 'technician'].includes(userRole) && !isMarketer;
+
   // Service stock items loaded from backend
   const [serviceStock, setServiceStock] = useState([]);
   const [isLoadingStock, setIsLoadingStock] = useState(true);
@@ -145,6 +149,10 @@ export function OperationsProvider({ children }) {
   // Stock audit log for Refill, Adjustment, Stock Check
   const [stockAuditLog, setStockAuditLog] = useState([]);
 
+  // Daily stock live photo audits (Technicians end-of-day photo proof + remarks)
+  const [dailyStockAudits, setDailyStockAudits] = useState([]);
+  const [isLoadingAudits, setIsLoadingAudits] = useState(false);
+
   // Financial & completed service state
   const [dailyTotals, setDailyTotals] = useState(initialDailyTotals);
   const [techRevenue, setTechRevenue] = useState(initialTechRevenue);
@@ -164,8 +172,10 @@ export function OperationsProvider({ children }) {
 
   // Load stock items and activity history from backend
   const refreshStock = useCallback(async () => {
-    if (!isAuthenticated || isCleaner) {
+    if (!canAccessStock) {
       setIsLoadingStock(false);
+      setServiceStock([]);
+      setStockAuditLog([]);
       return;
     }
     try {
@@ -211,15 +221,83 @@ export function OperationsProvider({ children }) {
     } finally {
       setIsLoadingStock(false);
     }
-  }, [isAuthenticated, isCleaner]);
+  }, [canAccessStock]);
 
   useEffect(() => {
-    if (isAuthenticated && !isCleaner) {
+    if (canAccessStock) {
       refreshStock();
     } else {
       setIsLoadingStock(false);
+      setServiceStock([]);
+      setStockAuditLog([]);
     }
-  }, [isAuthenticated, isCleaner, refreshStock]);
+  }, [canAccessStock, refreshStock]);
+
+  // Load daily stock photo audits from backend
+  const refreshDailyAudits = useCallback(
+    async (filterParams = {}) => {
+      if (!canAccessStock) {
+        setDailyStockAudits([]);
+        return;
+      }
+      try {
+        setIsLoadingAudits(true);
+        const res = await stockApi.getDailyAudits({ limit: 100, ...filterParams });
+        const items = res?.data?.audits || [];
+        setDailyStockAudits(items);
+      } catch (err) {
+        setDailyStockAudits([]);
+      } finally {
+        setIsLoadingAudits(false);
+      }
+    },
+    [canAccessStock]
+  );
+
+  useEffect(() => {
+    if (canAccessStock) {
+      refreshDailyAudits();
+    } else {
+      setDailyStockAudits([]);
+    }
+  }, [canAccessStock, refreshDailyAudits]);
+
+  // Submit live stock photo audit
+  const submitDailyStockAudit = useCallback(
+    async (auditData) => {
+      const res = await stockApi.submitDailyAudit(auditData);
+      const created = res?.data;
+      if (created) {
+        setDailyStockAudits((prev) => [created, ...prev]);
+      }
+      return created;
+    },
+    []
+  );
+
+  // Review daily stock audit (Manager / Reception)
+  const reviewDailyStockAudit = useCallback(
+    async (auditId, reviewData) => {
+      const res = await stockApi.reviewDailyAudit(auditId, reviewData);
+      const updated = res?.data;
+      if (updated) {
+        setDailyStockAudits((prev) =>
+          prev.map((a) => (a.id === auditId ? { ...a, ...updated } : a))
+        );
+      }
+      return updated;
+    },
+    []
+  );
+
+  // Delete daily stock audit
+  const deleteDailyStockAudit = useCallback(
+    async (auditId) => {
+      await stockApi.deleteDailyAudit(auditId);
+      setDailyStockAudits((prev) => prev.filter((a) => a.id !== auditId));
+    },
+    []
+  );
 
   // Check if an appointment was already closed
   const isAppointmentClosed = useCallback(
@@ -885,6 +963,12 @@ export function OperationsProvider({ children }) {
         deleteProduct,
         toggleProductActive,
         saveServiceConsumptionRules,
+        dailyStockAudits,
+        isLoadingAudits,
+        refreshDailyAudits,
+        submitDailyStockAudit,
+        reviewDailyStockAudit,
+        deleteDailyStockAudit,
       }}
     >
       {children}

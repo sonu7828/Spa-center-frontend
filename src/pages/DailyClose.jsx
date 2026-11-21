@@ -15,7 +15,7 @@
  * Source: WIREFRAME.md Screen 16, FLOW.md §40-44
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   MessageCircle,
@@ -31,6 +31,7 @@ import {
   ShieldAlert,
   Sparkles,
   Phone,
+  Camera,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -39,12 +40,14 @@ import { useOperations } from '../context/OperationsContext';
 import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
 import { useExpenses } from '../context/ExpensesContext';
+import { useInvoices } from '../context/InvoiceContext';
 import { reportsApi, whatsappApi } from '../services/api';
 
 export default function DailyClose() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { completedServices, latestReconciliation, retailSales = [] } = useOperations();
+  const { completedServices, latestReconciliation, retailSales = [], dailyStockAudits = [] } = useOperations();
+  const { invoices, refreshInvoices } = useInvoices();
   const { clients } = useClients();
   const { appointments } = useAppointments();
   const { todayExpensesTotal = 0 } = useExpenses();
@@ -53,11 +56,39 @@ export default function DailyClose() {
   const [sendError, setSendError] = useState(null);
   const [bossPhone, setBossPhone] = useState(() => localStorage.getItem('omega_boss_phone') || '+237676761349');
 
+  // Load backend configured boss phone on mount
+  useEffect(() => {
+    let isMounted = true;
+    whatsappApi
+      .getBossPhone()
+      .then((res) => {
+        if (isMounted && res?.data?.bossPhone) {
+          setBossPhone(res.data.bossPhone);
+          try {
+            localStorage.setItem('omega_boss_phone', res.data.bossPhone);
+          } catch (e) { }
+        }
+      })
+      .catch(() => { });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleBossPhoneChange = (val) => {
     setBossPhone(val);
     try {
       localStorage.setItem('omega_boss_phone', val);
-    } catch (e) {}
+    } catch (e) { }
+  };
+
+  const handleBossPhoneBlur = async () => {
+    if (!bossPhone || !bossPhone.trim()) return;
+    try {
+      await whatsappApi.updateBossPhone(bossPhone.trim());
+    } catch (e) {
+      console.warn('Could not sync boss phone to backend:', e.message);
+    }
   };
 
   // Live Backend Reports State
@@ -138,7 +169,20 @@ export default function DailyClose() {
     );
   }
 
-  // --- Derive fallback data from shared state if backend report empty ---
+  // --- Derive fallback data from shared state and invoices context ---
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayPaidInvoices = useMemo(() => {
+    return (invoices || []).filter((inv) => {
+      if (inv.status !== 'PAID') return false;
+      const invDate = String(inv.date || inv.paidAt || inv.createdAt || '');
+      return (
+        invDate.startsWith(todayIso) ||
+        invDate.includes(today) ||
+        invDate === 'Today'
+      );
+    });
+  }, [invoices, todayIso, today]);
+
   const todayCompletedServices = completedServices.filter(
     (s) => s.date === today || s.date === 'Today'
   );
@@ -159,69 +203,127 @@ export default function DailyClose() {
     return s.includes('ORANGE');
   };
 
+  const parseNum = (v) => {
+    if (typeof v === 'number') return isNaN(v) ? 0 : v;
+    return parseInt(String(v || '0').replace(/[^0-9]/g, ''), 10) || 0;
+  };
+
+  const invoiceCash = todayPaidInvoices
+    .filter((inv) => isCash(inv.paymentMethod))
+    .reduce((sum, inv) => sum + parseNum(inv.finalTotal ?? inv.paidAmount ?? inv.total), 0);
+
+  const invoiceMtn = todayPaidInvoices
+    .filter((inv) => isMtn(inv.paymentMethod))
+    .reduce((sum, inv) => sum + parseNum(inv.finalTotal ?? inv.paidAmount ?? inv.total), 0);
+
+  const invoiceOrange = todayPaidInvoices
+    .filter((inv) => isOrange(inv.paymentMethod))
+    .reduce((sum, inv) => sum + parseNum(inv.finalTotal ?? inv.paidAmount ?? inv.total), 0);
+
   const servicesCash = todayCompletedServices
     .filter((s) => isCash(s.payment))
-    .reduce((sum, s) => sum + (s.price || 0), 0);
+    .reduce((sum, s) => sum + parseNum(s.price), 0);
   const retailCash = todayRetailSales
     .filter((s) => isCash(s.payment))
-    .reduce((sum, s) => sum + (s.amount || 0), 0);
-  const fallbackCash = servicesCash + retailCash;
+    .reduce((sum, s) => sum + parseNum(s.amount), 0);
+  const fallbackCash = Math.max(servicesCash + retailCash, invoiceCash);
 
   const servicesMtn = todayCompletedServices
     .filter((s) => isMtn(s.payment))
-    .reduce((sum, s) => sum + (s.price || 0), 0);
+    .reduce((sum, s) => sum + parseNum(s.price), 0);
   const retailMtn = todayRetailSales
     .filter((s) => isMtn(s.payment))
-    .reduce((sum, s) => sum + (s.amount || 0), 0);
-  const fallbackMtn = servicesMtn + retailMtn;
+    .reduce((sum, s) => sum + parseNum(s.amount), 0);
+  const fallbackMtn = Math.max(servicesMtn + retailMtn, invoiceMtn);
 
   const servicesOrange = todayCompletedServices
     .filter((s) => isOrange(s.payment))
-    .reduce((sum, s) => sum + (s.price || 0), 0);
+    .reduce((sum, s) => sum + parseNum(s.price), 0);
   const retailOrange = todayRetailSales
     .filter((s) => isOrange(s.payment))
-    .reduce((sum, s) => sum + (s.amount || 0), 0);
-  const fallbackOrange = servicesOrange + retailOrange;
+    .reduce((sum, s) => sum + parseNum(s.amount), 0);
+  const fallbackOrange = Math.max(servicesOrange + retailOrange, invoiceOrange);
 
-  // Real payment values
+  // Real payment values: merge backend report with live invoices to avoid under-counting
   const methods = revenueReport?.paymentMethodBreakdown || [];
-  const cashTotal = methods.find((m) => m.method === 'CASH')?.amount ?? fallbackCash;
-  const mtnTotal = methods.find((m) => m.method === 'MTN_MOMO')?.amount ?? fallbackMtn;
-  const orangeTotal = methods.find((m) => m.method === 'ORANGE_MONEY')?.amount ?? fallbackOrange;
+  const backendCash = methods.find((m) => m.method === 'CASH')?.amount;
+  const backendMtn = methods.find((m) => m.method === 'MTN_MOMO')?.amount;
+  const backendOrange = methods.find((m) => m.method === 'ORANGE_MONEY')?.amount;
+
+  const cashTotal = Math.max(backendCash ?? 0, fallbackCash, invoiceCash);
+  const mtnTotal = Math.max(backendMtn ?? 0, fallbackMtn, invoiceMtn);
+  const orangeTotal = Math.max(backendOrange ?? 0, fallbackOrange, invoiceOrange);
 
   // CA Total
-  const caTotal =
-    dashboardSummary?.cards?.totalRevenue ??
-    revenueReport?.totalRevenue ??
-    (cashTotal + mtnTotal + orangeTotal);
+  const backendTotal = dashboardSummary?.cards?.totalRevenue ?? revenueReport?.totalRevenue;
+  const caTotal = Math.max(backendTotal ?? 0, cashTotal + mtnTotal + orangeTotal);
 
   // Unique clients count
-  const uniqueClientsCount =
-    dashboardSummary?.cards?.completedServices ??
-    new Set(todayCompletedServices.map((s) => s.clientName).filter(Boolean)).size;
+  const invoiceClients = new Set(
+    todayPaidInvoices.map((inv) => inv.clientName || inv.clientId).filter(Boolean)
+  ).size;
+  const serviceClients = new Set(
+    todayCompletedServices.map((s) => s.clientName).filter(Boolean)
+  ).size;
+  const backendClients = dashboardSummary?.cards?.completedServices || 0;
+  const uniqueClientsCount = Math.max(backendClients, invoiceClients, serviceClients, todayPaidInvoices.length);
 
-  // Technician Breakdown: Real backend technicians performance
-  const techBreakdown =
-    techniciansPerformance.length > 0
-      ? techniciansPerformance.map((t) => ({
-          name: t.technicianName,
-          total: t.revenueGenerated,
-          count: t.servicesCompleted,
-        }))
-      : (() => {
-          const map = {};
-          todayCompletedServices.forEach((s) => {
-            const tech = s.technician || 'Other';
-            if (!map[tech]) map[tech] = { total: 0, count: 0 };
-            map[tech].total += s.price || 0;
-            map[tech].count += 1;
-          });
-          return Object.entries(map).map(([name, data]) => ({
+  // Technician Breakdown: Real backend technicians performance combined with paid invoices
+  const techBreakdown = useMemo(() => {
+    const map = {};
+
+    if (techniciansPerformance && techniciansPerformance.length > 0) {
+      techniciansPerformance.forEach((t, idx) => {
+        const name = t.technicianName || 'Other';
+        const key = t.technicianId || name;
+        if (!map[key]) {
+          map[key] = {
+            id: key || `tech-${idx}`,
             name,
-            total: data.total,
-            count: data.count,
-          }));
-        })();
+            total: 0,
+            count: 0,
+          };
+        }
+        map[key].total += Number(t.revenueGenerated || 0);
+        map[key].count += Number(t.servicesCompleted || 0);
+      });
+    }
+
+    // Include service items from today's paid invoices if not fully represented
+    todayPaidInvoices.forEach((inv) => {
+      (inv.items || []).forEach((item) => {
+        if (item.type === 'drink' || item.type === 'cosmetic') return;
+        const techName = item.technician || inv.technicianName || inv.technician || 'Staff';
+        if (techName === 'Reception' || techName === 'Other') return;
+        const key = item.technicianId || techName;
+        const itemPrice = parseNum(item.price);
+        if (!map[key]) {
+          map[key] = {
+            id: key,
+            name: techName,
+            total: 0,
+            count: 0,
+          };
+        }
+        if (!techniciansPerformance || techniciansPerformance.length === 0) {
+          map[key].total += itemPrice;
+          map[key].count += Math.max(1, parseInt(item.quantity || item.qty, 10) || 1);
+        }
+      });
+    });
+
+    if (Object.keys(map).length > 0) {
+      return Object.values(map);
+    }
+
+    todayCompletedServices.forEach((s) => {
+      const tech = s.technician || 'Other';
+      if (!map[tech]) map[tech] = { id: tech, name: tech, total: 0, count: 0 };
+      map[tech].total += parseNum(s.price);
+      map[tech].count += 1;
+    });
+    return Object.values(map);
+  }, [techniciansPerformance, todayCompletedServices, todayPaidInvoices]);
 
   // Referrals today
   const referralsToday = clients.filter(
@@ -246,23 +348,32 @@ export default function DailyClose() {
     }).length;
 
   const handleSend = async () => {
-    if (!bossPhone.trim()) {
-      setSendError('Please enter Boss WhatsApp phone number.');
-      setTimeout(() => setSendError(null), 5000);
+    const cleanPhone = (bossPhone || '').trim();
+    if (!cleanPhone || cleanPhone.replace(/[^\d]/g, '').length < 8) {
+      setSendError('Please enter a valid Boss WhatsApp phone number (e.g. +918319399018 or +2376XXXXXXXX).');
+      setTimeout(() => setSendError(null), 6000);
       return;
     }
     setSending(true);
     setSendError(null);
     try {
-      await whatsappApi.triggerDailyClose({
+      await whatsappApi.updateBossPhone(cleanPhone).catch(() => {});
+      const res = await whatsappApi.triggerDailyClose({
         businessDate: new Date().toISOString().split('T')[0],
-        recipientPhone: bossPhone.trim(),
+        recipientPhone: cleanPhone,
       });
+
+      const resData = res?.data?.data || res?.data || res;
+      if (resData?.log?.status === 'FAILED') {
+        throw new Error(resData?.log?.failureReason || 'WhatsApp delivery failed at provider');
+      }
+
       setSent(true);
-      setTimeout(() => setSent(false), 5000);
+      setTimeout(() => setSent(false), 6000);
     } catch (err) {
+      console.error('Daily close send error:', err);
       setSendError(err.message || 'Failed to send daily close summary');
-      setTimeout(() => setSendError(null), 5000);
+      setTimeout(() => setSendError(null), 8000);
     } finally {
       setSending(false);
     }
@@ -299,6 +410,7 @@ export default function DailyClose() {
                 placeholder="+2376XXXXXXXX or +91..."
                 value={bossPhone}
                 onChange={(e) => handleBossPhoneChange(e.target.value)}
+                onBlur={handleBossPhoneBlur}
                 className="h-11 px-3.5 bg-soft-cream/40 border border-border rounded-[10px] text-xs font-mono font-semibold text-charcoal focus:border-sage outline-none min-w-[210px]"
               />
             </div>
@@ -424,9 +536,9 @@ export default function DailyClose() {
                 No technician revenue recorded today.
               </p>
             ) : (
-              techBreakdown.map((t) => (
+              techBreakdown.map((t, idx) => (
                 <div
-                  key={t.name}
+                  key={t.id || `${t.name}-${idx}`}
                   className="flex items-center justify-between py-1.5 px-2 rounded-[6px] hover:bg-soft-cream/40 text-xs"
                 >
                   <span className="font-medium text-charcoal">
@@ -480,6 +592,26 @@ export default function DailyClose() {
               <span className="font-bold text-charcoal">
                 {consumedStockCount} units
               </span>
+            </div>
+
+            {/* Daily Stock Live Photo Audits Proof Row */}
+            <div className="flex items-center justify-between py-2 border-b border-border/60">
+              <div className="flex items-center gap-2 text-muted-gray">
+                <Camera size={16} className="text-sage" />
+                <span>End-of-Day Stock Photo Proofs</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-charcoal">
+                  {dailyStockAudits.length} photo{dailyStockAudits.length !== 1 ? 's' : ''} ({dailyStockAudits.filter((a) => a.status === 'REVIEWED').length} reviewed)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/stock')}
+                  className="text-[11px] font-bold text-sage hover:underline cursor-pointer"
+                >
+                  View
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center justify-between py-2 border-b border-border/60">

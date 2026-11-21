@@ -34,6 +34,12 @@ import {
   CreditCard,
   ChevronRight,
   ShieldAlert,
+  Target,
+  Lock,
+  Unlock,
+  Zap,
+  Calculator,
+  Camera,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -45,7 +51,7 @@ import ClientAcquisitionModal from '../components/ClientAcquisitionModal';
 import { useOperations } from '../context/OperationsContext';
 import { useClients } from '../context/ClientsContext';
 import { useAppointments } from '../context/AppointmentsContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useCommission } from '../context/CommissionContext';
 import { useReports } from '../context/ReportsContext';
 import { getDoualaTodayStr } from '../utils/timezone';
@@ -53,7 +59,14 @@ import { getDoualaTodayStr } from '../utils/timezone';
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, allUsers } = useAuth();
-  const { dailyTotals, serviceStock, getProductMetrics, lowStockThresholdDays } = useOperations();
+  const {
+    dailyTotals,
+    serviceStock,
+    getProductMetrics,
+    lowStockThresholdDays,
+    dailyStockAudits = [],
+    refreshDailyAudits,
+  } = useOperations();
   const { clients } = useClients();
   const { appointments } = useAppointments();
   const { commissionRate, getEmployeeCommissionSummary } = useCommission();
@@ -76,7 +89,8 @@ export default function Dashboard() {
   const [managerShowAllIntroduced, setManagerShowAllIntroduced] = useState(false);
 
   const role = (user?.role || 'manager').toLowerCase();
-  const isTechnician = role === 'technician';
+  const isMarketer = role === 'marketer' || isMarketerUser(user);
+  const isTechnician = role === 'technician' && !isMarketer;
   const isReception = role === 'reception';
   const isManager = role === 'manager';
   const isCleaner = role === 'cleaner';
@@ -153,9 +167,14 @@ export default function Dashboard() {
       String(a.introducedById) === String(user?.id)
   );
 
-  // Active technicians for manager summary
+  // Active technicians & marketers for manager summary (excluding reception & managers)
   const activeTechnicians = allUsers.filter(
-    (u) => u.role === 'technician' && u.active !== false
+    (u) =>
+      (u.role === 'technician' || u.role === 'marketer' || isMarketerUser(u)) &&
+      u.role !== 'reception' &&
+      u.role !== 'manager' &&
+      u.role !== 'cleaner' &&
+      u.active !== false
   );
 
   // Current user's referral commission summary fallback
@@ -187,23 +206,13 @@ export default function Dashboard() {
 
   const allIntroducedClients = clients.filter((c) => Boolean(c.introducedBy));
 
-  // Top Staff Referrer computation (Employee Referral)
-  const referrerCounts = {};
-  clients.forEach((c) => {
-    if (c.introducedBy) {
-      const name = c.introducedBy.trim();
-      if (name) {
-        referrerCounts[name] = (referrerCounts[name] || 0) + 1;
-      }
-    }
-  });
-
+  // Top Staff Referrer computation (Strictly Technicians & Marketers - Receptionists & Managers excluded)
   let topReferrer = null;
   let maxCount = 0;
-  Object.entries(referrerCounts).forEach(([name, count]) => {
-    if (count > maxCount) {
-      maxCount = count;
-      topReferrer = { name, count };
+  technicianAcquisitionSummary.forEach((tech) => {
+    if (tech.clientsIntroduced > maxCount) {
+      maxCount = tech.clientsIntroduced;
+      topReferrer = { name: tech.name, count: tech.clientsIntroduced };
     }
   });
 
@@ -222,10 +231,15 @@ export default function Dashboard() {
     return daysSince > 14;
   }).length;
 
+  const pendingStockAuditsCount = dailyStockAudits.filter((a) => a.status === 'PENDING').length;
+
   const attentionItems = [
     { id: 1, label: 'Clients to Rebook', count: clientsToRebookCount, type: 'warning' },
     { id: 2, label: 'Deposit Required Clients', count: depositRequiredCount, type: 'error' },
     { id: 3, label: 'Stock Alerts', count: lowStockCount, type: 'warning' },
+    ...(pendingStockAuditsCount > 0
+      ? [{ id: 4, label: 'Stock Audits Pending Review', count: pendingStockAuditsCount, type: 'warning' }]
+      : []),
   ].filter((item) => item.count > 0);
 
   const handleAcquisitionSuccess = (data) => {
@@ -302,12 +316,250 @@ export default function Dashboard() {
 
   // =========================================================================
   // =========================================================================
+  // MARKETER PORTAL DASHBOARD VIEW (DEDICATED MARKETING & REFERRAL ACQUISITION)
+  // =========================================================================
+  if (isMarketer) {
+    const clientsReferredCount = myIntroducedClients.length;
+    const appointmentsCreatedCount = myIntroducedAppointments.length;
+    const completedServicesCount = myPerformance?.servicesCompleted ?? myCommissionSummary?.completedServices ?? 0;
+    const commissionEarnedAmount = myPerformance?.commissionEarned ?? myCommissionSummary?.commissionEarned ?? 0;
+
+    return (
+      <div className="space-y-4 sm:space-y-5 pb-8">
+        <PageHeader
+          title="Marketer Dashboard"
+          subtitle={`Welcome, ${user?.name} · Client Acquisition & Referral Tracking`}
+        />
+
+        {acquisitionSuccess && (
+          <div className="bg-success-soft border border-success/30 rounded-[12px] p-3.5 flex items-center gap-2.5 text-xs font-semibold text-[#4F6748] shadow-xs">
+            <CheckCircle size={16} className="text-success shrink-0" />
+            <span>{acquisitionSuccess}</span>
+          </div>
+        )}
+
+        {/* ── Metric Cards ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white rounded-[16px] border border-border p-4 shadow-card hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-gray">
+                Clients Acquired
+              </span>
+              <div className="w-8 h-8 rounded-[10px] bg-[#EDE9FE] text-[#6D28D9] flex items-center justify-center">
+                <Users size={17} />
+              </div>
+            </div>
+            <p className="text-2xl font-extrabold text-charcoal">{clientsReferredCount}</p>
+            <p className="text-[11px] text-muted-gray mt-1">Total registered clients</p>
+          </div>
+
+          <div className="bg-white rounded-[16px] border border-border p-4 shadow-card hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-gray">
+                Appointments Booked
+              </span>
+              <div className="w-8 h-8 rounded-[10px] bg-sage-soft text-sage-hover flex items-center justify-center">
+                <CalendarDays size={17} />
+              </div>
+            </div>
+            <p className="text-2xl font-extrabold text-charcoal">{appointmentsCreatedCount}</p>
+            <p className="text-[11px] text-muted-gray mt-1">Booked for your clients</p>
+          </div>
+
+          <div className="bg-white rounded-[16px] border border-border p-4 shadow-card hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-gray">
+                Completed Treatments
+              </span>
+              <div className="w-8 h-8 rounded-[10px] bg-[#DCE7D7] text-[#4F6748] flex items-center justify-center">
+                <Sparkles size={17} />
+              </div>
+            </div>
+            <p className="text-2xl font-extrabold text-charcoal">{completedServicesCount}</p>
+            <p className="text-[11px] text-muted-gray mt-1">Performed by salon staff</p>
+          </div>
+
+          <div className="bg-white rounded-[16px] border border-border p-4 shadow-card hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-gray">
+                Referral Commission
+              </span>
+              <div className="w-8 h-8 rounded-[10px] bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Award size={17} />
+              </div>
+            </div>
+            <p className="text-2xl font-extrabold text-charcoal truncate">
+              {commissionEarnedAmount.toLocaleString('en-US')}
+              <span className="text-xs font-normal text-muted-gray ml-1">FCFA</span>
+            </p>
+            <p className="text-[11px] text-muted-gray mt-1">Rule: {commissionRate}% per completed service</p>
+          </div>
+        </div>
+
+        {/* ── Client Acquisition Hero Card ── */}
+        <section className="bg-gradient-to-r from-[#F5F3FF] to-[#FAF5FF] border border-[#DDD6FE] rounded-[16px] p-4 sm:p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[6px] text-[10px] font-bold bg-[#EDE9FE] text-[#6D28D9] mb-2 uppercase tracking-wide">
+              Client Acquisition Portal
+            </div>
+            <h3 className="text-base sm:text-lg font-bold text-charcoal">
+              Introduce New Clients to OMEGA SPA
+            </h3>
+            <p className="text-xs text-muted-gray mt-1 leading-relaxed">
+              Register clients you have brought in, recommend their interested spa treatment, and choose their appointment slot. When their service is completed, your referral commission is automatically recorded.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAcquisitionModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-[11px] bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0 self-start sm:self-auto active:scale-[0.98]"
+          >
+            <UserPlus size={16} />
+            Add New Client
+          </button>
+        </section>
+
+        {/* ── My Introduced Clients Table with Appointment History Links ── */}
+        <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border mb-4">
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-charcoal flex items-center gap-2">
+                <UserCheck size={18} className="text-[#6D28D9]" />
+                My Acquired Clients & Visit History
+              </h2>
+              <p className="text-xs text-muted-gray mt-0.5">
+                All clients registered through your referral. Click any client to view their full appointment and visit history.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/clients')}
+              className="h-8 text-xs font-semibold self-start sm:self-auto"
+            >
+              View All in Clients Directory
+            </Button>
+          </div>
+
+          {myIntroducedClients.length === 0 ? (
+            <div className="text-center py-10 bg-soft-cream/40 rounded-[12px] border border-dashed border-border">
+              <UserPlus size={32} className="text-border mx-auto mb-2 text-[#8B5CF6]" />
+              <p className="text-sm font-bold text-charcoal">No clients introduced yet</p>
+              <p className="text-xs text-muted-gray mt-1 max-w-sm mx-auto">
+                Start introducing clients to OMEGA SPA to track their appointments and earn referral commissions.
+              </p>
+              <button
+                onClick={() => setShowAcquisitionModal(true)}
+                className="mt-4 px-4 py-2 rounded-[10px] bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-xs font-bold cursor-pointer inline-flex items-center gap-1.5 transition-all shadow-xs"
+              >
+                <Plus size={14} />
+                Register First Client
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-[10px] border border-border/60">
+              <table className="w-full text-xs">
+                <thead className="bg-[#FAF5FF] border-b border-[#EDE9FE]">
+                  <tr>
+                    <th className="text-left py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">Client</th>
+                    <th className="text-left py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">First Interest</th>
+                    <th className="text-left py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">Latest Appointment</th>
+                    <th className="text-left py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">Assigned Tech</th>
+                    <th className="text-left py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">Visit Status</th>
+                    <th className="text-right py-2.5 px-3 font-bold text-[#6D28D9] uppercase tracking-wider text-[10px]">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40 bg-white">
+                  {myIntroducedClients.map((client) => {
+                    const clientAppts = appointments.filter(
+                      (a) =>
+                        a.clientId === client.id ||
+                        a.clientName?.toLowerCase() === client.name?.toLowerCase()
+                    );
+                    const latestApt = clientAppts[0];
+                    const serviceName =
+                      latestApt?.service ||
+                      client.firstAppointmentService ||
+                      (client.lastService && client.lastService !== 'Spa Service' ? client.lastService : null) ||
+                      '—';
+                    const isCompleted = latestApt?.status === 'completed';
+
+                    return (
+                      <tr key={client.id} className="hover:bg-[#FAF5FF]/50 transition-colors">
+                        <td className="py-2.5 px-3">
+                          <span
+                            onClick={() => navigate(`/clients/${client.id}`)}
+                            className="font-bold text-charcoal hover:underline hover:text-[#6D28D9] cursor-pointer"
+                          >
+                            {client.name}
+                          </span>
+                          <span className="block text-[10px] text-muted-gray font-normal font-mono">
+                            {client.phone}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-medium text-charcoal">{serviceName}</td>
+                        <td className="py-2.5 px-3 text-muted-gray font-mono">
+                          {latestApt ? `${latestApt.date} · ${latestApt.time}` : '—'}
+                        </td>
+                        <td className="py-2.5 px-3 text-charcoal font-medium">
+                          {latestApt?.technicianName || '—'}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[10px] font-bold ${
+                              isCompleted
+                                ? 'bg-[#DCE7D7] text-[#4F6748] border border-[#4F6748]/20'
+                                : 'bg-[#EDE9FE] text-[#6D28D9] border border-[#DDD6FE]'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isCompleted ? 'bg-[#4F6748]' : 'bg-[#6D28D9]'
+                              }`}
+                            />
+                            {isCompleted ? 'Completed' : latestApt ? 'Booked' : 'Registered'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <button
+                            onClick={() => navigate(`/clients/${client.id}`)}
+                            className="text-[11px] font-bold text-[#6D28D9] hover:underline hover:text-[#5B21B6] cursor-pointer inline-flex items-center gap-1"
+                          >
+                            Appointment History
+                            <ChevronRight size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <ClientAcquisitionModal
+          isOpen={showAcquisitionModal}
+          onClose={() => setShowAcquisitionModal(false)}
+          onSuccess={handleAcquisitionSuccess}
+        />
+      </div>
+    );
+  }
+
+  // =========================================================================
   // TECHNICIAN / EMPLOYEE DASHBOARD VIEW
   // =========================================================================
   if (isTechnician) {
     const clientsReferredCount = myPerformance?.clientsReferred ?? myCommissionSummary?.clientsReferred ?? myIntroducedClients.length ?? 0;
     const completedServicesCount = myPerformance?.servicesCompleted ?? myCommissionSummary?.completedServices ?? 0;
     const commissionEarnedAmount = myPerformance?.commissionEarned ?? myCommissionSummary?.commissionEarned ?? 0;
+
+    const myTodayAudits = dailyStockAudits.filter((audit) => {
+      const isMe =
+        String(audit.technicianId) === String(user?.id) ||
+        audit.technicianName?.toLowerCase() === user?.name?.toLowerCase();
+      const isToday = audit.date ? audit.date.startsWith(todayStr) : true;
+      return isMe && isToday;
+    });
 
     return (
       <div className="space-y-4 sm:space-y-5 pb-8">
@@ -877,6 +1129,9 @@ export default function Dashboard() {
         subtitle={`Live Business & Operational Analytics · ${today}`}
       />
 
+      {/* ── Date Filter Bar: Today / Weekly / Monthly / Custom Range ── */}
+      {renderFilterBar()}
+
       {acquisitionSuccess && (
         <div className="bg-success-soft border border-success/30 rounded-[12px] p-3.5 flex items-center gap-2.5 text-xs font-semibold text-[#4F6748] shadow-xs">
           <CheckCircle size={16} className="text-success shrink-0" />
@@ -911,6 +1166,91 @@ export default function Dashboard() {
           value={orangeAmount.toLocaleString('en-US')}
           icon={Smartphone}
         />
+      </section>
+
+      {/* ── Revenue Collections (Operational View) ── */}
+      <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-border/70">
+          <div>
+            <h2 className="text-base font-bold text-charcoal flex items-center gap-2">
+              <Banknote size={18} className="text-sage" />
+              Revenue Collections (Operational View)
+            </h2>
+            <p className="text-xs text-muted-gray">Daily collections breakdown by payment method</p>
+          </div>
+          <div className="px-3 py-1 bg-soft-cream rounded-[8px] border border-border text-xs font-semibold text-charcoal">
+            Total Collected: <span className="text-[#4F6748] font-bold">{totalRevenueVal.toLocaleString('en-US')} FCFA</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-3 bg-warm-ivory/60 rounded-[12px] border border-border/60">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">Cash</span>
+            <span className="text-lg font-bold text-charcoal mt-1 block">
+              {cashAmount.toLocaleString('en-US')} <span className="text-xs font-normal text-muted-gray">FCFA</span>
+            </span>
+          </div>
+          <div className="p-3 bg-warm-ivory/60 rounded-[12px] border border-border/60">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">MTN MoMo</span>
+            <span className="text-lg font-bold text-charcoal mt-1 block">
+              {mtnAmount.toLocaleString('en-US')} <span className="text-xs font-normal text-muted-gray">FCFA</span>
+            </span>
+          </div>
+          <div className="p-3 bg-warm-ivory/60 rounded-[12px] border border-border/60">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">Orange Money</span>
+            <span className="text-lg font-bold text-charcoal mt-1 block">
+              {orangeAmount.toLocaleString('en-US')} <span className="text-xs font-normal text-muted-gray">FCFA</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Technician Staff Activity ── */}
+      <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card">
+        <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/70">
+          <div>
+            <h2 className="text-base font-bold text-charcoal flex items-center gap-2">
+              <Users size={18} className="text-sage" />
+              Technician Staff Activity
+            </h2>
+            <p className="text-xs text-muted-gray">Operational productivity and completed client sessions</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-[10px] border border-border/60">
+          <table className="w-full text-xs">
+            <thead className="bg-soft-cream border-b border-border">
+              <tr>
+                <th className="text-left py-2.5 px-3 font-bold text-muted-gray uppercase tracking-wider text-[10px]">Technician</th>
+                <th className="text-center py-2.5 px-3 font-bold text-muted-gray uppercase tracking-wider text-[10px]">Services Completed</th>
+                <th className="text-right py-2.5 px-3 font-bold text-muted-gray uppercase tracking-wider text-[10px]">Revenue Generated</th>
+                <th className="text-right py-2.5 px-3 font-bold text-muted-gray uppercase tracking-wider text-[10px]">Avg Ticket</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/40 bg-white">
+              {techniciansPerformance.length > 0 ? (
+                techniciansPerformance.map((tech) => (
+                  <tr key={tech.technicianId} className="hover:bg-warm-ivory/50 transition-colors">
+                    <td className="py-2.5 px-3 font-bold text-charcoal">{tech.technicianName}</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-charcoal">{tech.servicesCompleted}</td>
+                    <td className="py-2.5 px-3 text-right font-medium text-charcoal">
+                      {tech.revenueGenerated.toLocaleString('en-US')} FCFA
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-muted-gray font-mono">
+                      {tech.averageTicket.toLocaleString('en-US')} FCFA
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="py-4 text-center text-muted-gray">
+                    No technician operational activity recorded for this period.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {/* ── Section 2: Employee Client Acquisition & Referral Summary ── */}
@@ -1024,6 +1364,116 @@ export default function Dashboard() {
         )}
       </section>
 
+      {/* ── Section 2B: Staff Target Progress & Quota Tracker ── */}
+      <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/70">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-charcoal flex items-center gap-2">
+                <Target size={18} className="text-sage" />
+                Staff Target & Commission Quotas
+              </h2>
+              <span className="text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-[6px]">
+                Target Engine
+              </span>
+            </div>
+            <p className="text-xs text-muted-gray mt-0.5">
+              Monthly sales quota tracking: Mode A (Fixed Salary) vs Mode B (Commission)
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/staff')}
+              className="px-3 py-1.5 rounded-[10px] bg-soft-cream hover:bg-warm-ivory text-xs font-semibold text-charcoal transition-colors border border-border cursor-pointer flex items-center gap-1.5"
+            >
+              <Calculator size={13} className="text-sage" />
+              Manage Contracts
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-4">
+          {allUsers
+            .filter((u) => u.role === 'technician' && u.active !== false)
+            .map((tech) => {
+              const contract = tech.salaryContract || {};
+              const target = Number(contract.monthlyTarget || 500000);
+              const perf = techniciansPerformance.find(
+                (p) =>
+                  String(p.technicianId) === String(tech.id) ||
+                  p.technicianName?.toLowerCase() === tech.name?.toLowerCase()
+              );
+              const sales = Number(perf?.revenueGenerated || 0);
+              const percent = target > 0 ? Math.round((sales / target) * 100) : 0;
+              const isTargetMet = sales >= target && target > 0;
+              const remaining = Math.max(0, target - sales);
+
+              return (
+                <div
+                  key={tech.id}
+                  className="bg-warm-ivory/40 rounded-[14px] border border-border/70 p-4 flex flex-col justify-between hover:border-sage/40 transition-all shadow-2xs"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-2.5">
+                      <div>
+                        <h4 className="font-bold text-charcoal text-sm">{tech.name}</h4>
+                        <span className="text-[11px] text-muted-gray">
+                          Target: {target.toLocaleString()} FCFA
+                        </span>
+                      </div>
+                      {isTargetMet ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <Unlock size={11} /> Mode B Unlocked
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                          <Lock size={11} /> Mode A (Fixed Salary)
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="space-y-1 mb-3">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-semibold text-charcoal">
+                          {sales.toLocaleString()} FCFA
+                        </span>
+                        <span className={`font-bold ${isTargetMet ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {percent}%
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            isTargetMet ? 'bg-emerald-500' : 'bg-amber-500'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(3, percent))}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-gray">
+                    <span>
+                      {isTargetMet ? (
+                        <span className="text-emerald-700 font-semibold">Goal Achieved!</span>
+                      ) : (
+                        `${remaining.toLocaleString()} F to goal`
+                      )}
+                    </span>
+                    <button
+                      onClick={() => navigate(`/technicians/daily?technicianId=${tech.id}`)}
+                      className="font-bold text-sage-hover hover:underline cursor-pointer"
+                    >
+                      View Summary →
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </section>
+
       {/* ── Section 3: Today's Appointments ── */}
       <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4">
@@ -1060,76 +1510,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* ── Section 4 & 5: Top Referrer & Attention ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Top Referrer This Month */}
-        <section className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card flex flex-col justify-between">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4">
-              <h2 className="text-base sm:text-lg font-semibold text-charcoal">
-                Top Referrer
-              </h2>
-              <Button
-                variant="secondary"
-                onClick={() => navigate('/referrals')}
-                className="w-full sm:w-auto h-10 sm:h-11 text-xs sm:text-sm"
-              >
-                View Referrals
-              </Button>
-            </div>
 
-            <div className="bg-soft-cream/60 border border-border/70 rounded-[14px] p-4 flex items-center gap-3.5 mt-1">
-              <div className="w-12 h-12 rounded-[12px] bg-sage-soft border border-sage/30 flex items-center justify-center text-charcoal shrink-0">
-                <Award size={24} className="text-sage" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-gray uppercase tracking-wider">
-                  Top Staff Referrer
-                </p>
-                <h3 className="text-lg font-bold text-charcoal mt-0.5">
-                  {topReferrer ? topReferrer.name : '-'}
-                </h3>
-                {topReferrer ? (
-                  <p className="text-xs text-sage font-semibold mt-0.5">
-                    {topReferrer.count} {topReferrer.count === 1 ? 'client referred' : 'clients referred'}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-gray font-medium mt-0.5">-</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-3.5 mt-3.5 border-t border-border/60 flex items-center justify-between text-xs text-muted-gray">
-            <span>Referral Program Reward:</span>
-            <span className="font-semibold text-charcoal">{commissionRate}% Staff Commission</span>
-          </div>
-        </section>
-
-        {/* Attention Items */}
-        <section className="bg-white border border-border rounded-[16px] p-5 shadow-card flex flex-col justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-charcoal mb-4">Attention</h2>
-
-            <div className="space-y-2">
-              {attentionItems.length > 0 ? (
-                attentionItems.map((item) => (
-                  <AttentionItem
-                    key={item.id}
-                    label={item.label}
-                    count={item.count}
-                    type={item.type}
-                  />
-                ))
-              ) : (
-                <p className="text-sm text-muted-gray text-center py-4">
-                  No attention items today. All clear! ✨
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
-      </div>
 
       <ClientAcquisitionModal
         isOpen={showAcquisitionModal}

@@ -21,7 +21,7 @@
  * Source: Employee Attendance UI spec — Section 4, 5 + Manual Entry & Override
  */
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, Fragment } from 'react';
 import {
   Clock,
   Users,
@@ -39,6 +39,7 @@ import {
   Camera,
   Info,
   RotateCcw,
+  Coffee,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../context/AuthContext';
@@ -209,13 +210,56 @@ export default function AttendanceManager() {
 
   // Filtered history records
   const filteredHistory = useMemo(() => {
+    // If a specific date is selected, build the complete daily roster (present staff + absent staff)
+    if (filterDate) {
+      const existingDateRecords = allRecordsSorted.filter((rec) => rec.date === filterDate);
+      const recordedEmpIds = new Set(existingDateRecords.map((r) => String(r.employeeId)));
+
+      // Generate absent records for all active employees who didn't clock in on filterDate
+      const absentRecords = employees
+        .filter((emp) => !recordedEmpIds.has(String(emp.id)))
+        .map((emp) => ({
+          id: `absent-${emp.id}-${filterDate}`,
+          employeeId: emp.id,
+          employeeName: emp.name || emp.email,
+          employeeRole: emp.role || 'technician',
+          date: filterDate,
+          clockIn: '—',
+          clockOut: '—',
+          clockInRaw: null,
+          breaks: [],
+          breakCount: 0,
+          totalBreakMinutes: 0,
+          workingHours: '—',
+          netWorkingHours: '—',
+          status: 'not_started',
+          isManualEntry: false,
+          isAbsent: true,
+          photo: null,
+          clockInPhoto: null,
+          clockOutPhoto: null,
+        }));
+
+      // Combine: Present staff first, then Absent staff sorted by name
+      const fullRoster = [
+        ...existingDateRecords,
+        ...absentRecords.sort((a, b) => a.employeeName.localeCompare(b.employeeName)),
+      ];
+
+      return fullRoster.filter((rec) => {
+        if (filterEmployee && rec.employeeName !== filterEmployee) return false;
+        if (filterStatus && rec.status !== filterStatus) return false;
+        return true;
+      });
+    }
+
+    // Default: full history across all dates
     return allRecordsSorted.filter((rec) => {
-      if (filterDate && rec.date !== filterDate) return false;
       if (filterEmployee && rec.employeeName !== filterEmployee) return false;
       if (filterStatus && rec.status !== filterStatus) return false;
       return true;
     });
-  }, [allRecordsSorted, filterDate, filterEmployee, filterStatus]);
+  }, [allRecordsSorted, filterDate, filterEmployee, filterStatus, employees]);
 
   const formatDateDisplay = (dateStr) => {
     return formatDoualaDateDisplay(dateStr);
@@ -551,7 +595,13 @@ export default function AttendanceManager() {
                         Clock Out
                       </th>
                       <th className="text-left text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
-                        Working Hours
+                        Breaks
+                      </th>
+                      <th className="text-left text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
+                        Net Hours
+                      </th>
+                      <th className="text-left text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
+                        Gross Hours
                       </th>
                       <th className="text-left text-[10px] font-bold text-muted-gray uppercase tracking-wider py-3 px-4">
                         Photos
@@ -652,15 +702,43 @@ export default function AttendanceManager() {
                             )}
                           </td>
 
-                          {/* Working Hours */}
+                          {/* Breaks */}
                           <td className="py-3 px-4 whitespace-nowrap">
-                            {rec?.workingHours ? (
+                            {rec?.isOnBreak ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+                                <Coffee size={11} />
+                                On Break
+                              </span>
+                            ) : rec?.breakCount ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800">
+                                <Coffee size={12} className="text-amber-600" />
+                                {rec.breakCount} ({rec.totalBreakMinutes}m)
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-gray/60">0 (0m)</span>
+                            )}
+                          </td>
+
+                          {/* Net Work Hours */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            {rec?.netWorkingHours ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] text-xs font-bold text-[#4F6748] bg-[#DCE7D7]">
-                                {rec.workingHours}
+                                {rec.netWorkingHours}
                               </span>
                             ) : status === 'working' ? (
                               <span className="text-[11px] text-[#4F6748] font-semibold animate-pulse">
                                 In Progress
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-gray/60">—</span>
+                            )}
+                          </td>
+
+                          {/* Gross Shift Hours */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            {rec?.workingHours ? (
+                              <span className="text-xs text-muted-gray font-medium">
+                                {rec.workingHours}
                               </span>
                             ) : (
                               <span className="text-xs text-muted-gray/60">—</span>
@@ -693,6 +771,69 @@ export default function AttendanceManager() {
                                     <span>In Photo</span>
                                   </button>
                                 )}
+                                {/* Active Break Departure Photo */}
+                                {rec.isOnBreak && rec.currentBreakStartPhoto && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setViewingPhoto({
+                                        photo: rec.currentBreakStartPhoto,
+                                        name: rec.employeeName || emp.name,
+                                        role: rec.employeeRole || emp.role,
+                                        date: todayFormatted,
+                                        timeLabel: `On Break Now`,
+                                        typeLabel: 'Break Departure Photo (Active)',
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-amber-50 hover:bg-amber-100 text-[10px] font-semibold text-amber-800 border border-amber-300 transition-colors cursor-pointer shadow-2xs"
+                                  >
+                                    <Coffee size={10} className="text-amber-600" />
+                                    <span>Brk Out</span>
+                                  </button>
+                                )}
+                                {/* Completed Breaks Departure & Return Photos */}
+                                {rec.breaks?.map((b, bIdx) => (
+                                  <Fragment key={b.id || bIdx}>
+                                    {b.startPhoto && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setViewingPhoto({
+                                            photo: b.startPhoto,
+                                            name: rec.employeeName || emp.name,
+                                            role: rec.employeeRole || emp.role,
+                                            date: todayFormatted,
+                                            timeLabel: `Break #${bIdx + 1} Out: ${b.startTime ? new Date(b.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}`,
+                                            typeLabel: `Break #${bIdx + 1} Departure Photo`,
+                                          })
+                                        }
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[6px] bg-white hover:bg-amber-50 text-[9px] font-semibold text-amber-800 border border-amber-200 transition-colors cursor-pointer shadow-2xs"
+                                      >
+                                        <Coffee size={9} />
+                                        <span>B#{bIdx + 1} Out</span>
+                                      </button>
+                                    )}
+                                    {b.endPhoto && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setViewingPhoto({
+                                            photo: b.endPhoto,
+                                            name: rec.employeeName || emp.name,
+                                            role: rec.employeeRole || emp.role,
+                                            date: todayFormatted,
+                                            timeLabel: `Break #${bIdx + 1} In: ${b.endTime ? new Date(b.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}`,
+                                            typeLabel: `Break #${bIdx + 1} Return Photo (${b.durationMinutes}m)`,
+                                          })
+                                        }
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[6px] bg-white hover:bg-emerald-50 text-[9px] font-semibold text-emerald-800 border border-emerald-200 transition-colors cursor-pointer shadow-2xs"
+                                      >
+                                        <CheckCircle size={9} />
+                                        <span>B#{bIdx + 1} In</span>
+                                      </button>
+                                    )}
+                                  </Fragment>
+                                ))}
                                 {rec.clockOutPhoto && (
                                   <button
                                     type="button"
@@ -712,7 +853,7 @@ export default function AttendanceManager() {
                                     <span>Out Photo</span>
                                   </button>
                                 )}
-                                {!rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (
+                                {!rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (!rec.breaks || !rec.breaks.some((b) => b.startPhoto || b.endPhoto)) && (
                                   <span className="text-xs text-muted-gray/60">—</span>
                                 )}
                               </div>
@@ -840,8 +981,9 @@ export default function AttendanceManager() {
                   className="w-full px-3 py-2 rounded-[10px] border border-border bg-warm-ivory text-xs text-charcoal focus:outline-none focus:border-sage transition-colors cursor-pointer"
                 >
                   <option value="">All Statuses</option>
-                  <option value="working">Working</option>
                   <option value="completed">Completed</option>
+                  <option value="working">Working</option>
+                  <option value="not_started">Absent</option>
                 </select>
               </div>
               {hasActiveFilters && (
@@ -878,7 +1020,9 @@ export default function AttendanceManager() {
                         <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Role</th>
                         <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Clock In</th>
                         <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Clock Out</th>
-                        <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Hours</th>
+                        <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Breaks</th>
+                        <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Gross Hours</th>
+                        <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Net Hours</th>
                         <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Status</th>
                         <th className="text-left text-[10px] font-semibold text-muted-gray uppercase tracking-wider py-2.5 px-3">Photo</th>
                       </tr>
@@ -912,7 +1056,11 @@ export default function AttendanceManager() {
                             <td className="py-3 px-3 text-xs text-muted-gray capitalize">{rec.employeeRole || '—'}</td>
                             <td className="py-3 px-3 text-xs text-charcoal">{rec.clockIn || '—'}</td>
                             <td className="py-3 px-3 text-xs text-charcoal">{rec.clockOut || '—'}</td>
-                            <td className="py-3 px-3 text-xs font-semibold text-charcoal">{rec.workingHours || '—'}</td>
+                            <td className="py-3 px-3 text-xs text-amber-800 font-semibold">
+                              {rec.breakCount ? `${rec.breakCount} (${rec.totalBreakMinutes}m)` : '0 (0m)'}
+                            </td>
+                            <td className="py-3 px-3 text-xs text-muted-gray">{rec.workingHours || '—'}</td>
+                            <td className="py-3 px-3 text-xs font-bold text-[#4F6748]">{rec.netWorkingHours || '—'}</td>
                             <td className="py-3 px-3">
                               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-[10px] font-semibold ${rsc.bg} ${rsc.color} border ${rsc.border}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${rsc.dot}`} />
@@ -954,7 +1102,44 @@ export default function AttendanceManager() {
                                     <LogOut size={11} className="text-error" /> Out
                                   </button>
                                 )}
-                                {!rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (
+                                {rec.breaks?.map((b, bIdx) => (
+                                  (b.startPhoto || b.endPhoto) ? (
+                                    <button
+                                      key={b.id || bIdx}
+                                      onClick={() => setViewingPhoto({
+                                        photo: b.endPhoto || b.startPhoto,
+                                        name: rec.employeeName,
+                                        role: rec.employeeRole,
+                                        date: formatDateDisplay(rec.date),
+                                        timeLabel: `Break #${bIdx + 1} (${b.durationMinutes}m)`,
+                                        typeLabel: b.endPhoto && b.startPhoto ? `Break #${bIdx + 1} Return & Departure Photos` : `Break #${bIdx + 1} Photo`,
+                                      })}
+                                      className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 hover:text-amber-900 cursor-pointer transition-colors"
+                                      title="View break photos"
+                                    >
+                                      <Coffee size={10} className="text-amber-600" /> B#{bIdx + 1}
+                                    </button>
+                                  ) : null
+                                ))}
+                                {rec.isAbsent ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      resetManualForm();
+                                      setManualEmployee(String(rec.employeeId));
+                                      setManualDate(rec.date);
+                                      setManualClockIn(getDoualaCurrentTimeStr());
+                                      setManualClockOut(getDoualaCurrentTimeStr());
+                                      setManualStatus('completed');
+                                      setManualReason('Manager recorded attendance for absent employee');
+                                      setShowManualForm(true);
+                                    }}
+                                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2 py-0.5 rounded-[6px] transition-colors cursor-pointer"
+                                    title="Add manual attendance for this date"
+                                  >
+                                    + Add
+                                  </button>
+                                ) : !rec.clockInPhoto && !rec.photo && !rec.clockOutPhoto && (!rec.breaks || !rec.breaks.some((b) => b.startPhoto || b.endPhoto)) && (
                                   rec.isManualEntry ? (
                                     <button
                                       onClick={() => setSelectedManualDetails(rec)}
@@ -997,7 +1182,7 @@ export default function AttendanceManager() {
                           </span>
                         </div>
                         <p className="text-[10px] text-muted-gray font-medium">{formatDateDisplay(rec.date)}</p>
-                        <div className="grid grid-cols-3 gap-2 text-[10px]">
+                        <div className="grid grid-cols-4 gap-1.5 text-[10px]">
                           <div>
                             <p className="text-muted-gray font-medium">In</p>
                             <p className="font-semibold text-charcoal">{rec.clockIn || '—'}</p>
@@ -1007,11 +1192,35 @@ export default function AttendanceManager() {
                             <p className="font-semibold text-charcoal">{rec.clockOut || '—'}</p>
                           </div>
                           <div>
-                            <p className="text-muted-gray font-medium">Hours</p>
-                            <p className="font-bold text-[#4F6748]">{rec.workingHours || '—'}</p>
+                            <p className="text-muted-gray font-medium">Breaks</p>
+                            <p className="font-semibold text-amber-700">{rec.totalBreakMinutes || 0}m</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-gray font-medium">Net Hours</p>
+                            <p className="font-bold text-[#4F6748]">{rec.netWorkingHours || '—'}</p>
                           </div>
                         </div>
                         <ManualBadge rec={rec} />
+                        {rec.isAbsent && (
+                          <div className="pt-2 border-t border-border/40 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                resetManualForm();
+                                setManualEmployee(String(rec.employeeId));
+                                setManualDate(rec.date);
+                                setManualClockIn(getDoualaCurrentTimeStr());
+                                setManualClockOut(getDoualaCurrentTimeStr());
+                                setManualStatus('completed');
+                                setManualReason('Manager recorded attendance for absent employee');
+                                setShowManualForm(true);
+                              }}
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-[6px] transition-colors cursor-pointer"
+                            >
+                              + Record Attendance
+                            </button>
+                          </div>
+                        )}
                         {((rec.clockInPhoto || rec.photo) || rec.clockOutPhoto) && (
                           <div className="flex items-center gap-2 pt-1 border-t border-border/40">
                             {(rec.clockInPhoto || rec.photo) && (
@@ -1482,7 +1691,7 @@ export default function AttendanceManager() {
                     {selectedManualDetails.status === 'completed' ? 'Completed' : 'Working'}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t border-border/50">
+                <div className="grid grid-cols-4 gap-2 text-xs pt-2 border-t border-border/50">
                   <div>
                     <p className="text-[10px] text-muted-gray">Date</p>
                     <p className="font-semibold text-charcoal">{formatDateDisplay(selectedManualDetails.date)}</p>
@@ -1495,12 +1704,16 @@ export default function AttendanceManager() {
                     <p className="text-[10px] text-muted-gray">Clock Out</p>
                     <p className="font-semibold text-charcoal">{selectedManualDetails.clockOut || '—'}</p>
                   </div>
+                  <div>
+                    <p className="text-[10px] text-muted-gray">Breaks</p>
+                    <p className="font-semibold text-amber-800">{selectedManualDetails.totalBreakMinutes || 0}m</p>
+                  </div>
                 </div>
-                {selectedManualDetails.workingHours && (
+                {(selectedManualDetails.netWorkingHours || selectedManualDetails.workingHours) && (
                   <div className="pt-1.5 text-xs flex items-center justify-between">
-                    <span className="text-[10px] text-muted-gray">Total Hours:</span>
+                    <span className="text-[10px] text-muted-gray">Net Work Hours:</span>
                     <span className="font-bold text-[#4F6748] bg-[#DCE7D7] px-2 py-0.5 rounded-[6px] text-[11px]">
-                      {selectedManualDetails.workingHours}
+                      {selectedManualDetails.netWorkingHours || selectedManualDetails.workingHours}
                     </span>
                   </div>
                 )}

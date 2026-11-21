@@ -72,7 +72,9 @@ export async function apiRequest(endpoint, options = {}) {
 
     return data;
   } catch (error) {
-    console.error('[API Error] ' + (options.method || 'GET') + ' ' + endpoint + ':', error);
+    if (!options?.silent) {
+      console.error('[API Error] ' + (options.method || 'GET') + ' ' + endpoint + ':', error);
+    }
     throw error;
   }
 }
@@ -102,6 +104,11 @@ export const usersApi = {
   delete: (id) =>
     apiRequest('/users/' + id, {
       method: 'DELETE',
+    }),
+  updateSalaryContract: (id, contractData) =>
+    apiRequest('/users/' + id + '/salary-contract', {
+      method: 'PATCH',
+      body: JSON.stringify(contractData),
     }),
 };
 
@@ -241,19 +248,30 @@ export const invoicesApi = {
     if (typeof data === 'string') {
       payload = { appointmentId: data };
     } else if (data && typeof data === 'object') {
-      const rawAptId = data.appointmentId !== undefined ? data.appointmentId : data.id;
+      const isAppointmentObj = Boolean(data.appointmentDate || data.serviceSummary || data.appointmentServices);
+      const rawAptId = data.appointmentId !== undefined ? data.appointmentId : (isAppointmentObj ? data.id : null);
       const aptId =
         rawAptId && typeof rawAptId === 'object'
           ? rawAptId.appointmentId || rawAptId.id || String(rawAptId)
           : rawAptId;
 
       payload = {
-        ...(aptId ? { appointmentId: aptId } : {}),
         ...(data.clientId ? { clientId: data.clientId } : {}),
+        ...(data.clientName ? { clientName: data.clientName } : {}),
+        ...(data.clientPhone ? { clientPhone: data.clientPhone } : {}),
+        ...(data.phone ? { phone: data.phone } : {}),
+        ...(data.date ? { date: data.date } : {}),
+        ...(data.invoiceNumber ? { invoiceNumber: data.invoiceNumber } : {}),
         discount: typeof data.discount === 'number' ? data.discount : 0,
         status: data.status || 'PENDING_PAYMENT',
+        ...(aptId ? { appointmentId: aptId } : {}),
         ...(data.paymentMethod ? { paymentMethod: data.paymentMethod } : {}),
-        ...(data.retailProducts ? { retailProducts: data.retailProducts } : {}),
+        ...(Array.isArray(data.retailProducts) && data.retailProducts.length > 0
+          ? { retailProducts: data.retailProducts }
+          : {}),
+        ...(Array.isArray(data.services) && data.services.length > 0
+          ? { services: data.services }
+          : {}),
       };
     } else {
       payload = data;
@@ -347,6 +365,27 @@ export const stockApi = {
     apiRequest(`/stock/retail/${id}`, {
       method: 'DELETE',
     }),
+  submitDailyAudit: (data) =>
+    apiRequest('/stock/daily-audit', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getDailyAudits: (params = {}, options = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest('/stock/daily-audit' + (query ? '?' + query : ''), {
+      silent: true,
+      ...options,
+    });
+  },
+  reviewDailyAudit: (id, reviewData) =>
+    apiRequest(`/stock/daily-audit/${id}/review`, {
+      method: 'PATCH',
+      body: JSON.stringify(reviewData),
+    }),
+  deleteDailyAudit: (id) =>
+    apiRequest(`/stock/daily-audit/${id}`, {
+      method: 'DELETE',
+    }),
 };
 
 export const commissionsApi = {
@@ -374,6 +413,15 @@ export const commissionsApi = {
   approve: (commissionId) =>
     apiRequest('/commissions/' + commissionId + '/approve', {
       method: 'POST',
+    }),
+  getSalarySummary: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest('/commissions/salary-summary' + (query ? '?' + query : ''));
+  },
+  finalizePayroll: (data) =>
+    apiRequest('/commissions/payroll/finalize', {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 };
 
@@ -426,6 +474,7 @@ export const reportsApi = {
   getRevenue: (params = 'today') => apiRequest('/reports/revenue' + buildReportQuery(params)),
   getAppointments: (params = 'today') => apiRequest('/reports/appointments' + buildReportQuery(params)),
   getTopServices: (params = 'today') => apiRequest('/reports/top-services' + buildReportQuery(params)),
+  getServicePerformance: (params = '30d') => apiRequest('/reports/service-performance' + buildReportQuery(params)),
   getTechnicians: (params = 'today') => apiRequest('/reports/technicians' + buildReportQuery(params)),
   getMyPerformance: (params = 'today') => apiRequest('/reports/technicians/me' + buildReportQuery(params)),
   getTechnicianMe: (params = 'today') => apiRequest('/reports/technicians/me' + buildReportQuery(params)),
@@ -452,6 +501,25 @@ export const whatsappApi = {
     const qs = searchParams.toString();
     return apiRequest('/whatsapp/logs' + (qs ? '?' + qs : ''));
   },
+  purgeOldLogs: (days = 30) =>
+    apiRequest('/whatsapp/logs/purge', {
+      method: 'POST',
+      body: JSON.stringify({ days }),
+    }),
+  getRetentionSettings: () => apiRequest('/whatsapp/settings/retention', { silent: true }),
+  updateRetentionSettings: (days) =>
+    apiRequest('/whatsapp/settings/retention', {
+      method: 'PATCH',
+      body: JSON.stringify({ days }),
+      silent: true,
+    }),
+  getBossPhone: () => apiRequest('/whatsapp/settings/boss-phone', { silent: true }),
+  updateBossPhone: (bossPhone) =>
+    apiRequest('/whatsapp/settings/boss-phone', {
+      method: 'POST',
+      body: JSON.stringify({ bossPhone }),
+      silent: true,
+    }),
   processReminders: (data = {}) =>
     apiRequest('/whatsapp/triggers/process-reminders', {
       method: 'POST',
@@ -482,6 +550,11 @@ export const whatsappApi = {
       method: 'POST',
       body: JSON.stringify({ appointmentId }),
     }),
+  triggerClientWelcome: (clientId) =>
+    apiRequest('/whatsapp/triggers/client-welcome', {
+      method: 'POST',
+      body: JSON.stringify({ clientId }),
+    }),
   sendMessage: (data) =>
     apiRequest('/whatsapp/triggers/send', {
       method: 'POST',
@@ -492,12 +565,32 @@ export const whatsappApi = {
       method: 'POST',
       body: JSON.stringify({ invoiceId, phone }),
     }),
+  sendInvoiceFeedback: (invoiceId, phone) =>
+    apiRequest('/whatsapp/triggers/send-invoice-feedback', {
+      method: 'POST',
+      body: JSON.stringify({ invoiceId, phone }),
+    }),
   getInvoiceReceiptStatus: (invoiceId) =>
     apiRequest('/whatsapp/invoices/' + invoiceId + '/receipt-status'),
   retryMessage: (logId) =>
     apiRequest('/whatsapp/logs/' + logId + '/retry', {
       method: 'POST',
       body: JSON.stringify({}),
+    }),
+  getHolidays: () => apiRequest('/whatsapp/holidays'),
+  updateHoliday: (id, data) =>
+    apiRequest('/whatsapp/holidays/' + id, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  testSendHoliday: (id, data = {}) =>
+    apiRequest('/whatsapp/holidays/' + id + '/test-send', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  triggerTodayHolidays: () =>
+    apiRequest('/whatsapp/holidays/trigger-today', {
+      method: 'POST',
     }),
 };
 
@@ -650,3 +743,43 @@ export const socialApi = {
       method: 'DELETE',
     }),
 };
+
+export const penaltiesApi = {
+  getRules: () => apiRequest('/penalties/rules'),
+  createPenalty: (data) =>
+    apiRequest('/penalties', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getPenalties: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest('/penalties' + (query ? '?' + query : ''));
+  },
+  deletePenalty: (id) =>
+    apiRequest('/penalties/' + id, {
+      method: 'DELETE',
+    }),
+};
+
+export const jobSeekersApi = {
+  getAll: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest('/job-seekers' + (query ? '?' + query : ''));
+  },
+  getById: (id) => apiRequest('/job-seekers/' + id),
+  create: (data) =>
+    apiRequest('/job-seekers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id, data) =>
+    apiRequest('/job-seekers/' + id, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    apiRequest('/job-seekers/' + id, {
+      method: 'DELETE',
+    }),
+};
+

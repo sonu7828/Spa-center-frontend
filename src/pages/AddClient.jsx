@@ -12,12 +12,13 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertCircle, UserPlus } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import PhoneInputField from '../components/PhoneInputField';
+import CelebrationDateInput from '../components/CelebrationDateInput';
 import { useClients } from '../context/ClientsContext';
 import { useAuth } from '../context/AuthContext';
 import { validatePhoneNumber } from '../utils/phone';
@@ -25,8 +26,13 @@ import { validatePhoneNumber } from '../utils/phone';
 export default function AddClient() {
   const navigate = useNavigate();
   const { clients, addClient } = useClients();
-  const { user } = useAuth();
+  const { user, allUsers } = useAuth();
   const isManager = user?.role === 'manager' || user?.role === 'MANAGER';
+
+  // Eligible active staff for manager referral selection
+  const eligibleStaff = (allUsers || []).filter(
+    (u) => (u.role === 'technician' || u.role === 'reception') && u.active !== false
+  );
 
   const [form, setForm] = useState({
     name: '',
@@ -36,27 +42,14 @@ export default function AddClient() {
     anniversary: '',
   });
 
+  const [referredByStaffId, setReferredByStaffId] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [serverError, setServerError] = useState('');
-
-  const handlePhoneChange = (e) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    setForm((prev) => ({ ...prev, phone: formatted }));
-    setServerError('');
-    const validation = validatePhoneNumber(formatted);
-    if (!validation.isValid && formatted.trim() !== '+237') {
-      setPhoneError(validation.message);
-    } else {
-      setPhoneError('');
-    }
-  };
 
   const update = (field) => (e) => {
     setServerError('');
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
   };
-
-  const phoneStatus = validatePhoneNumber(form.phone);
 
   const [isSaving, setIsSaving] = useState(false);
   const handleSave = async () => {
@@ -85,13 +78,21 @@ export default function AddClient() {
 
     setIsSaving(true);
     try {
+      const selectedStaffObj = isManager
+        ? eligibleStaff.find((s) => String(s.id) === String(referredByStaffId))
+        : null;
+
       const newId = await addClient({
         name: form.name,
         phone: form.phone,
         quartier: form.quartier,
         birthday: form.birthday,
         anniversary: form.anniversary,
-        source: isManager ? 'DIRECT' : undefined,
+        introducedById: isManager ? (referredByStaffId || null) : user?.id,
+        introducedBy: isManager
+          ? (selectedStaffObj?.name || null)
+          : (user?.name || null),
+        source: isManager ? (referredByStaffId ? 'STAFF_REFERRAL' : 'DIRECT') : 'STAFF_REFERRAL',
       });
 
       navigate(`/clients/${newId}`);
@@ -155,23 +156,54 @@ export default function AddClient() {
             onChange={update('quartier')}
             placeholder="Neighborhood"
           />
-          <Input
+          <CelebrationDateInput
             label="Birthday Date"
-            type="date"
             value={form.birthday}
             onChange={update('birthday')}
+            hint="Year is optional"
           />
         </div>
 
         {/* Row 2b: Anniversary Date (Optional) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4">
-          <Input
+          <CelebrationDateInput
             label="Anniversary Date (Optional)"
-            type="date"
             value={form.anniversary}
             onChange={update('anniversary')}
+            hint="Year is optional"
           />
         </div>
+
+        {/* Row 3: Referral Attribution */}
+        {isManager ? (
+          <div className="mb-5 p-4 bg-soft-cream/40 border border-border/80 rounded-[12px]">
+            <label className="block text-xs font-semibold text-charcoal mb-1.5 uppercase tracking-wide">
+              Referred By Staff (Optional)
+            </label>
+            <select
+              value={referredByStaffId}
+              onChange={(e) => setReferredByStaffId(e.target.value)}
+              className="w-full h-11 px-3.5 bg-white border border-border rounded-[10px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors"
+            >
+              <option value="">Direct / Walk-In (No Staff Referral)</option>
+              {eligibleStaff.map((staff) => (
+                <option key={staff.id} value={staff.id}>
+                  {staff.name} — {(staff.specialties || []).join(', ') || (staff.role === 'reception' ? 'Receptionist' : 'Technician')}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-gray mt-1.5">
+              Select the active staff member who introduced this client, or leave as Direct Walk-In.
+            </p>
+          </div>
+        ) : (
+          <div className="mb-5 p-3.5 bg-sage-soft/50 border border-sage/20 rounded-[12px] flex items-center gap-2.5 text-xs text-charcoal">
+            <UserPlus size={16} className="text-sage shrink-0" />
+            <span>
+              This client will automatically be attributed to your account (<strong>{user?.name || 'You'}</strong>) as an introduced client.
+            </span>
+          </div>
+        )}
 
 
 

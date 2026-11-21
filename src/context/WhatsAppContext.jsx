@@ -17,7 +17,7 @@
  *   - TECHNICIAN / CLEANER: Blocked from WhatsApp management
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { whatsappApi } from '../services/api';
 
@@ -72,6 +72,12 @@ export const AUTOMATION_METADATA = {
     category: 'Executive',
     defaultTiming: 'Daily close sign-off',
   },
+  CLIENT_WELCOME: {
+    title: 'New Client Welcome',
+    description: 'Instant welcoming message sent automatically when a new client is added to the system',
+    category: 'Welcome & Retention',
+    defaultTiming: 'Immediate on registration',
+  },
 };
 
 export function WhatsAppProvider({ children }) {
@@ -86,12 +92,29 @@ export function WhatsAppProvider({ children }) {
     totalPages: 1,
   });
 
+  const paginationRef = useRef({ page: 1, limit: 20 });
+  const activeParamsRef = useRef({});
+
   const [automationsLoading, setAutomationsLoading] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Special broadcast state
   const [specialUpdates, setSpecialUpdates] = useState([]);
+
+  // Auto-cleanup retention timeframe (days before message logs auto-purge at midnight)
+  const [retentionDays, setRetentionDays] = useState(() => {
+    try {
+      const saved = localStorage.getItem('omega_whatsapp_retention_days');
+      return saved ? parseInt(saved, 10) || 30 : 30;
+    } catch {
+      return 30;
+    }
+  });
+
+  // Holiday & Occasion Greetings state
+  const [holidays, setHolidays] = useState([]);
+  const [holidaysLoading, setHolidaysLoading] = useState(false);
 
   const role = (user?.role || '').toLowerCase();
   const isManager = role === 'manager';
@@ -107,7 +130,7 @@ export function WhatsAppProvider({ children }) {
       const res = await whatsappApi.getAutomations();
       const list = Array.isArray(res?.data) ? res.data : [];
 
-      // Ensure all 8 canonical types are represented
+      // Ensure strictly the 9 active canonical automations are represented
       const canonicalTypes = [
         'BIRTHDAY',
         'ANNIVERSARY',
@@ -117,12 +140,17 @@ export function WhatsAppProvider({ children }) {
         'PAYMENT_CONFIRMATION',
         'REBOOKING',
         'DAILY_CLOSE_BOSS',
+        'CLIENT_WELCOME',
       ];
 
-      // Normalize and enrich items with metadata
+      // Normalize and enrich strictly the 9 canonical items
       const enriched = canonicalTypes.map((type) => {
         const found = list.find((item) => item.type === type);
         const meta = AUTOMATION_METADATA[type] || {};
+        const fallbackTemplate =
+          type === 'CLIENT_WELCOME'
+            ? "Hello {{1}}! 😊 We’d love to welcome you to Omega Spa.\n\nIt’s the perfect time to take a break and treat yourself to some relaxation. ✨ Contact us or book your appointment whenever you're ready.\n\nWe look forward to seeing you soon! 💚"
+            : '';
         return {
           id: found?.id || type.toLowerCase(),
           type,
@@ -130,7 +158,7 @@ export function WhatsAppProvider({ children }) {
           description: meta.description || '',
           category: meta.category || 'General',
           timing: found?.timing || meta.defaultTiming || '',
-          template: found?.template || '',
+          template: found?.template || fallbackTemplate,
           isActive: found ? Boolean(found.isActive) : true,
           enabled: found ? Boolean(found.isActive) : true,
           lastExecution: found?.updatedAt || found?.createdAt || null,
@@ -153,15 +181,35 @@ export function WhatsAppProvider({ children }) {
       if (!isAuthenticated || !hasAccess) return;
       setLogsLoading(true);
       try {
-        const res = await whatsappApi.getLogs({
-          page: pagination.page,
-          limit: pagination.limit,
+        const mergedParams = {
+          page: params.page !== undefined ? params.page : paginationRef.current.page,
+          limit: params.limit !== undefined ? params.limit : paginationRef.current.limit,
+          ...activeParamsRef.current,
           ...params,
+        };
+
+        // Clean empty string or undefined
+        const cleanParams = {};
+        Object.entries(mergedParams).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== '' && v !== 'ALL') {
+            cleanParams[k] = v;
+          }
         });
+
+        // Track active params
+        activeParamsRef.current = { ...cleanParams };
+        delete activeParamsRef.current.page;
+        delete activeParamsRef.current.limit;
+
+        const res = await whatsappApi.getLogs(cleanParams);
         if (res?.data) {
           setLogs(res.data.logs || []);
           if (res.data.pagination) {
             setPagination(res.data.pagination);
+            paginationRef.current = {
+              page: res.data.pagination.page,
+              limit: res.data.pagination.limit,
+            };
           }
         }
       } catch (err) {
@@ -170,41 +218,130 @@ export function WhatsAppProvider({ children }) {
         setLogsLoading(false);
       }
     },
-    [isAuthenticated, hasAccess, pagination.page, pagination.limit]
+    [isAuthenticated, hasAccess]
   );
+
+  // Fetch retention policy
+  const fetchRetentionSettings = useCallback(async () => {
+    if (!isAuthenticated || !hasAccess) return;
+    try {
+      const res = await whatsappApi.getRetentionSettings();
+      if (res?.data?.retentionDays) {
+        setRetentionDays(res.data.retentionDays);
+        localStorage.setItem('omega_whatsapp_retention_days', String(res.data.retentionDays));
+      }
+    } catch (e) {
+      // Backend may be building/restarting; keep existing state / localStorage
+    }
+  }, [isAuthenticated, hasAccess]);
+
+  // Update auto-cleanup retention days
+  const updateRetention = useCallback(async (days) => {
+    // 1. Immediately persist locally so UI is reactive
+    setRetentionDays(days);
+    try {
+      localStorage.setItem('omega_whatsapp_retention_days', String(days));
+    } catch {
+      // ignore storage quota
+    }
+
+    // 2. Sync to backend
+    try {
+      const res = await whatsappApi.updateRetentionSettings(days);
+      if (res?.data?.retentionDays) {
+        setRetentionDays(res.data.retentionDays);
+      }
+      return res;
+    } catch (e) {
+      console.warn('Backend retention sync note (saved locally):', e.message);
+      return { success: true, localOnly: true, data: { retentionDays: days } };
+    }
+  }, []);
+
+  // Fetch all 24 fixed and variable holidays
+  const fetchHolidays = useCallback(async () => {
+    if (!isAuthenticated || !hasAccess) return;
+    setHolidaysLoading(true);
+    try {
+      const res = await whatsappApi.getHolidays();
+      if (res?.data && Array.isArray(res.data)) {
+        setHolidays(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch holidays:', err.message);
+    } finally {
+      setHolidaysLoading(false);
+    }
+  }, [isAuthenticated, hasAccess]);
+
+  // Update a holiday (toggle active, change timing, or update variable date for year)
+  const updateHoliday = useCallback(async (id, data) => {
+    try {
+      const res = await whatsappApi.updateHoliday(id, data);
+      if (res?.data) {
+        setHolidays((prev) =>
+          prev.map((h) => (h.id === id || h.code === id ? res.data : h))
+        );
+      }
+      return res;
+    } catch (err) {
+      console.warn('Failed to update holiday:', err.message);
+      throw err;
+    }
+  }, []);
+
+  // Send a test holiday greeting
+  const testSendHoliday = useCallback(async (id, data = {}) => {
+    return whatsappApi.testSendHoliday(id, data);
+  }, []);
+
+  // Trigger today's holiday check and dispatch
+  const triggerTodayHolidays = useCallback(async () => {
+    const res = await whatsappApi.triggerTodayHolidays();
+    await fetchLogs();
+    return res;
+  }, [fetchLogs]);
 
   // Initial load
   useEffect(() => {
     if (hasAccess) {
       fetchAutomations();
       fetchLogs();
+      fetchHolidays();
     }
-  }, [hasAccess, fetchAutomations, fetchLogs]);
+  }, [hasAccess, fetchAutomations, fetchLogs, fetchHolidays]);
 
-  // 3. Update automation configuration (Manager only)
+  // 3. Update automation configuration (Manager only) with Optimistic UI
   const updateAutomation = useCallback(
     async (type, data) => {
+      let previousState = null;
+
+      // 1. Optimistic instant update so user sees zero delay
+      setAutomations((prev) => {
+        previousState = prev;
+        return prev.map((a) =>
+          a.type === type
+            ? {
+                ...a,
+                ...data,
+                isActive: data.isActive !== undefined ? data.isActive : a.isActive,
+                enabled: data.isActive !== undefined ? data.isActive : a.enabled,
+                template: data.template !== undefined ? data.template : a.template,
+                timing: data.timing !== undefined ? data.timing : a.timing,
+                lastExecution: new Date().toISOString(),
+              }
+            : a
+        );
+      });
+
       try {
         const res = await whatsappApi.updateAutomation(type, data);
-        if (res?.success) {
-          setAutomations((prev) =>
-            prev.map((a) =>
-              a.type === type
-                ? {
-                    ...a,
-                    ...data,
-                    isActive: data.isActive !== undefined ? data.isActive : a.isActive,
-                    enabled: data.isActive !== undefined ? data.isActive : a.enabled,
-                    template: data.template !== undefined ? data.template : a.template,
-                    timing: data.timing !== undefined ? data.timing : a.timing,
-                    lastExecution: new Date().toISOString(),
-                  }
-                : a
-            )
-          );
-        }
         return res;
       } catch (err) {
+        // Rollback on failure
+        if (previousState) {
+          setAutomations(previousState);
+        }
         console.warn('Failed to update automation:', err.message);
         throw err;
       }
@@ -212,17 +349,13 @@ export function WhatsAppProvider({ children }) {
     []
   );
 
-  // Toggle automation ON/OFF
+  // Toggle automation ON/OFF (returns Promise for caller to handle loading state)
   const toggleAutomation = useCallback(
     async (type) => {
       const current = automations.find((a) => a.type === type || a.id === type);
       if (!current) return;
       const nextActive = !current.isActive;
-      try {
-        await updateAutomation(current.type, { isActive: nextActive });
-      } catch (err) {
-        console.warn('Error toggling automation:', err.message);
-      }
+      return updateAutomation(current.type, { isActive: nextActive });
     },
     [automations, updateAutomation]
   );
@@ -345,6 +478,20 @@ export function WhatsAppProvider({ children }) {
     [fetchLogs]
   );
 
+  // 5. Purge old message logs (Manager only)
+  const purgeOldLogs = useCallback(
+    async (days = 30) => {
+      try {
+        const res = await whatsappApi.purgeOldLogs(days);
+        await fetchLogs({ page: 1 });
+        return res;
+      } catch (err) {
+        throw new Error(err.message || 'Failed to purge old message logs');
+      }
+    },
+    [fetchLogs]
+  );
+
   const value = {
     automations,
     logs,
@@ -357,6 +504,9 @@ export function WhatsAppProvider({ children }) {
     toggleAutomation,
     updateTemplate,
     fetchLogs,
+    retentionDays,
+    updateRetention,
+    purgeOldLogs,
     retryMessage,
     sendMessage,
     processReminders,
@@ -364,6 +514,12 @@ export function WhatsAppProvider({ children }) {
     generateInvoiceMessage,
     sendSpecialUpdate,
     specialUpdates,
+    holidays,
+    holidaysLoading,
+    fetchHolidays,
+    updateHoliday,
+    testSendHoliday,
+    triggerTodayHolidays,
   };
 
   return <WhatsAppContext.Provider value={value}>{children}</WhatsAppContext.Provider>;

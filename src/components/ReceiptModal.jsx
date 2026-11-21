@@ -31,16 +31,88 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
     month: 'long',
     year: 'numeric',
   });
-  const timeStr =
-    invoice.paidTime ||
-    paidDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const isMidnightOrDateOnly = (t) => {
+    if (!t) return true;
+    const str = String(t);
+    return str.endsWith('T00:00:00.000Z') || str.endsWith('T00:00:00Z') || /^\d{4}-\d{2}-\d{2}$/.test(str);
+  };
 
-  const subtotal = invoice.total || 0;
-  const discount = invoice.discount || 0;
-  const grandTotal = invoice.finalTotal !== undefined ? invoice.finalTotal : subtotal;
+  const realPaidTimestamp =
+    (!isMidnightOrDateOnly(invoice.paidAt) ? invoice.paidAt : null) ||
+    (!isMidnightOrDateOnly(invoice.createdAt) ? invoice.createdAt : null);
+
+  const timeStr =
+    (invoice.paidTime && invoice.paidTime !== '05:30 AM' && invoice.paidTime !== '05:30' ? invoice.paidTime : null) ||
+    (realPaidTimestamp
+      ? new Date(realPaidTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : paidDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+
+  const itemsSubtotal = (invoice.items || []).reduce(
+    (sum, it) => sum + (Number(it.price) || 0),
+    0
+  );
+  const discount = Number(invoice.discount) || 0;
+  const subtotal =
+    itemsSubtotal > 0
+      ? itemsSubtotal
+      : Number(invoice.subtotal) || Number(invoice.total || 0) + discount;
+  const grandTotal =
+    invoice.finalTotal !== undefined
+      ? invoice.finalTotal
+      : invoice.total !== undefined
+      ? invoice.total
+      : subtotal - discount;
   
   const formatPaymentMethod = (pm) => {
-    const p = String(pm || 'cash').trim().toUpperCase();
+    // 1. Multiple payments array from backend
+    if (Array.isArray(invoice.payments) && invoice.payments.length > 1) {
+      return invoice.payments
+        .map((p) => {
+          const rawMethod = String(p.paymentMethod || 'CASH').toUpperCase();
+          const label = rawMethod.includes('MTN')
+            ? 'MTN MOMO'
+            : rawMethod.includes('ORANGE')
+            ? 'ORANGE MONEY'
+            : 'CASH';
+          return `${label}: ${Number(p.amount || 0).toLocaleString('en-US')} FCFA`;
+        })
+        .join(' + ');
+    }
+
+    // 2. Explicit splits array on invoice
+    if (Array.isArray(invoice.splits) && invoice.splits.length > 1) {
+      return invoice.splits
+        .map((s) => {
+          const rawMethod = String(s.method || s.paymentMethod || 'CASH').toUpperCase();
+          const label = rawMethod.includes('MTN')
+            ? 'MTN MOMO'
+            : rawMethod.includes('ORANGE')
+            ? 'ORANGE MONEY'
+            : 'CASH';
+          return `${label}: ${Number(s.amount || 0).toLocaleString('en-US')} FCFA`;
+        })
+        .join(' + ');
+    }
+
+    // 3. Formatted split string directly on invoice (e.g. "CASH (2,000) + MTN MOMO (1,240)")
+    const p = String(pm || invoice.paymentMethod || 'cash').trim().toUpperCase();
+    if (p.includes('+') || p.includes(':')) return p;
+
+    // 4. Single payment with notes containing split breakdown
+    if (Array.isArray(invoice.payments) && invoice.payments.length === 1) {
+      const p0 = invoice.payments[0];
+      if (p0.notes && (p0.notes.includes('+') || p0.notes.toLowerCase().includes('split payment:'))) {
+        const cleaned = p0.notes.replace(/^Split payment:\s*/i, '').trim();
+        if (cleaned.includes('+') || cleaned.includes(':')) {
+          return cleaned.toUpperCase();
+        }
+      }
+      const raw = String(p0.paymentMethod || '').toUpperCase();
+      if (raw.includes('MTN')) return 'MTN MOMO';
+      if (raw.includes('ORANGE')) return 'ORANGE MONEY';
+      return 'CASH';
+    }
+
     if (p.includes('MTN')) return 'MTN MOMO';
     if (p.includes('ORANGE')) return 'ORANGE MONEY';
     return 'CASH';
@@ -63,26 +135,159 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
   const cosmeticItems = (invoice.items || []).filter((it) => it.type === 'cosmetic');
 
   const handlePrint = () => {
-    const origTitle = document.title;
-    document.title = ' ';
-    window.print();
+    const printEl = document.getElementById('omega-receipt-print');
+    if (!printEl) {
+      window.print();
+      return;
+    }
+
+    // Create an isolated iframe for clean single-page printing
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '800px';
+    iframe.style.height = '1000px';
+    iframe.style.border = 'none';
+    iframe.style.opacity = '0.001';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.zIndex = '-9999';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    doc.open();
+    doc.write('<!DOCTYPE html><html><head><title>Receipt ' + invNumber + '</title>');
+
+    // Clone all external stylesheets and style tags, skipping any conflicting print rules
+    document.querySelectorAll('link[rel="stylesheet"], style').forEach((styleNode) => {
+      if (styleNode.textContent && styleNode.textContent.includes('body * { visibility: hidden')) {
+        return;
+      }
+      doc.write(styleNode.outerHTML);
+    });
+
+    // Add print styles to ensure strict single-page layout with no background bleed
+    doc.write(`
+      <style>
+        @page {
+          size: A4 portrait;
+          margin: 8mm 10mm;
+        }
+        * {
+          box-sizing: border-box !important;
+        }
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        #omega-receipt-print {
+          position: static !important;
+          transform: none !important;
+          width: 100% !important;
+          max-width: 620px !important;
+          margin: 0 auto !important;
+          border: 1px solid #E8E1D9 !important;
+          border-radius: 12px !important;
+          overflow: visible !important;
+          box-shadow: none !important;
+          background: #ffffff !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          page-break-after: avoid !important;
+          break-after: avoid !important;
+        }
+        .receipt-header-bar {
+          background: #2E2F31 !important;
+          color: #ffffff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .receipt-total-row {
+          background: #f5f1ec !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .receipt-paid-badge {
+          background: #EDF4EE !important;
+          color: #4a8c5c !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .no-print {
+          display: none !important;
+        }
+      </style>
+    `);
+
+    doc.write('</head><body>');
+    doc.write(printEl.outerHTML);
+    doc.write('</body></html>');
+    doc.close();
+
     setTimeout(() => {
-      document.title = origTitle;
-    }, 1000);
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.warn('Iframe print failed, falling back to window.print():', err);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 2000);
+      }
+    }, 400);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-charcoal/50 backdrop-blur-xs overflow-hidden">
-      {/* ── Print-only CSS ── */}
+      {/* ── Print-only CSS (Fallback for Ctrl+P) ── */}
       <style>{`
         @media print {
-          /* Hide everything */
+          @page {
+            size: A4 portrait;
+            margin: 8mm 10mm;
+          }
+
           html, body {
             margin: 0 !important;
             padding: 0 !important;
             background: #fff !important;
+            height: 100% !important;
+            max-height: 100% !important;
+            overflow: hidden !important;
           }
+
           body * { visibility: hidden !important; }
+
+          /* Cancel fixed positioning and viewport limits on modal containers to avoid page repetition */
+          div[class*="fixed"],
+          div[class*="inset-0"] {
+            position: static !important;
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            background: transparent !important;
+            box-shadow: none !important;
+          }
 
           /* Show only receipt */
           #omega-receipt-print, #omega-receipt-print * {
@@ -92,23 +297,26 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
           #omega-receipt-print {
             position: absolute !important;
             top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
             width: 100% !important;
-            max-width: 100% !important;
+            max-width: 620px !important;
             height: auto !important;
-            margin: 0 !important;
-            padding: 24px 32px !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
             background: #fff !important;
             color: #1a1a1a !important;
             box-shadow: none !important;
-            border: none !important;
-            border-radius: 0 !important;
+            border: 1px solid #E8E1D9 !important;
+            border-radius: 12px !important;
+            overflow: hidden !important;
             font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif !important;
-            font-size: 11pt !important;
-            line-height: 1.5 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
           }
 
           .receipt-header-bar {
@@ -132,11 +340,6 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
           }
 
           .no-print { display: none !important; }
-
-          @page {
-            size: auto;
-            margin: 0mm !important;
-          }
         }
       `}</style>
 
@@ -165,25 +368,25 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
           <div
             id="omega-receipt-print"
             style={{ fontFamily: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif" }}
-            className="bg-white border border-border rounded-[14px] w-full max-w-[460px] shadow-card"
+            className="bg-white border border-border rounded-[14px] w-full max-w-[500px] shadow-card"
           >
 
             {/* ═══════ TOP BAR ═══════ */}
-            <div className="receipt-header-bar bg-charcoal text-white px-4 sm:px-6 py-4 sm:py-5">
-              <div className="flex items-center justify-between gap-2">
+            <div className="receipt-header-bar bg-charcoal text-white px-5 sm:px-7 py-5 sm:py-6">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h1 style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '2px', margin: 0 }}>
+                  <h1 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '2px', margin: 0 }}>
                     OMEGA SPA
                   </h1>
-                  <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0', letterSpacing: '1px' }}>
+                  <p style={{ fontSize: '12px', opacity: 0.7, margin: '3px 0 0', letterSpacing: '1px' }}>
                     DOUALA, CAMEROON
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: '10px', opacity: 0.6, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  <p style={{ fontSize: '12px', opacity: 0.6, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>
                     Official Receipt
                   </p>
-                  <p style={{ fontSize: '14px', fontWeight: 700, margin: '2px 0 0', letterSpacing: '0.5px' }}>
+                  <p style={{ fontSize: '16px', fontWeight: 700, margin: '3px 0 0', letterSpacing: '0.5px' }}>
                     {invNumber}
                   </p>
                 </div>
@@ -191,46 +394,46 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
             </div>
 
             {/* ═══════ DATE / CLIENT INFO ═══════ */}
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #E8E1D9' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <div style={{ padding: '16px 22px', borderBottom: '1px solid #E8E1D9' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <tbody>
                   <tr>
-                    <td style={{ padding: '4px 0', color: '#76736F', width: '100px', verticalAlign: 'top' }}>Date</td>
-                    <td style={{ padding: '4px 0', fontWeight: 600, color: '#2E2F31' }}>{dateStr}</td>
+                    <td style={{ padding: '5px 0', color: '#76736F', width: '120px', verticalAlign: 'top', fontSize: '13.5px' }}>Date</td>
+                    <td style={{ padding: '5px 0', fontWeight: 600, color: '#2E2F31', fontSize: '14px' }}>{dateStr}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '4px 0', color: '#76736F' }}>Time</td>
-                    <td style={{ padding: '4px 0', fontWeight: 600, color: '#2E2F31' }}>{timeStr}</td>
+                    <td style={{ padding: '5px 0', color: '#76736F', fontSize: '13.5px' }}>Time</td>
+                    <td style={{ padding: '5px 0', fontWeight: 600, color: '#2E2F31', fontSize: '14px' }}>{timeStr}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '4px 0', color: '#76736F' }}>Client</td>
-                    <td style={{ padding: '4px 0', fontWeight: 700, color: '#2E2F31', fontSize: '13px' }}>
+                    <td style={{ padding: '5px 0', color: '#76736F', fontSize: '13.5px' }}>Client</td>
+                    <td style={{ padding: '5px 0', fontWeight: 700, color: '#2E2F31', fontSize: '15px' }}>
                       {invoice.clientName && invoice.clientName.trim().toLowerCase() !== 'client'
                         ? invoice.clientName
                         : (invoice.clientId ? 'Client' : 'Walk in')}
                     </td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '4px 0', color: '#76736F' }}>Technician(s)</td>
-                    <td style={{ padding: '4px 0', fontWeight: 600, color: '#2E2F31' }}>{technicians}</td>
+                    <td style={{ padding: '5px 0', color: '#76736F', fontSize: '13.5px' }}>Technician(s)</td>
+                    <td style={{ padding: '5px 0', fontWeight: 600, color: '#2E2F31', fontSize: '14px' }}>{technicians}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             {/* ═══════ SERVICES & RETAIL ITEMS ═══════ */}
-            <div style={{ padding: '14px 18px' }}>
-              <p style={{ fontSize: '10px', fontWeight: 700, color: '#76736F', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '10px' }}>
+            <div style={{ padding: '16px 22px' }}>
+              <p style={{ fontSize: '12px', fontWeight: 700, color: '#76736F', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '12px' }}>
                 Items & Services Rendered
               </p>
-              <div className="overflow-x-auto w-full space-y-3">
+              <div className="overflow-x-auto w-full space-y-4">
                 {/* 1. SERVICES (if any) */}
                 {serviceItems.length > 0 && (
                   <div>
-                    <div style={{ padding: '4px 0', borderBottom: '1px solid #2E2F31', fontSize: '10px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    <div style={{ padding: '5px 0', borderBottom: '1px solid #2E2F31', fontSize: '12px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
                       SERVICES ({serviceItems.length})
                     </div>
-                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '14px' }}>
                       <tbody>
                         {serviceItems.map((item, idx) => {
                           const priceNum =
@@ -239,13 +442,13 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                               : parseInt(String(item.price).replace(/[^0-9]/g, ''), 10) || 0;
                           return (
                             <tr key={idx} style={{ borderBottom: '1px solid #E8E1D9' }}>
-                              <td style={{ padding: '8px 0', fontWeight: 600, color: '#2E2F31' }}>
-                                <div>{item.service || item.name}</div>
-                                <div style={{ fontSize: '10px', color: '#76736F', fontWeight: 400 }}>
+                              <td style={{ padding: '10px 0', fontWeight: 600, color: '#2E2F31' }}>
+                                <div style={{ fontSize: '14px' }}>{item.service || item.name}</div>
+                                <div style={{ fontSize: '12px', color: '#76736F', fontWeight: 400, marginTop: '2px' }}>
                                   Tech: {item.technician || 'Staff'} {item.product ? `· ${item.product}` : ''}
                                 </div>
                               </td>
-                              <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap', fontSize: '15px' }}>
                                 {priceNum.toLocaleString('en-US')} FCFA
                               </td>
                             </tr>
@@ -259,10 +462,10 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                 {/* 2. DRINKS (if any) */}
                 {drinkItems.length > 0 && (
                   <div>
-                    <div style={{ padding: '4px 0', borderBottom: '1px solid #2E2F31', fontSize: '10px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    <div style={{ padding: '5px 0', borderBottom: '1px solid #2E2F31', fontSize: '12px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
                       DRINKS ({drinkItems.length})
                     </div>
-                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '14px' }}>
                       <tbody>
                         {drinkItems.map((item, idx) => {
                           const priceNum =
@@ -273,13 +476,13 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                           const unitPrice = item.unitPrice || Math.round(priceNum / qty);
                           return (
                             <tr key={idx} style={{ borderBottom: '1px solid #E8E1D9' }}>
-                              <td style={{ padding: '8px 0', fontWeight: 600, color: '#2E2F31' }}>
-                                <div>{item.name || item.service}</div>
-                                <div style={{ fontSize: '10px', color: '#76736F', fontWeight: 400 }}>
+                              <td style={{ padding: '10px 0', fontWeight: 600, color: '#2E2F31' }}>
+                                <div style={{ fontSize: '14px' }}>{item.name || item.service}</div>
+                                <div style={{ fontSize: '12px', color: '#76736F', fontWeight: 400, marginTop: '2px' }}>
                                   Qty: {qty} {qty > 1 ? `· (${unitPrice.toLocaleString('en-US')} FCFA each)` : '· Retail Drink'}
                                 </div>
                               </td>
-                              <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap', fontSize: '15px' }}>
                                 {priceNum.toLocaleString('en-US')} FCFA
                               </td>
                             </tr>
@@ -293,10 +496,10 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                 {/* 3. COSMETICS (if any) */}
                 {cosmeticItems.length > 0 && (
                   <div>
-                    <div style={{ padding: '4px 0', borderBottom: '1px solid #2E2F31', fontSize: '10px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    <div style={{ padding: '5px 0', borderBottom: '1px solid #2E2F31', fontSize: '12px', fontWeight: 800, color: '#2E2F31', letterSpacing: '1px', textTransform: 'uppercase' }}>
                       COSMETICS ({cosmeticItems.length})
                     </div>
-                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', fontSize: '14px' }}>
                       <tbody>
                         {cosmeticItems.map((item, idx) => {
                           const priceNum =
@@ -307,13 +510,13 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                           const unitPrice = item.unitPrice || Math.round(priceNum / qty);
                           return (
                             <tr key={idx} style={{ borderBottom: '1px solid #E8E1D9' }}>
-                              <td style={{ padding: '8px 0', fontWeight: 600, color: '#2E2F31' }}>
-                                <div>{item.name || item.service}</div>
-                                <div style={{ fontSize: '10px', color: '#76736F', fontWeight: 400 }}>
+                              <td style={{ padding: '10px 0', fontWeight: 600, color: '#2E2F31' }}>
+                                <div style={{ fontSize: '14px' }}>{item.name || item.service}</div>
+                                <div style={{ fontSize: '12px', color: '#76736F', fontWeight: 400, marginTop: '2px' }}>
                                   Qty: {qty} {qty > 1 ? `· (${unitPrice.toLocaleString('en-US')} FCFA each)` : '· Retail Cosmetic'}
                                 </div>
                               </td>
-                              <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', whiteSpace: 'nowrap', fontSize: '15px' }}>
                                 {priceNum.toLocaleString('en-US')} FCFA
                               </td>
                             </tr>
@@ -327,13 +530,13 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
             </div>
 
             {/* ═══════ TOTALS ═══════ */}
-            <div style={{ padding: '0 18px 14px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <div style={{ padding: '0 22px 16px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <tbody>
                   {/* Subtotal (always show) */}
                   <tr style={{ borderTop: '1px solid #E8E1D9' }}>
-                    <td style={{ padding: '8px 0', color: '#76736F' }}>Subtotal</td>
-                    <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 600, color: '#2E2F31' }}>
+                    <td style={{ padding: '9px 0', color: '#76736F', fontSize: '14px' }}>Subtotal</td>
+                    <td style={{ padding: '9px 0', textAlign: 'right', fontWeight: 600, color: '#2E2F31', fontSize: '15px' }}>
                       {subtotal.toLocaleString('en-US')} FCFA
                     </td>
                   </tr>
@@ -341,10 +544,10 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
                   {/* Discount (if applied) */}
                   {discount > 0 && (
                     <tr>
-                      <td style={{ padding: '6px 0', color: '#7FA285' }}>
-                        Loyalty Discount ({pointsRedeemed} pts redeemed)
+                      <td style={{ padding: '7px 0', color: '#7FA285', fontSize: '14px' }}>
+                        {pointsRedeemed > 0 ? `Loyalty Discount (${pointsRedeemed} pts redeemed)` : 'Discount / Promo'}
                       </td>
-                      <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 600, color: '#7FA285' }}>
+                      <td style={{ padding: '7px 0', textAlign: 'right', fontWeight: 600, color: '#7FA285', fontSize: '15px' }}>
                         −{discount.toLocaleString('en-US')} FCFA
                       </td>
                     </tr>
@@ -352,10 +555,10 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
 
                   {/* Grand Total */}
                   <tr className="receipt-total-row" style={{ borderTop: '2px solid #2E2F31' }}>
-                    <td style={{ padding: '10px 8px', fontWeight: 800, fontSize: '14px', color: '#2E2F31' }}>
+                    <td style={{ padding: '12px 10px', fontWeight: 800, fontSize: '18px', color: '#2E2F31' }}>
                       TOTAL
                     </td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 800, fontSize: '14px', color: '#2E2F31' }}>
+                    <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 800, fontSize: '18px', color: '#2E2F31' }}>
                       {grandTotal.toLocaleString('en-US')} FCFA
                     </td>
                   </tr>
@@ -364,25 +567,25 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
             </div>
 
             {/* ═══════ PAYMENT & STATUS ═══════ */}
-            <div style={{ padding: '0 18px 14px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <div style={{ padding: '0 22px 16px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                 <tbody>
                   <tr style={{ borderTop: '1px solid #E8E1D9' }}>
-                    <td style={{ padding: '8px 0', color: '#76736F' }}>Payment Method</td>
-                    <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31' }}>
+                    <td style={{ padding: '9px 0', color: '#76736F', fontSize: '14px' }}>Payment Method</td>
+                    <td style={{ padding: '9px 0', textAlign: 'right', fontWeight: 700, color: '#2E2F31', fontSize: '15px' }}>
                       {paymentMethodDisplay}
                     </td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '6px 0', color: '#76736F' }}>Status</td>
-                    <td style={{ padding: '6px 0', textAlign: 'right' }}>
+                    <td style={{ padding: '7px 0', color: '#76736F', fontSize: '14px' }}>Status</td>
+                    <td style={{ padding: '7px 0', textAlign: 'right' }}>
                       <span
                         className="receipt-paid-badge"
                         style={{
                           display: 'inline-block',
-                          padding: '3px 12px',
+                          padding: '4px 14px',
                           borderRadius: '6px',
-                          fontSize: '11px',
+                          fontSize: '13px',
                           fontWeight: 700,
                           backgroundColor: '#EDF4EE',
                           color: '#4a8c5c',
@@ -400,37 +603,37 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
             {/* ═══════ LOYALTY POINTS ═══════ */}
             {(invoice.clientId || clientLoyalty) && (
               <div style={{
-                margin: '0 18px 14px',
-                padding: '12px 14px',
+                margin: '0 22px 16px',
+                padding: '14px 16px',
                 backgroundColor: '#F6F1EB',
                 borderRadius: '10px',
-                fontSize: '11px',
+                fontSize: '13px',
               }}>
-                <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '10px', color: '#76736F', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '12px', color: '#76736F', textTransform: 'uppercase', letterSpacing: '1px' }}>
                   Loyalty Program
                 </p>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <tbody>
                     <tr>
-                      <td style={{ padding: '3px 0', color: '#2E2F31' }}>Points Earned This Visit</td>
-                      <td style={{ padding: '3px 0', textAlign: 'right', fontWeight: 700, color: '#7FA285' }}>
+                      <td style={{ padding: '4px 0', color: '#2E2F31' }}>Points Earned This Visit</td>
+                      <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 700, color: '#7FA285', fontSize: '14px' }}>
                         +{pointsEarned} pts
                       </td>
                     </tr>
                     {pointsRedeemed > 0 && (
                       <tr>
-                        <td style={{ padding: '3px 0', color: '#2E2F31' }}>Points Redeemed</td>
-                        <td style={{ padding: '3px 0', textAlign: 'right', fontWeight: 600, color: '#C77B6E' }}>
+                        <td style={{ padding: '4px 0', color: '#2E2F31' }}>Points Redeemed</td>
+                        <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 600, color: '#C77B6E', fontSize: '14px' }}>
                           −{pointsRedeemed} pts
                         </td>
                       </tr>
                     )}
                     {clientLoyalty && (
                       <tr style={{ borderTop: '1px solid #E8E1D9' }}>
-                        <td style={{ padding: '6px 0 3px', fontWeight: 600, color: '#2E2F31' }}>
+                        <td style={{ padding: '8px 0 4px', fontWeight: 600, color: '#2E2F31', fontSize: '13.5px' }}>
                           Current Balance
                         </td>
-                        <td style={{ padding: '6px 0 3px', textAlign: 'right', fontWeight: 800, color: '#2E2F31', fontSize: '13px' }}>
+                        <td style={{ padding: '8px 0 4px', textAlign: 'right', fontWeight: 800, color: '#2E2F31', fontSize: '15px' }}>
                           {clientLoyalty.balance} pts
                         </td>
                       </tr>
@@ -442,14 +645,14 @@ export default function ReceiptModal({ isOpen, onClose, invoice, clientLoyalty }
 
             {/* ═══════ FOOTER ═══════ */}
             <div style={{
-              padding: '14px 18px 16px',
+              padding: '16px 22px 18px',
               borderTop: '1px solid #E8E1D9',
               textAlign: 'center',
             }}>
-              <p style={{ fontSize: '12px', fontWeight: 700, color: '#2E2F31', margin: '0 0 4px' }}>
+              <p style={{ fontSize: '15px', fontWeight: 700, color: '#2E2F31', margin: '0 0 4px' }}>
                 Thank you for visiting OMEGA SPA!
               </p>
-              <p style={{ fontSize: '11px', color: '#76736F', margin: 0 }}>
+              <p style={{ fontSize: '13px', color: '#76736F', margin: 0 }}>
                 We look forward to pampering you again soon.
               </p>
             </div>

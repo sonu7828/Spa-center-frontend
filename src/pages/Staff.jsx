@@ -32,10 +32,14 @@ import {
   Tags,
   Trash2,
   Key,
+  Share2,
+  Calculator,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
+import RecordPenaltyModal from '../components/RecordPenaltyModal';
+import EditSalaryContractModal from '../components/EditSalaryContractModal';
 import { useAuth } from '../context/AuthContext';
 import { useServices } from '../context/ServicesContext';
 
@@ -43,6 +47,7 @@ const ROLES = [
   { value: 'manager', label: 'Manager', icon: ShieldCheck },
   { value: 'reception', label: 'Reception', icon: Shield },
   { value: 'technician', label: 'Technician', icon: ShieldAlert },
+  { value: 'marketer', label: 'Marketer', icon: Share2 },
   { value: 'cleaner', label: 'Cleaner', icon: Paintbrush },
 ];
 
@@ -50,6 +55,7 @@ const roleBadgeStyles = {
   manager: 'bg-sage-soft text-sage border-sage/20',
   reception: 'bg-[#E8EFF8] text-[#4A6B8A] border-[#4A6B8A]/20',
   technician: 'bg-dusty-rose-soft text-dusty-rose border-dusty-rose/20',
+  marketer: 'bg-[#EDE9FE] text-[#6D28D9] border-[#DDD6FE]',
   cleaner: 'bg-warning-soft text-warning border-warning/20',
 };
 
@@ -72,6 +78,12 @@ export default function Staff() {
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [showNewPw, setShowNewPw] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+
+  // Disciplinary Penalty Modal state
+  const [penaltyModalStaff, setPenaltyModalStaff] = useState(null);
+
+  // Target & Salary Contract Modal state
+  const [salaryContractStaff, setSalaryContractStaff] = useState(null);
 
   // Form state
   const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'technician', password: '', specialties: [] });
@@ -130,6 +142,7 @@ export default function Staff() {
     // Filter against active specialties to prevent orphaned/ghost selections
     const activeNames = activeSpecialties.map((s) => s.name);
     const rawSpecs = Array.isArray(u.specialties) ? u.specialties : [];
+    const isMarketer = u.role === 'marketer' || (u.role === 'technician' && rawSpecs.includes('Marketer'));
     const mappedSpecs = rawSpecs.map((s) => {
       if (s === 'Massage' && activeNames.some((n) => n.toLowerCase() === 'body massage')) {
         return activeNames.find((n) => n.toLowerCase() === 'body massage');
@@ -145,9 +158,9 @@ export default function Staff() {
       name: u.name || '',
       email: u.email || '',
       phone: u.phone || '',
-      role: u.role,
+      role: isMarketer ? 'marketer' : u.role,
       password: '',
-      specialties: Array.from(new Set(validSpecs)),
+      specialties: isMarketer ? ['Marketer'] : Array.from(new Set(validSpecs)),
     });
     setFormError('');
     setShowPw(false);
@@ -193,13 +206,21 @@ export default function Staff() {
     try {
       const emailVal = form.email ? form.email.trim().toLowerCase() : '';
       const phoneVal = form.phone ? form.phone.trim() : '';
+      const isMarketer = form.role === 'marketer';
+      const effectiveRole = form.role;
+      const effectiveSpecialties = isMarketer
+        ? ['Marketer']
+        : form.role === 'technician'
+        ? form.specialties
+        : [];
+
       if (editingUser) {
         const updates = {
           name: form.name.trim(),
           email: emailVal,
           phone: phoneVal || null,
-          role: form.role,
-          specialties: form.role === 'technician' ? form.specialties : [],
+          role: effectiveRole,
+          specialties: effectiveSpecialties,
         };
         if (form.password && form.password.trim()) {
           updates.password = form.password.trim();
@@ -210,9 +231,9 @@ export default function Staff() {
           name: form.name.trim(),
           email: emailVal,
           phone: phoneVal || null,
-          role: form.role,
+          role: effectiveRole,
           password: form.password.trim(),
-          specialties: form.role === 'technician' ? form.specialties : [],
+          specialties: effectiveSpecialties,
         });
       }
 
@@ -465,6 +486,7 @@ export default function Staff() {
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Email</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Phone</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Role</th>
+                <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Target & Contract</th>
                 <th className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Specialties</th>
                 {isManager && (
                   <th className="text-right px-5 py-2.5 text-[11px] font-semibold text-muted-gray uppercase tracking-wider">Actions</th>
@@ -472,122 +494,228 @@ export default function Staff() {
               </tr>
             </thead>
             <tbody>
-              {activeUsers.map((u) => (
-                <tr key={u.id} className="border-b border-border/40 last:border-b-0 hover:bg-soft-cream/30 transition-colors">
-                  <td className="px-5 py-3.5 text-sm font-semibold text-charcoal">{u.name}</td>
-                  <td className="px-5 py-3.5 text-sm text-muted-gray">{u.email}</td>
-                  <td className="px-5 py-3.5 text-sm text-charcoal font-medium">{u.phone || '—'}</td>
-                  <td className="px-5 py-3.5">
-                    <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize ${roleBadgeStyles[u.role] || 'bg-soft-cream text-charcoal border-border'}`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {u.specialties?.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {u.specialties.map((s) => {
-                          const displayName = s === 'Massage' ? 'Body Massage' : s;
-                          return (
-                            <span
-                              key={displayName}
-                              className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-soft-cream text-charcoal border border-border"
-                            >
-                              {displayName}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-gray">—</span>
-                    )}
-                  </td>
-                  {isManager && (
+              {activeUsers.map((u) => {
+                const isMarketer = u.role === 'marketer' || (u.role === 'technician' && (u.specialties || []).includes('Marketer'));
+                const displayRole = isMarketer ? 'marketer' : u.role;
+                return (
+                  <tr key={u.id} className="border-b border-border/40 last:border-b-0 hover:bg-soft-cream/30 transition-colors">
+                    <td className="px-5 py-3.5 text-sm font-semibold text-charcoal">{u.name}</td>
+                    <td className="px-5 py-3.5 text-sm text-muted-gray">{u.email}</td>
+                    <td className="px-5 py-3.5 text-sm text-charcoal font-medium">{u.phone || '—'}</td>
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => openEditModal(u)}
-                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer flex items-center gap-1"
-                          title="Edit"
-                        >
-                          <Pencil size={12} /> Edit
-                        </button>
-                        <button
-                          onClick={() => openResetModal(u)}
-                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center gap-1"
-                          title="Reset Password"
-                        >
-                          <RotateCcw size={11} /> Reset PW
-                        </button>
-                        <button
-                          onClick={() => deactivateUser(u.id)}
-                          className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center gap-1"
-                          title="Deactivate"
-                        >
-                          <UserX size={12} /> Deactivate
-                        </button>
-                      </div>
+                      <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize ${roleBadgeStyles[displayRole] || 'bg-soft-cream text-charcoal border-border'}`}>
+                        {displayRole}
+                      </span>
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td className="px-5 py-3.5">
+                      {u.role === 'manager' ? (
+                        Number(u.salaryContract?.fixedSalary) > 0 ? (
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-charcoal">
+                              <span className="text-emerald-700 font-bold">
+                                {Number(u.salaryContract.fixedSalary).toLocaleString()} FCFA
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                                Fixed Salary
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-muted-gray">
+                              Management Remuneration
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60">
+                            Pending Salary
+                          </span>
+                        )
+                      ) : u.salaryContract && (Number(u.salaryContract.monthlyTarget) > 0 || Number(u.salaryContract.fixedSalary) > 0) ? (
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-charcoal">
+                            <span className="text-emerald-700 font-bold">
+                              {Number(u.salaryContract.monthlyTarget).toLocaleString()} FCFA
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/60 font-semibold">
+                              {u.salaryContract.targetScope === 'SPA_TOTAL' ? 'Spa Total' : 'Target'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-muted-gray">
+                            Rate: {u.salaryContract.commissionRate}% · Base: {Number(u.salaryContract.basePay).toLocaleString()} · Fixed: {Number(u.salaryContract.fixedSalary).toLocaleString()}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60">
+                          Pending Contract
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {u.specialties?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {u.specialties.map((s) => {
+                            const displayName = s === 'Massage' ? 'Body Massage' : s;
+                            return (
+                              <span
+                                key={displayName}
+                                className="inline-block px-2 py-0.5 rounded-[6px] text-[10px] font-medium bg-soft-cream text-charcoal border border-border"
+                              >
+                                {displayName}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-gray">—</span>
+                      )}
+                    </td>
+                    {isManager && (
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setSalaryContractStaff(u)}
+                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer flex items-center gap-1"
+                            title={u.role === 'manager' ? 'Set Monthly Fixed Salary' : 'Target & Salary Contract Settings'}
+                          >
+                            <Calculator size={12} className="text-emerald-700" /> Contract
+                          </button>
+                          <button
+                            onClick={() => openEditModal(u)}
+                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-charcoal bg-soft-cream border border-border hover:bg-sage-soft hover:border-sage/30 transition-all cursor-pointer flex items-center gap-1"
+                            title="Edit"
+                          >
+                            <Pencil size={12} /> Edit
+                          </button>
+                          <button
+                            onClick={() => openResetModal(u)}
+                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center gap-1"
+                            title="Reset Password"
+                          >
+                            <RotateCcw size={11} /> Reset PW
+                          </button>
+                          {!isMarketer && u.role !== 'manager' && (
+                            <button
+                              onClick={() => setPenaltyModalStaff(u)}
+                              className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-rose-700 bg-rose-50 border border-rose-200/70 hover:bg-rose-100 transition-all cursor-pointer flex items-center gap-1"
+                              title="Record Disciplinary Penalty"
+                            >
+                              <ShieldAlert size={12} className="text-rose-600" /> Penalty
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deactivateUser(u.id)}
+                            className="h-[30px] px-2.5 rounded-[7px] text-[11px] font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center gap-1"
+                            title="Deactivate"
+                          >
+                            <UserX size={12} /> Deactivate
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
         {/* Mobile / Tablet Portrait Cards View */}
         <div className="block md:hidden divide-y divide-border/60">
-          {activeUsers.map((u) => (
-            <div key={u.id} className="p-4 space-y-3 hover:bg-soft-cream/20 transition-colors">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h4 className="text-sm font-bold text-charcoal">{u.name}</h4>
-                  <p className="text-xs text-muted-gray mt-0.5">{u.email} {u.phone ? `· ${u.phone}` : ''}</p>
+          {activeUsers.map((u) => {
+            const isMarketer = u.role === 'marketer' || (u.role === 'technician' && (u.specialties || []).includes('Marketer'));
+            const displayRole = isMarketer ? 'marketer' : u.role;
+            return (
+              <div key={u.id} className="p-4 space-y-3 hover:bg-soft-cream/20 transition-colors">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-bold text-charcoal">{u.name}</h4>
+                    <p className="text-xs text-muted-gray mt-0.5">{u.email} {u.phone ? `· ${u.phone}` : ''}</p>
+                  </div>
+                  <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize shrink-0 ${roleBadgeStyles[displayRole] || 'bg-soft-cream text-charcoal border-border'}`}>
+                    {displayRole}
+                  </span>
                 </div>
-                <span className={`inline-block px-2.5 py-1 rounded-[7px] text-[11px] font-semibold border capitalize shrink-0 ${roleBadgeStyles[u.role] || 'bg-soft-cream text-charcoal border-border'}`}>
-                  {u.role}
-                </span>
-              </div>
 
-              {u.specialties?.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {u.specialties.map((s) => {
-                    const displayName = s === 'Massage' ? 'Body Massage' : s;
-                    return (
-                      <span
-                        key={displayName}
-                        className="inline-block px-2 py-0.5 rounded-[5px] text-[10px] font-medium bg-soft-cream text-charcoal border border-border"
-                      >
-                        {displayName}
+                {u.specialties?.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {u.specialties.map((s) => {
+                      const displayName = s === 'Massage' ? 'Body Massage' : s;
+                      return (
+                        <span
+                          key={displayName}
+                          className="inline-block px-2 py-0.5 rounded-[5px] text-[10px] font-medium bg-soft-cream text-charcoal border border-border"
+                        >
+                          {displayName}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {u.role === 'manager' ? (
+                  Number(u.salaryContract?.fixedSalary) > 0 ? (
+                    <div className="px-3 py-2 rounded-[9px] bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-[11px] text-charcoal font-bold block">
+                          Salary: {Number(u.salaryContract.fixedSalary).toLocaleString()} FCFA
+                        </span>
+                        <span className="text-[10px] text-muted-gray font-medium">
+                          Monthly Fixed Remuneration (Management)
+                        </span>
+                      </div>
+                    </div>
+                  ) : null
+                ) : u.salaryContract && (Number(u.salaryContract.monthlyTarget) > 0 || Number(u.salaryContract.fixedSalary) > 0) ? (
+                  <div className="px-3 py-2 rounded-[9px] bg-emerald-50/80 border border-emerald-200/70 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-[11px] text-emerald-950 font-bold block">
+                        Target: {Number(u.salaryContract.monthlyTarget).toLocaleString()} FCFA ({u.salaryContract.targetScope === 'SPA_TOTAL' ? 'Spa' : 'Indiv'})
                       </span>
-                    );
-                  })}
-                </div>
-              )}
+                      <span className="text-[10px] text-emerald-800 font-medium">
+                        {u.salaryContract.commissionRate}% comm · Base: {Number(u.salaryContract.basePay).toLocaleString()} · Fixed: {Number(u.salaryContract.fixedSalary).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
 
-              {isManager && (
-                <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-border/40">
-                  <button
-                    onClick={() => openEditModal(u)}
-                    className="h-[38px] px-2 rounded-[9px] text-xs font-semibold text-charcoal bg-soft-cream border border-border hover:bg-sage-soft transition-all cursor-pointer flex items-center justify-center gap-1"
-                  >
-                    <Pencil size={12} /> Edit
-                  </button>
-                  <button
-                    onClick={() => openResetModal(u)}
-                    className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center justify-center gap-1"
-                  >
-                    <RotateCcw size={11} /> Reset PW
-                  </button>
-                  <button
-                    onClick={() => deactivateUser(u.id)}
-                    className="h-[38px] px-2 rounded-[9px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center justify-center gap-1"
-                  >
-                    <UserX size={12} /> Deact
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+                {isManager && (
+                  <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border/40">
+                    <button
+                      onClick={() => setSalaryContractStaff(u)}
+                      className="flex-1 min-w-[85px] h-[36px] px-2 rounded-[8px] text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Calculator size={12} className="text-emerald-700" /> Contract
+                    </button>
+                    <button
+                      onClick={() => openEditModal(u)}
+                      className="flex-1 min-w-[70px] h-[36px] px-2 rounded-[8px] text-xs font-semibold text-charcoal bg-soft-cream border border-border hover:bg-sage-soft transition-all cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Pencil size={12} /> Edit
+                    </button>
+                    <button
+                      onClick={() => openResetModal(u)}
+                      className="flex-1 min-w-[80px] h-[36px] px-2 rounded-[8px] text-xs font-medium text-muted-gray bg-white border border-border hover:bg-soft-cream transition-all cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <RotateCcw size={11} /> Reset PW
+                    </button>
+                    {!isMarketer && u.role !== 'manager' && (
+                      <button
+                        onClick={() => setPenaltyModalStaff(u)}
+                        className="flex-1 min-w-[75px] h-[36px] px-2 rounded-[8px] text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200/70 hover:bg-rose-100 transition-all cursor-pointer flex items-center justify-center gap-1"
+                        title="Record Penalty"
+                      >
+                        <ShieldAlert size={12} className="text-rose-600" /> Penalty
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deactivateUser(u.id)}
+                      className="flex-1 min-w-[65px] h-[36px] px-2 rounded-[8px] text-xs font-medium text-[#B34040] bg-[#FAECEC] border border-[#ECCACA] hover:bg-[#F7DADA] transition-all cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <UserX size={12} /> Deact
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -734,15 +862,30 @@ export default function Staff() {
                   </select>
                 </div>
 
+                {/* Marketer Role Info Card */}
+                {form.role === 'marketer' && (
+                  <div className="bg-[#EDE9FE]/60 border border-[#DDD6FE] rounded-[11px] p-3 flex items-start gap-2.5 text-xs text-[#6D28D9]">
+                    <Share2 size={16} className="shrink-0 text-[#6D28D9] mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="font-semibold">Marketer Profile Active</p>
+                      <p className="text-[11px] opacity-90 leading-relaxed">
+                        Dedicated social media client acquisition role. Marketers have access to register new clients and view their referral performance without access to appointments or billing.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Specialties — Only for Technician (multi-select checkboxes) */}
                 {form.role === 'technician' && (
                   <div>
                     <label className="block text-[12px] font-medium text-muted-gray mb-2">Specialties *</label>
                     <div className="bg-soft-cream/30 border border-border/60 rounded-[12px] p-3 space-y-1.5 max-h-[160px] overflow-y-auto">
-                      {activeSpecialties.length === 0 ? (
+                      {activeSpecialties.filter((s) => s.name.toLowerCase() !== 'marketer').length === 0 ? (
                         <p className="text-xs text-muted-gray text-center py-2">No specialties defined. Add via Specialties button.</p>
                       ) : (
-                        activeSpecialties.map((spec) => (
+                        activeSpecialties
+                          .filter((s) => s.name.toLowerCase() !== 'marketer')
+                          .map((spec) => (
                           <label
                             key={spec.id}
                             className="flex items-center gap-2.5 py-1.5 px-2 rounded-[8px] hover:bg-white cursor-pointer transition-colors"
@@ -907,6 +1050,35 @@ export default function Staff() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Record Penalty Modal */}
+      {penaltyModalStaff && (
+        <RecordPenaltyModal
+          isOpen={Boolean(penaltyModalStaff)}
+          onClose={() => setPenaltyModalStaff(null)}
+          onSuccess={() => {
+            setPenaltyModalStaff(null);
+          }}
+          defaultStaffId={penaltyModalStaff?.id}
+          staffList={allUsers.filter((u) => {
+            const isMarketer = u.role === 'marketer' || (u.role === 'technician' && (u.specialties || []).includes('Marketer'));
+            return u.active !== false && !isMarketer && u.role !== 'manager';
+          })}
+        />
+      )}
+
+      {/* Target & Salary Contract Modal */}
+      {salaryContractStaff && (
+        <EditSalaryContractModal
+          isOpen={Boolean(salaryContractStaff)}
+          onClose={() => setSalaryContractStaff(null)}
+          onSuccess={() => {
+            setSalaryContractStaff(null);
+            if (refreshUsers) refreshUsers();
+          }}
+          staff={salaryContractStaff}
+        />
       )}
     </div>
   );

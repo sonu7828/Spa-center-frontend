@@ -25,7 +25,7 @@
  *       TECHNICIAN / CLEANER: Blocked with luxury 403 Access Denied screen
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Cake,
@@ -48,6 +48,14 @@ import {
   CreditCard,
   Sparkles,
   ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  Loader2,
+  Calendar,
+  Send,
+  Edit3,
+  PartyPopper,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -63,6 +71,7 @@ const AUTOMATION_ICONS = {
   PAYMENT_CONFIRMATION: CreditCard,
   REBOOKING: RefreshCw,
   DAILY_CLOSE_BOSS: TrendingUp,
+  CLIENT_WELCOME: Sparkles,
 };
 
 const AUTOMATION_COLORS = {
@@ -74,6 +83,7 @@ const AUTOMATION_COLORS = {
   PAYMENT_CONFIRMATION: { bg: 'bg-[#F3E5F5]', border: 'border-[#AB47BC]/30', text: 'text-[#6A1B9A]', dot: 'bg-[#AB47BC]' },
   REBOOKING: { bg: 'bg-[#EFEBE9]', border: 'border-[#8D6E63]/30', text: 'text-[#4E342E]', dot: 'bg-[#8D6E63]' },
   DAILY_CLOSE_BOSS: { bg: 'bg-sage-soft', border: 'border-sage/30', text: 'text-[#4F6748]', dot: 'bg-sage' },
+  CLIENT_WELCOME: { bg: 'bg-[#E0F7FA]', border: 'border-[#00ACC1]/30', text: 'text-[#00838F]', dot: 'bg-[#00ACC1]' },
 };
 
 export default function WhatsAppAutomations() {
@@ -90,10 +100,27 @@ export default function WhatsAppAutomations() {
     updateAutomation,
     toggleAutomation,
     fetchLogs,
+    retentionDays = 30,
+    updateRetention,
     retryMessage,
     processReminders,
     triggerDailyClose,
+    holidays = [],
+    holidaysLoading,
+    updateHoliday,
+    testSendHoliday,
   } = useWhatsApp();
+
+  // Holidays state
+  const [selectedHolidayYear, setSelectedHolidayYear] = useState(() => new Date().getFullYear());
+  const [dateChangeModal, setDateChangeModal] = useState({ isOpen: false, holiday: null, date: '' });
+  const [testSendModal, setTestSendModal] = useState({ isOpen: false, holiday: null, phone: '+237', clientName: '' });
+  const [sendingTestGreeting, setSendingTestGreeting] = useState(false);
+  const [savingHolidayDate, setSavingHolidayDate] = useState(false);
+  const [togglingHolidayId, setTogglingHolidayId] = useState(null);
+
+  const fixedHolidays = useMemo(() => holidays.filter((h) => h.category === 'fixed'), [holidays]);
+  const variableHolidays = useMemo(() => holidays.filter((h) => h.category === 'variable'), [holidays]);
 
   const role = (user?.role || '').toLowerCase();
   const isManager = role === 'manager';
@@ -115,6 +142,7 @@ export default function WhatsAppAutomations() {
   const [processingReminders, setProcessingReminders] = useState(false);
   const [triggeringDailyClose, setTriggeringDailyClose] = useState(false);
   const [retryingLogId, setRetryingLogId] = useState(null);
+  const [togglingTypes, setTogglingTypes] = useState({});
 
   // =========================================================================
   // RBAC GUARD: TECHNICIAN & CLEANER ACCESS DENIED
@@ -136,8 +164,6 @@ export default function WhatsAppAutomations() {
     );
   }
 
-  const activeAutomationsCount = automations.filter((a) => a.isActive).length;
-
   const showNotification = (msg, isError = false) => {
     setAlertNotice({ message: msg, isError });
     setTimeout(() => setAlertNotice(null), 5000);
@@ -149,11 +175,32 @@ export default function WhatsAppAutomations() {
       showNotification('Receptionists can only view automation status. Manager permission required to toggle.', true);
       return;
     }
+    if (togglingTypes[auto.type]) {
+      return; // Lock against duplicate clicks while request is in flight
+    }
+
+    setTogglingTypes((prev) => ({ ...prev, [auto.type]: true }));
     try {
       await toggleAutomation(auto.type);
       showNotification(`${auto.title} ${!auto.isActive ? 'enabled (will auto-send)' : 'disabled (skipped from sending)'}.`);
     } catch (err) {
       showNotification(err.message || 'Error toggling automation', true);
+    } finally {
+      setTogglingTypes((prev) => ({ ...prev, [auto.type]: false }));
+    }
+  };
+
+  // Change scheduled execution timing (Manager only)
+  const handleTimingChange = async (auto, newTiming) => {
+    if (!isManager) {
+      showNotification('Manager permission required to change automation timing.', true);
+      return;
+    }
+    try {
+      await updateAutomation(auto.type, { timing: newTiming });
+      showNotification(`${auto.title} dispatch time updated to ${newTiming} (Africa/Douala). Dynamic scheduler updated.`);
+    } catch (err) {
+      showNotification(err.message || 'Error updating automation timing', true);
     }
   };
 
@@ -173,9 +220,8 @@ export default function WhatsAppAutomations() {
     }
   };
 
-  // Trigger Daily Close handler (Manager only)
+  // Trigger Daily Close handler (Manager & Reception)
   const handleTriggerDailyClose = async () => {
-    if (!isManager) return;
     setTriggeringDailyClose(true);
     try {
       const savedBossPhone = localStorage.getItem('omega_boss_phone');
@@ -201,23 +247,68 @@ export default function WhatsAppAutomations() {
     }
   };
 
+  // Retention schedule change handler (Manager only)
+  const [updatingRetention, setUpdatingRetention] = useState(false);
+  const handleRetentionChange = async (days) => {
+    if (!isManager) return;
+    setUpdatingRetention(true);
+    try {
+      await updateRetention(days);
+      showNotification(`Auto-clear schedule updated: logs older than ${days} days will be automatically deleted at midnight.`);
+    } catch (err) {
+      showNotification(err.message || 'Failed to update auto-clear schedule', true);
+    } finally {
+      setUpdatingRetention(false);
+    }
+  };
 
+  const searchTimeoutRef = useRef(null);
 
-  // Filtered Logs
-  const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      if (logStatusFilter !== 'ALL' && log.status !== logStatusFilter) return false;
-      if (logTypeFilter !== 'ALL' && log.automationType !== logTypeFilter) return false;
-      if (logSearch.trim()) {
-        const q = logSearch.toLowerCase();
-        const clientName = (log.client?.name || '').toLowerCase();
-        const phone = (log.recipientPhone || '').toLowerCase();
-        const msg = (log.message || '').toLowerCase();
-        return clientName.includes(q) || phone.includes(q) || msg.includes(q);
-      }
-      return true;
-    });
-  }, [logs, logStatusFilter, logTypeFilter, logSearch]);
+  const currentPage = pagination?.page || 1;
+  const totalPages = pagination?.totalPages || 1;
+  const totalLogs = pagination?.total || 0;
+  const pageSize = pagination?.limit || 20;
+
+  // Filter change handlers that query backend
+  const handleStatusFilterChange = (status) => {
+    setLogStatusFilter(status);
+    fetchLogs({ status: status === 'ALL' ? undefined : status, page: 1 });
+  };
+
+  const handleTypeFilterChange = (type) => {
+    setLogTypeFilter(type);
+    fetchLogs({ automationType: type === 'ALL' ? undefined : type, page: 1 });
+  };
+
+  const handleSearchChange = (val) => {
+    setLogSearch(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchLogs({ search: val.trim() || undefined, page: 1 });
+    }, 350);
+  };
+
+  const handlePageChange = (newPage) => {
+    fetchLogs({ page: newPage });
+  };
+
+  const handleLimitChange = (newLimit) => {
+    fetchLogs({ limit: newLimit, page: 1 });
+  };
+
+  // Page Numbers Array for Pagination Bar
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (currentPage >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+  }, [currentPage, totalPages]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -245,90 +336,69 @@ export default function WhatsAppAutomations() {
         </div>
       )}
 
-      {/* ── KPI Summary & Operational Actions ── */}
-      <div className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-3 w-full lg:w-auto">
-          <div className="px-3.5 py-2.5 bg-soft-cream/60 rounded-[12px] border border-border/70 text-center sm:text-left">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">
-              Automations
-            </span>
-            <span className="text-lg sm:text-xl font-extrabold text-charcoal block mt-0.5">
-              {automations.length} Engine
-            </span>
-          </div>
+      {/* ── Top Navigation Tabs & Operational Actions ── */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1.5 p-1 bg-soft-cream/80 border border-border rounded-[12px] max-w-fit shadow-2xs">
+          <button
+            onClick={() => setActiveTab('automations')}
+            className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
+              activeTab === 'automations'
+                ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <Sparkles size={14} className="text-sage" />
+            Automations Engine ({automations.length})
+          </button>
 
-          <div className="px-3.5 py-2.5 bg-sage-soft rounded-[12px] border border-sage/30 text-center sm:text-left">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#4F6748] block">
-              Active Status
-            </span>
-            <span className="text-lg sm:text-xl font-extrabold text-[#4F6748] block mt-0.5">
-              {activeAutomationsCount} / {automations.length} ON
-            </span>
-          </div>
+          <button
+            onClick={() => setActiveTab('holidays')}
+            className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
+              activeTab === 'holidays'
+                ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <Calendar size={14} className="text-sage" />
+            Holidays & Occasions ({holidays.length || 24})
+          </button>
 
-          <div className="px-3.5 py-2.5 bg-warm-ivory rounded-[12px] border border-border/70 text-center sm:text-left">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-gray block">
-              Total Logged
-            </span>
-            <span className="text-lg sm:text-xl font-extrabold text-charcoal block mt-0.5">
-              {pagination.total} Msgs
-            </span>
-          </div>
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
+              activeTab === 'logs'
+                ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
+                : 'text-muted-gray hover:text-charcoal'
+            }`}
+          >
+            <FileText size={14} className="text-sage" />
+            Message Audit Logs ({pagination.total})
+          </button>
         </div>
 
-        {/* Global Trigger Actions */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-border/50">
+        {/* Operational Actions directly on the right of tabs */}
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="secondary"
             onClick={handleProcessReminders}
             disabled={processingReminders}
-            className="h-10 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
+            className="h-9 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
           >
-            <RotateCw size={14} className={processingReminders ? 'animate-spin' : ''} />
-            {processingReminders ? 'Processing...' : 'Run Reminders (24h/2h)'}
+            <RotateCw size={13} className={processingReminders ? 'animate-spin' : ''} />
+            {processingReminders ? 'Running...' : 'Run Reminders (24h/2h)'}
           </Button>
 
-          {isManager && (
-            <Button
-              variant="secondary"
-              onClick={handleTriggerDailyClose}
-              disabled={triggeringDailyClose}
-              className="h-10 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
-            >
-              <TrendingUp size={14} />
-              {triggeringDailyClose ? 'Sending...' : 'Trigger Daily Close'}
-            </Button>
-          )}
-
+          <Button
+            variant="secondary"
+            onClick={handleTriggerDailyClose}
+            disabled={triggeringDailyClose}
+            className="h-9 text-xs px-3.5 font-semibold cursor-pointer shrink-0"
+          >
+            <TrendingUp size={13} className={triggeringDailyClose ? 'animate-spin text-sage' : ''} />
+            {triggeringDailyClose ? 'Sending...' : 'Trigger Daily Close'}
+          </Button>
         </div>
-      </div>
-
-      {/* ── Top Navigation Tabs ── */}
-      <div className="flex items-center gap-1.5 p-1 bg-soft-cream/80 border border-border rounded-[12px] max-w-fit shadow-2xs">
-        <button
-          onClick={() => setActiveTab('automations')}
-          className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
-            activeTab === 'automations'
-              ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
-              : 'text-muted-gray hover:text-charcoal'
-          }`}
-        >
-          <Sparkles size={14} className="text-sage" />
-          Automations Engine ({automations.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('logs')}
-          className={`px-4 py-2 rounded-[8px] text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center gap-2 ${
-            activeTab === 'logs'
-              ? 'bg-white text-charcoal shadow-xs border border-border/60 font-bold'
-              : 'text-muted-gray hover:text-charcoal'
-          }`}
-        >
-          <FileText size={14} className="text-sage" />
-          Message Audit Logs ({pagination.total})
-        </button>
       </div>
 
       {/* =====================================================================
@@ -336,12 +406,38 @@ export default function WhatsAppAutomations() {
          ===================================================================== */}
       {activeTab === 'automations' && (
         <div className="space-y-4">
+          {/* Scheduling Frequency & Anti-Spam Guard Card */}
+          <div className="bg-white border border-border rounded-[14px] p-4 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-[10px] bg-sage-soft border border-sage/30 flex items-center justify-center text-[#4F6748] shrink-0 mt-0.5">
+                <Clock size={18} />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-charcoal flex items-center gap-2">
+                  Automation Timing & Frequency Policy
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#4F6748] bg-[#EAF2E8] border border-[#4F6748]/20 px-2 py-0.5 rounded-full">
+                    30-Day Anti-Spam Active
+                  </span>
+                </h4>
+                <p className="text-[11px] text-muted-gray mt-0.5">
+                  Scheduled daily automations (Rebooking, Daily Close, Celebrations) run at your chosen hour below in <strong>Africa/Douala</strong> time. Rebooking strictly requires &ge; 30 days of inactivity and enforces a 30-day cooldown.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+              <span className="text-[11px] font-semibold text-muted-gray">Rebooking Inactivity:</span>
+              <span className="text-[11px] font-bold text-charcoal bg-soft-cream border border-border px-2.5 py-1 rounded-[8px]">
+                30+ Days Since Visit
+              </span>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
             <h2 className="text-base sm:text-lg font-bold text-charcoal">
               Standard Automation Rules
             </h2>
             <span className="text-xs text-muted-gray">
-              {isManager ? 'Manager: Toggle ON/OFF to activate or deactivate automations.' : 'Reception: Operational view only.'}
+              {isManager ? 'Manager: Choose dispatch time and toggle ON/OFF.' : 'Reception: Operational view only.'}
             </span>
           </div>
 
@@ -375,43 +471,104 @@ export default function WhatsAppAutomations() {
                         </div>
                       </div>
 
-                      {/* Active Toggle */}
+                      {/* Active Toggle with Loading & Anti-Spam Lock */}
                       <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleToggle(auto)}
-                          disabled={!isManager}
-                          title={isManager ? (auto.isActive ? 'Click to turn OFF' : 'Click to turn ON') : 'Manager permission required'}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            auto.isActive ? 'bg-[#4F6748]' : 'bg-border'
-                          } ${!isManager ? 'opacity-80 cursor-not-allowed' : ''}`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              auto.isActive ? 'translate-x-5' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
+                        {(() => {
+                          const isToggling = Boolean(togglingTypes[auto.type]);
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleToggle(auto)}
+                              disabled={!isManager || isToggling}
+                              title={isToggling ? 'Updating...' : isManager ? (auto.isActive ? 'Click to turn OFF' : 'Click to turn ON') : 'Manager permission required'}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-200 ease-in-out focus:outline-none ${
+                                auto.isActive ? 'bg-[#4F6748]' : 'bg-border'
+                              } ${!isManager || isToggling ? 'opacity-75 cursor-not-allowed' : ''}`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-flex items-center justify-center h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  auto.isActive ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              >
+                                {isToggling && (
+                                  <Loader2 size={11} className="animate-spin text-[#4F6748]" />
+                                )}
+                              </span>
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
 
-                    {/* Metadata Sub-bar */}
+                    {/* Metadata Sub-bar with Interactive Timing Selector */}
                     <div className="px-5 py-2.5 bg-soft-cream/40 border-b border-border/40 flex items-center justify-between text-xs text-muted-gray flex-wrap gap-2">
                       <div className="flex items-center gap-1.5 font-medium">
-                        <Clock size={13} className="text-sage" />
-                        <span>Timing: <strong className="text-charcoal">{auto.timing || 'Immediate'}</strong></span>
+                        <Clock size={13} className="text-sage shrink-0" />
+                        {['REBOOKING', 'DAILY_CLOSE_BOSS', 'BIRTHDAY', 'ANNIVERSARY'].includes(auto.type) ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-muted-gray text-xs">Timing:</span>
+                            {isManager ? (
+                              <select
+                                value={auto.timing || (auto.type === 'DAILY_CLOSE_BOSS' ? '19:30' : auto.type === 'BIRTHDAY' ? '09:00' : '10:00')}
+                                onChange={(e) => handleTimingChange(auto, e.target.value)}
+                                className="text-xs font-bold text-charcoal bg-white border border-border/90 rounded-[6px] px-2 py-0.5 shadow-2xs hover:border-sage focus:outline-none focus:ring-1 focus:ring-sage cursor-pointer"
+                                title="Click to choose dispatch time"
+                              >
+                                {[
+                                  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+                                  '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+                                  '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
+                                  '17:00', '17:30', '18:00', '18:30', '19:00', '19:30',
+                                  '20:00', '20:30', '21:00', '21:30', '22:00'
+                                ].map((t) => (
+                                  <option key={t} value={t}>
+                                    {t}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <strong className="text-charcoal font-bold">{auto.timing || '10:00'}</strong>
+                            )}
+                            <span className="text-[10px] text-muted-gray/70 font-mono">(Douala)</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span>Timing: <strong className="text-charcoal">{auto.timing || 'Immediate'}</strong></span>
+                            {auto.type.includes('APPOINTMENT') && (
+                              <span className="text-[10px] font-semibold text-[#8B6E58] bg-[#F7F2EE] px-1.5 py-0.5 rounded border border-[#E6DDD5]">
+                                Relative
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[10px] font-bold ${
-                            auto.isActive
-                              ? 'bg-[#DCE7D7] text-[#4F6748] border border-[#4F6748]/20'
-                              : 'bg-soft-cream text-muted-gray border border-border'
-                          }`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${auto.isActive ? 'bg-[#4F6748]' : 'bg-muted-gray'}`} />
-                          {auto.isActive ? 'ACTIVE' : 'INACTIVE'}
-                        </span>
+                        {(() => {
+                          const isToggling = Boolean(togglingTypes[auto.type]);
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[10px] font-bold ${
+                                isToggling
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200/60 animate-pulse'
+                                  : auto.isActive
+                                  ? 'bg-[#DCE7D7] text-[#4F6748] border border-[#4F6748]/20'
+                                  : 'bg-soft-cream text-muted-gray border border-border'
+                              }`}
+                            >
+                              {isToggling ? (
+                                <>
+                                  <Loader2 size={10} className="animate-spin text-amber-600" />
+                                  SAVING...
+                                </>
+                              ) : (
+                                <>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${auto.isActive ? 'bg-[#4F6748]' : 'bg-muted-gray'}`} />
+                                  {auto.isActive ? 'ACTIVE' : 'INACTIVE'}
+                                </>
+                              )}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -451,7 +608,281 @@ export default function WhatsAppAutomations() {
       )}
 
       {/* =====================================================================
-          TAB 2: MESSAGE AUDIT LOGS
+          TAB 2: HOLIDAYS & OCCASIONS (UNIVERSAL META TEMPLATE)
+         ===================================================================== */}
+      {activeTab === 'holidays' && (
+        <div className="space-y-6">
+          {/* Holiday Greetings Header */}
+          <div className="bg-white border border-border rounded-[16px] p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[12px] bg-sage-soft border border-sage/30 flex items-center justify-center text-[#4F6748] shrink-0">
+                <PartyPopper size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-bold text-charcoal">
+                    Annual Holiday & Occasion Greetings
+                  </h2>
+                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-full border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle size={11} /> Meta Approved
+                  </span>
+                </div>
+                <p className="text-xs text-muted-gray mt-0.5">
+                  Automated dispatches at 09:00 AM (Africa/Douala WAT) · 16 Fixed & 8 Variable Occasions
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 1: FIXED DATES (16 Occasions) */}
+          <div className="bg-white border border-border rounded-[16px] p-5 shadow-card space-y-4">
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-border/70">
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-charcoal flex items-center gap-2">
+                  <Calendar size={16} className="text-sage" />
+                  1. Fixed Annual Dates ({fixedHolidays.length})
+                </h3>
+                <p className="text-xs text-muted-gray">
+                  These occasions fall on the exact same calendar date every year and automatically repeat without any manual intervention.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {fixedHolidays.map((h) => {
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const monthLabel = h.fixedMonth ? monthNames[h.fixedMonth - 1] : '';
+                const dayLabel = String(h.fixedDay || 1).padStart(2, '0');
+                const isToggling = togglingHolidayId === h.id;
+
+                return (
+                  <div
+                    key={h.id}
+                    className={`border rounded-[12px] p-3.5 flex flex-col justify-between gap-2.5 transition-all ${
+                      h.isActive
+                        ? 'bg-white border-border/80 shadow-2xs hover:border-sage/40'
+                        : 'bg-soft-cream/30 border-border/40 opacity-70'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-11 h-11 rounded-[8px] bg-sage-soft border border-sage/30 flex flex-col items-center justify-center shrink-0 leading-tight">
+                          <span className="text-[10px] uppercase font-bold text-sage">{monthLabel}</span>
+                          <span className="text-sm font-extrabold text-charcoal">{dayLabel}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-charcoal leading-snug line-clamp-2" title={h.name}>
+                            {h.name}
+                          </h4>
+                          <span className="text-[10px] text-muted-gray">Fixed recurring</span>
+                        </div>
+                      </div>
+
+                      {/* Active Toggle Switch */}
+                      <button
+                        type="button"
+                        disabled={!isManager || isToggling}
+                        onClick={async () => {
+                          setTogglingHolidayId(h.id);
+                          try {
+                            await updateHoliday(h.id, { isActive: !h.isActive });
+                          } catch (e) {
+                            setAlertNotice({ type: 'error', message: 'Failed to update holiday status' });
+                          } finally {
+                            setTogglingHolidayId(null);
+                          }
+                        }}
+                        className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer shrink-0 mt-1 ${
+                          h.isActive ? 'bg-sage' : 'bg-muted-gray/30'
+                        }`}
+                        title={h.isActive ? 'Active (Click to pause)' : 'Paused (Click to activate)'}
+                      >
+                        <span
+                          className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.75 transition-transform ${
+                            h.isActive ? 'right-0.75' : 'left-0.75'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px]">
+                      <span className="text-muted-gray font-mono">09:00 WAT</span>
+                      <button
+                        type="button"
+                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: '+237', clientName: '' })}
+                        className="text-sage hover:text-charcoal font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Send size={11} /> Test Send
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* SECTION 2: VARIABLE DATES (8 Occasions) */}
+          <div className="bg-white border border-border rounded-[16px] p-5 shadow-card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/70">
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-charcoal flex items-center gap-2">
+                  <Calendar size={16} className="text-sage" />
+                  2. Variable Annual Dates ({variableHolidays.length})
+                </h3>
+                <p className="text-xs text-muted-gray">
+                  These dates change every year (Islamic lunar Eid holidays, Easter, Mother's Day, etc.). Managers can update or confirm the exact date for each year.
+                </p>
+              </div>
+
+              {/* Year Selector */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-semibold text-charcoal">Year:</span>
+                <div className="flex items-center bg-soft-cream p-1 rounded-[8px] border border-border gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHolidayYear((prev) => Math.max(2025, prev - 1))}
+                    title="Previous Year"
+                    className="w-6 h-6 rounded flex items-center justify-center text-muted-gray hover:text-charcoal hover:bg-white transition-colors cursor-pointer"
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+
+                  {[2026, 2027, 2028, 2029, 2030].map((yr) => (
+                    <button
+                      key={yr}
+                      type="button"
+                      onClick={() => setSelectedHolidayYear(yr)}
+                      className={`px-2.5 py-1 rounded-[6px] text-xs font-bold transition-all cursor-pointer ${
+                        selectedHolidayYear === yr
+                          ? 'bg-charcoal text-white shadow-2xs'
+                          : 'text-muted-gray hover:text-charcoal'
+                      }`}
+                    >
+                      {yr}
+                    </button>
+                  ))}
+
+                  {selectedHolidayYear > 2030 && (
+                    <button
+                      type="button"
+                      className="px-2.5 py-1 rounded-[6px] text-xs font-bold bg-charcoal text-white shadow-2xs"
+                    >
+                      {selectedHolidayYear}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHolidayYear((prev) => prev + 1)}
+                    title="Next Year"
+                    className="w-6 h-6 rounded flex items-center justify-center text-muted-gray hover:text-charcoal hover:bg-white transition-colors cursor-pointer"
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {variableHolidays.map((h) => {
+                const yearKey = String(selectedHolidayYear);
+                const assignedDateStr = h.variableDates?.[yearKey] || '';
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                let monthLabel = 'TBD';
+                let dayLabel = '--';
+                if (assignedDateStr) {
+                  const parts = assignedDateStr.split('-');
+                  if (parts.length === 3) {
+                    const mIdx = parseInt(parts[1], 10) - 1;
+                    monthLabel = monthNames[mIdx] || 'TBD';
+                    dayLabel = parts[2];
+                  }
+                }
+                const isToggling = togglingHolidayId === h.id;
+
+                return (
+                  <div
+                    key={h.id}
+                    className={`border rounded-[12px] p-3.5 flex flex-col justify-between gap-2.5 transition-all ${
+                      h.isActive
+                        ? 'bg-white border-border/80 shadow-2xs hover:border-sage/40'
+                        : 'bg-soft-cream/30 border-border/40 opacity-70'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-11 h-11 rounded-[8px] bg-amber-50 border border-amber-200/60 flex flex-col items-center justify-center shrink-0 leading-tight">
+                          <span className="text-[10px] uppercase font-bold text-amber-800">{monthLabel}</span>
+                          <span className="text-sm font-extrabold text-charcoal">{dayLabel}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-charcoal leading-snug line-clamp-2" title={h.name}>
+                            {h.name}
+                          </h4>
+                          <span className="text-[10px] text-muted-gray font-mono">
+                            {assignedDateStr ? assignedDateStr : 'Date Not Set'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Active Toggle Switch */}
+                      <button
+                        type="button"
+                        disabled={!isManager || isToggling}
+                        onClick={async () => {
+                          setTogglingHolidayId(h.id);
+                          try {
+                            await updateHoliday(h.id, { isActive: !h.isActive });
+                          } catch (e) {
+                            setAlertNotice({ type: 'error', message: 'Failed to update holiday status' });
+                          } finally {
+                            setTogglingHolidayId(null);
+                          }
+                        }}
+                        className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer shrink-0 mt-1 ${
+                          h.isActive ? 'bg-sage' : 'bg-muted-gray/30'
+                        }`}
+                        title={h.isActive ? 'Active' : 'Paused'}
+                      >
+                        <span
+                          className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.75 transition-transform ${
+                            h.isActive ? 'right-0.75' : 'left-0.75'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px]">
+                      {isManager ? (
+                        <button
+                          type="button"
+                          onClick={() => setDateChangeModal({ isOpen: true, holiday: h, date: assignedDateStr })}
+                          className="px-2 py-1 rounded-[6px] bg-soft-cream hover:bg-soft-cream/80 text-charcoal border border-border/70 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Edit3 size={11} className="text-sage" /> Change Date
+                        </button>
+                      ) : (
+                        <span className="text-muted-gray">Manager only</span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setTestSendModal({ isOpen: true, holiday: h, phone: '+237', clientName: '' })}
+                        className="text-sage hover:text-charcoal font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Send size={11} /> Test Send
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          TAB 3: MESSAGE AUDIT LOGS
          ===================================================================== */}
       {activeTab === 'logs' && (
         <div className="bg-white border border-border rounded-[16px] p-4 sm:p-5 shadow-card space-y-4">
@@ -464,15 +895,37 @@ export default function WhatsAppAutomations() {
               <p className="text-xs text-muted-gray">Real-time log of dispatched messages, client recipients, and delivery states</p>
             </div>
 
-            <Button
-              variant="secondary"
-              onClick={() => fetchLogs()}
-              disabled={logsLoading}
-              className="h-8 text-xs px-3 font-semibold cursor-pointer shrink-0"
-            >
-              <RotateCw size={13} className={logsLoading ? 'animate-spin' : ''} />
-              Refresh Logs
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 bg-soft-cream/70 px-3 py-1.5 rounded-[10px] border border-border shadow-2xs">
+                <Clock size={13} className="text-muted-gray shrink-0" />
+                <span className="text-xs font-semibold text-charcoal whitespace-nowrap">Auto-Clear Logs:</span>
+                <select
+                  value={retentionDays}
+                  onChange={(e) => handleRetentionChange(Number(e.target.value))}
+                  disabled={!isManager || updatingRetention}
+                  className="px-2 py-0.5 bg-white border border-border rounded-[6px] text-xs font-bold text-charcoal outline-none focus:border-sage cursor-pointer disabled:opacity-60"
+                  title="Logs older than this timeframe are automatically purged every night at 00:00 midnight"
+                >
+                  <option value={15}>After 15 Days</option>
+                  <option value={30}>After 30 Days (Standard)</option>
+                  <option value={60}>After 60 Days</option>
+                  <option value={90}>After 90 Days</option>
+                </select>
+                <span className="text-[10px] text-muted-gray hidden md:inline">
+                  (Midnight Auto-Clean)
+                </span>
+              </div>
+
+              <Button
+                variant="secondary"
+                onClick={() => fetchLogs()}
+                disabled={logsLoading}
+                className="h-8 text-xs px-3 font-semibold cursor-pointer shrink-0"
+              >
+                <RotateCw size={13} className={logsLoading ? 'animate-spin' : ''} />
+                Refresh Logs
+              </Button>
+            </div>
           </div>
 
           {/* Filters Bar */}
@@ -483,10 +936,10 @@ export default function WhatsAppAutomations() {
               </label>
               <select
                 value={logStatusFilter}
-                onChange={(e) => setLogStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 bg-soft-cream/50 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
+                onChange={(e) => handleStatusFilterChange(e.target.value)}
+                className="w-full px-3 py-2 bg-soft-cream/50 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage cursor-pointer"
               >
-                <option value="ALL">All Statuses ({logs.length})</option>
+                <option value="ALL">All Statuses ({totalLogs})</option>
                 <option value="QUEUED">QUEUED</option>
                 <option value="PENDING">PENDING</option>
                 <option value="SENT">SENT</option>
@@ -502,8 +955,8 @@ export default function WhatsAppAutomations() {
               </label>
               <select
                 value={logTypeFilter}
-                onChange={(e) => setLogTypeFilter(e.target.value)}
-                className="w-full px-3 py-2 bg-soft-cream/50 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
+                onChange={(e) => handleTypeFilterChange(e.target.value)}
+                className="w-full px-3 py-2 bg-soft-cream/50 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage cursor-pointer"
               >
                 <option value="ALL">All Automation Types</option>
                 <option value="BIRTHDAY">Birthday Greeting</option>
@@ -525,9 +978,9 @@ export default function WhatsAppAutomations() {
                 <Search size={14} className="absolute left-3 top-2.5 text-muted-gray" />
                 <input
                   type="text"
-                  placeholder="Search recipient..."
+                  placeholder="Search recipient or message..."
                   value={logSearch}
-                  onChange={(e) => setLogSearch(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 bg-soft-cream/50 border border-border rounded-[10px] text-xs text-charcoal outline-none focus:border-sage"
                 />
               </div>
@@ -548,14 +1001,14 @@ export default function WhatsAppAutomations() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40 bg-white">
-                {filteredLogs.length === 0 ? (
+                {logs.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-xs text-muted-gray">
                       {logsLoading ? 'Loading audit logs...' : 'No message logs found for this filter.'}
                     </td>
                   </tr>
                 ) : (
-                  filteredLogs.map((log) => {
+                  logs.map((log) => {
                     const clientName = log.client?.name || 'Client';
                     const phone = log.recipientPhone || log.client?.phone || '—';
                     const isFailed = log.status === 'FAILED';
@@ -620,6 +1073,251 @@ export default function WhatsAppAutomations() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Pagination Controls Bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs text-muted-gray">
+            <div className="flex items-center gap-2">
+              <span>
+                Showing {totalLogs === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+                {Math.min(currentPage * pageSize, totalLogs)} of {totalLogs.toLocaleString()} messages
+              </span>
+              <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-border/80">
+                <span className="text-[11px]">Show:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => handleLimitChange(Number(e.target.value))}
+                  className="px-2 py-1 bg-white border border-border rounded-[6px] text-xs font-semibold text-charcoal outline-none focus:border-sage cursor-pointer"
+                >
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1 || logsLoading}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-border bg-white text-charcoal hover:bg-soft-cream disabled:opacity-40 disabled:cursor-not-allowed font-medium transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  title="Previous Page"
+                >
+                  <ChevronLeft size={14} />
+                  <span className="hidden sm:inline">Previous</span>
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  {pageNumbers.map((p, idx) =>
+                    p === '...' ? (
+                      <span key={`dots-${idx}`} className="px-1.5 text-muted-gray font-bold select-none">
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => handlePageChange(p)}
+                        disabled={logsLoading}
+                        className={`min-w-[32px] h-[32px] rounded-[8px] text-xs font-bold transition cursor-pointer flex items-center justify-center ${
+                          currentPage === p
+                            ? 'bg-charcoal text-white shadow-xs'
+                            : 'bg-white border border-border/80 text-muted-gray hover:text-charcoal hover:bg-soft-cream'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages || logsLoading}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-border bg-white text-charcoal hover:bg-soft-cream disabled:opacity-40 disabled:cursor-not-allowed font-medium transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  title="Next Page"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+    
+      {/* ── Modal: Change Variable Holiday Date ── */}
+      {dateChangeModal.isOpen && dateChangeModal.holiday && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/50 backdrop-blur-xs">
+          <div className="bg-white rounded-[16px] max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Calendar size={18} className="text-sage" />
+                <h3 className="text-sm font-bold text-charcoal">Set {dateChangeModal.holiday.name} Date</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDateChangeModal({ isOpen: false, holiday: null, date: '' })}
+                className="text-muted-gray hover:text-charcoal cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-charcoal block mb-1">
+                  Selected Year: <strong>{selectedHolidayYear}</strong>
+                </label>
+                <input
+                  type="date"
+                  value={dateChangeModal.date}
+                  onChange={(e) => setDateChangeModal((prev) => ({ ...prev, date: e.target.value }))}
+                  className="w-full h-10 px-3 border border-border rounded-[8px] text-xs font-medium text-charcoal outline-none focus:border-sage"
+                />
+              </div>
+              <p className="text-[11px] text-muted-gray leading-normal">
+                WhatsApp greeting will automatically dispatch to clients on this date at 09:00 AM WAT.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setDateChangeModal({ isOpen: false, holiday: null, date: '' })}
+                className="h-9 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={!dateChangeModal.date || savingHolidayDate}
+                onClick={async () => {
+                  setSavingHolidayDate(true);
+                  try {
+                    await updateHoliday(dateChangeModal.holiday.id, {
+                      year: selectedHolidayYear,
+                      date: dateChangeModal.date,
+                    });
+                    setAlertNotice({
+                      type: 'success',
+                      message: `Date for ${dateChangeModal.holiday.name} (${selectedHolidayYear}) updated to ${dateChangeModal.date}!`,
+                    });
+                    setDateChangeModal({ isOpen: false, holiday: null, date: '' });
+                  } catch (e) {
+                    setAlertNotice({ type: 'error', message: 'Failed to update holiday date.' });
+                  } finally {
+                    setSavingHolidayDate(false);
+                  }
+                }}
+                className="h-9 text-xs"
+              >
+                {savingHolidayDate ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                Save Date
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Test Send Holiday Greeting ── */}
+      {testSendModal.isOpen && testSendModal.holiday && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/50 backdrop-blur-xs">
+          <div className="bg-white rounded-[16px] max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Send size={18} className="text-sage" />
+                <h3 className="text-sm font-bold text-charcoal">Test Send: {testSendModal.holiday.name}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTestSendModal({ isOpen: false, holiday: null, phone: '+237', clientName: '' })}
+                className="text-muted-gray hover:text-charcoal cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-charcoal block mb-1">
+                  Recipient WhatsApp Phone Number <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  placeholder="+237 6XX XXX XXX"
+                  value={testSendModal.phone}
+                  onChange={(e) => setTestSendModal((prev) => ({ ...prev, phone: e.target.value }))}
+                  className="w-full h-10 px-3 border border-border rounded-[8px] text-xs font-medium text-charcoal outline-none focus:border-sage"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-charcoal block mb-1">
+                  Test Client Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Marie Claire"
+                  value={testSendModal.clientName}
+                  onChange={(e) => setTestSendModal((prev) => ({ ...prev, clientName: e.target.value }))}
+                  className="w-full h-10 px-3 border border-border rounded-[8px] text-xs font-medium text-charcoal outline-none focus:border-sage"
+                />
+              </div>
+
+              {/* Live Preview */}
+              <div className="p-3 bg-[#FAF8F5] border border-border rounded-[8px] text-xs text-charcoal leading-relaxed font-sans">
+                <p className="font-semibold">Hi {testSendModal.clientName || 'Cher Client'},</p>
+                <p className="mt-1">Happy {testSendModal.holiday.name} from OMEGA SPA! 🌸 Wishing you and your loved ones happiness, peace, good health and joy.</p>
+                <p className="mt-1 text-muted-gray">Thank you for being part of our family. We truly appreciate your trust and support.</p>
+                <p className="mt-1 font-semibold">Warm wishes,<br />Team OMEGA SPA ❤️</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setTestSendModal({ isOpen: false, holiday: null, phone: '+237', clientName: '' })}
+                className="h-9 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={!testSendModal.phone || testSendModal.phone.trim() === '+237' || testSendModal.phone.trim() === '+' || sendingTestGreeting}
+                onClick={async () => {
+                  setSendingTestGreeting(true);
+                  try {
+                    const res = await testSendHoliday(testSendModal.holiday.id, {
+                      phone: testSendModal.phone.trim(),
+                      clientName: testSendModal.clientName.trim() || undefined,
+                    });
+                    if (res?.data?.success === false || res?.success === false) {
+                      setAlertNotice({
+                        type: 'error',
+                        message: res?.data?.error || res?.message || 'Failed to dispatch test greeting',
+                      });
+                    } else {
+                      setAlertNotice({
+                        type: 'success',
+                        message: res?.message || `Test greeting dispatched to ${testSendModal.phone}!`,
+                      });
+                      setTestSendModal({ isOpen: false, holiday: null, phone: '+237', clientName: '' });
+                    }
+                  } catch (e) {
+                    setAlertNotice({ type: 'error', message: e?.message || 'Failed to dispatch test greeting' });
+                  } finally {
+                    setSendingTestGreeting(false);
+                  }
+                }}
+                className="h-9 text-xs"
+              >
+                {sendingTestGreeting ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                Send Test Greeting
+              </Button>
+            </div>
           </div>
         </div>
       )}

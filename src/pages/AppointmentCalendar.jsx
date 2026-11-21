@@ -143,6 +143,7 @@ function getAppointmentStatusInfo(apt, isAppointmentClosed, todayDateStr, curren
 }
 
 const timeSlots = [
+  '09:00', '09:30',
   '10:00', '10:30',
   '11:00', '11:30',
   '12:00', '12:30',
@@ -211,7 +212,7 @@ export default function AppointmentCalendar() {
 
   // Snap a time string (HH:MM) to the nearest floor 30-min slot
   function snapToSlot(timeStr) {
-    if (!timeStr) return '10:00';
+    if (!timeStr) return '09:00';
     const [h, m] = timeStr.split(':').map(Number);
     const slotMin = m < 30 ? '00' : '30';
     return `${String(h).padStart(2, '0')}:${slotMin}`;

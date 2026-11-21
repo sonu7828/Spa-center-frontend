@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileText,
   CheckCircle2,
@@ -44,6 +44,12 @@ import {
   Search,
   Filter,
   ArrowUpDown,
+  Lock,
+  Layers,
+  Users,
+  UserCheck,
+  AlertTriangle,
+  AlertCircle,
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -55,7 +61,7 @@ import { useClients } from '../context/ClientsContext';
 import { useLoyalty } from '../context/LoyaltyContext';
 import { useWhatsApp } from '../context/WhatsAppContext';
 import { useFeedback } from '../context/FeedbackContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isMarketerUser } from '../context/AuthContext';
 import { useRetail } from '../context/RetailContext';
 import { useCommission } from '../context/CommissionContext';
 import { useAppointments } from '../context/AppointmentsContext';
@@ -81,9 +87,54 @@ const PAYMENT_METHODS = [
 function formatPaymentMethod(method) {
   if (!method) return 'CASH';
   const m = String(method).trim().toUpperCase();
+  if (m.includes('+') || m.includes(':')) return m;
   if (m.includes('MTN')) return 'MTN MOMO';
   if (m.includes('ORANGE')) return 'ORANGE MONEY';
   return 'CASH';
+}
+
+function getInvoicePaymentDisplay(invoice) {
+  if (!invoice) return 'CASH';
+
+  // 1. Multiple payments array from backend
+  if (Array.isArray(invoice.payments) && invoice.payments.length > 1) {
+    return invoice.payments
+      .map(
+        (p) =>
+          `${formatPaymentMethod(p.paymentMethod)}: ${Number(p.amount || 0).toLocaleString('en-US')} FCFA`
+      )
+      .join(' + ');
+  }
+
+  // 2. Explicit splits array on invoice
+  if (Array.isArray(invoice.splits) && invoice.splits.length > 1) {
+    return invoice.splits
+      .map(
+        (s) =>
+          `${formatPaymentMethod(s.method || s.paymentMethod)}: ${Number(s.amount || 0).toLocaleString('en-US')} FCFA`
+      )
+      .join(' + ');
+  }
+
+  // 3. Formatted split string directly on invoice (e.g. "CASH (2,000) + MTN MOMO (1,240)")
+  const pmStr = String(invoice.paymentMethod || '').trim();
+  if (pmStr.includes('+') || pmStr.includes(':')) {
+    return pmStr;
+  }
+
+  // 4. Single payment with notes containing split breakdown
+  if (Array.isArray(invoice.payments) && invoice.payments.length === 1) {
+    const p0 = invoice.payments[0];
+    if (p0.notes && (p0.notes.includes('+') || p0.notes.toLowerCase().includes('split payment:'))) {
+      const cleaned = p0.notes.replace(/^Split payment:\s*/i, '').trim();
+      if (cleaned.includes('+') || cleaned.includes(':')) {
+        return cleaned;
+      }
+    }
+    return formatPaymentMethod(p0.paymentMethod);
+  }
+
+  return formatPaymentMethod(invoice.paymentMethod);
 }
 
 function paymentLabel(method) {
@@ -279,8 +330,16 @@ function SearchableSelect({
   const filteredOptions = options.filter((opt) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
-    const matchLabel = opt.label ? String(opt.label).toLowerCase().includes(term) : false;
-    const matchSublabel = opt.sublabel ? String(opt.sublabel).toLowerCase().includes(term) : false;
+    const cleanTerm = term.replace(/[^a-z0-9]/gi, '');
+    const cleanSublabel = String(opt.sublabel || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const cleanLabel = String(opt.label || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+    const matchLabel = opt.label
+      ? String(opt.label).toLowerCase().includes(term) || (cleanTerm.length >= 2 && cleanLabel.includes(cleanTerm))
+      : false;
+    const matchSublabel = opt.sublabel
+      ? String(opt.sublabel).toLowerCase().includes(term) || (cleanTerm.length >= 2 && cleanSublabel.includes(cleanTerm))
+      : false;
     const matchBadge = opt.badge ? String(opt.badge).toLowerCase().includes(term) : false;
     return matchLabel || matchSublabel || matchBadge;
   });
@@ -298,7 +357,14 @@ function SearchableSelect({
       >
         <div className="truncate pr-2">
           {selectedOption ? (
-            <span className="font-semibold text-charcoal">{selectedOption.label}</span>
+            <span className="font-semibold text-charcoal">
+              {selectedOption.label}
+              {selectedOption.sublabel && selectedOption.value !== '' && (
+                <span className="text-[11px] font-normal text-muted-gray ml-1.5">
+                  ({selectedOption.sublabel})
+                </span>
+              )}
+            </span>
           ) : (
             <span className="text-muted-gray">{placeholder}</span>
           )}
@@ -316,7 +382,7 @@ function SearchableSelect({
             }`}
           style={{ minWidth: '100%' }}
         >
-          {options.length > 5 && (
+          {options.length > 1 && (
             <div className="p-2 border-b border-border/60 bg-soft-cream/40">
               <div className="relative">
                 <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-gray" />
@@ -325,10 +391,22 @@ function SearchableSelect({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder={searchPlaceholder}
-                  className="w-full h-7 pl-7 pr-2 text-xs bg-white border border-border rounded-[7px] outline-none focus:border-sage text-charcoal"
+                  className="w-full h-7 pl-7 pr-7 text-xs bg-white border border-border rounded-[7px] outline-none focus:border-sage text-charcoal"
                   onClick={(e) => e.stopPropagation()}
                   autoFocus
                 />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearchTerm('');
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-gray hover:text-charcoal cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -382,10 +460,12 @@ function SearchableSelect({
 
 export default function PendingInvoices() {
   const { user, allUsers } = useAuth();
-  const isTechnician = user?.role === 'technician';
-  const canCollectPayment = user?.role === 'manager' || user?.role === 'reception';
-  const canSellRetail = user?.role === 'manager' || user?.role === 'reception';
-  const canCreateInvoice = user?.role === 'manager' || user?.role === 'reception';
+  const role = (user?.role || '').toLowerCase();
+  const isTechnician = role === 'technician';
+  const isMarketer = role === 'marketer' || isMarketerUser(user);
+  const canCollectPayment = (role === 'manager' || role === 'reception') && !isMarketer;
+  const canSellRetail = (role === 'manager' || role === 'reception') && !isMarketer;
+  const canCreateInvoice = role === 'manager' || role === 'reception' || isMarketer || isTechnician;
 
   const {
     invoices,
@@ -394,6 +474,7 @@ export default function PendingInvoices() {
     getPaidTodayInvoices,
     getHistoryInvoices,
     markInvoicePaid,
+    recordSplitPayment,
     addRetailItemToInvoice,
     removeRetailItemFromInvoice,
     createRetailSaleInvoice,
@@ -431,6 +512,7 @@ export default function PendingInvoices() {
     earnPoints,
     redeemPoints,
     getClientLoyalty,
+    fetchClientLoyalty,
     settings,
     calculateDiscount,
     calculateEarnedPoints,
@@ -440,8 +522,26 @@ export default function PendingInvoices() {
   const { calculateAndAddCommission, commissionRate } = useCommission();
   const { appointments } = useAppointments();
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Active tab: 'pending' | 'paid-today' | 'history'
   const [activeTab, setActiveTab] = useState('pending');
+
+  // Handle URL navigation (e.g. /invoices?newWalkIn=shared)
+  useEffect(() => {
+    const newWalkIn = searchParams.get('newWalkIn');
+    if (newWalkIn === 'shared') {
+      openNewServiceModal(true);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('newWalkIn');
+      setSearchParams(nextParams, { replace: true });
+    } else if (newWalkIn === 'true' || newWalkIn === '1') {
+      openNewServiceModal(false);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('newWalkIn');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams]);
 
   // Expanded accordion in Pending & Paid Today lists
   const [expandedId, setExpandedId] = useState(null);
@@ -449,8 +549,94 @@ export default function PendingInvoices() {
   // Payment method selection per invoice in Pending view
   const [paymentMethods, setPaymentMethods] = useState({});
 
+  // Split payment state per invoice: { [invoiceId]: { isSplit: boolean, cash: string, momo: string, orange: string } }
+  const [splitPaymentState, setSplitPaymentState] = useState({});
+
+  const isInvoiceSplit = useCallback(
+    (invoiceId) => Boolean(splitPaymentState[invoiceId]?.isSplit),
+    [splitPaymentState]
+  );
+
+  const setInvoiceSplitMode = useCallback((invoiceId, isSplit) => {
+    setSplitPaymentState((prev) => ({
+      ...prev,
+      [invoiceId]: {
+        ...(prev[invoiceId] || {}),
+        isSplit,
+        cash: prev[invoiceId]?.cash || '',
+        momo: prev[invoiceId]?.momo || '',
+        orange: prev[invoiceId]?.orange || '',
+      },
+    }));
+  }, []);
+
+  const setInvoiceSplitAmount = useCallback((invoiceId, field, value) => {
+    const clean = String(value || '').replace(/[^0-9]/g, '');
+    setSplitPaymentState((prev) => ({
+      ...prev,
+      [invoiceId]: {
+        ...(prev[invoiceId] || {}),
+        isSplit: true,
+        [field]: clean,
+      },
+    }));
+  }, []);
+
+  const getInvoiceSplitData = useCallback(
+    (invoiceId, finalTotal) => {
+      const st = splitPaymentState[invoiceId] || {};
+      const cash = parseInt(String(st.cash || '').replace(/[^0-9]/g, ''), 10) || 0;
+      const momo = parseInt(String(st.momo || '').replace(/[^0-9]/g, ''), 10) || 0;
+      const orange = parseInt(String(st.orange || '').replace(/[^0-9]/g, ''), 10) || 0;
+      const totalSplit = cash + momo + orange;
+      const remainingToAllocate = finalTotal - totalSplit;
+      return {
+        isSplit: Boolean(st.isSplit),
+        cash: st.cash || '',
+        momo: st.momo || '',
+        orange: st.orange || '',
+        cashNum: cash,
+        momoNum: momo,
+        orangeNum: orange,
+        totalSplit,
+        remainingToAllocate,
+        isValid: Boolean(st.isSplit) ? totalSplit === finalTotal && totalSplit > 0 : true,
+      };
+    },
+    [splitPaymentState]
+  );
+
+  const handleQuickSplit5050 = useCallback((invoiceId, finalTotal) => {
+    const half1 = Math.round(finalTotal / 2);
+    const half2 = finalTotal - half1;
+    setSplitPaymentState((prev) => ({
+      ...prev,
+      [invoiceId]: {
+        isSplit: true,
+        cash: String(half1),
+        momo: String(half2),
+        orange: '',
+      },
+    }));
+  }, []);
+
+  const handleClearSplit = useCallback((invoiceId) => {
+    setSplitPaymentState((prev) => ({
+      ...prev,
+      [invoiceId]: {
+        isSplit: true,
+        cash: '',
+        momo: '',
+        orange: '',
+      },
+    }));
+  }, []);
+
   // Loyalty redemption state per invoice in Pending view
   const [redeemState, setRedeemState] = useState({});
+
+  // Marketer / First-time prospect promo discount selection per invoice (0 | 5 | 10 | 15 | 20)
+  const [prospectDiscounts, setProspectDiscounts] = useState({});
 
   // Receipt modal state
   const [receiptInvoice, setReceiptInvoice] = useState(null);
@@ -477,6 +663,10 @@ export default function PendingInvoices() {
   const [newSaleTab, setNewSaleTab] = useState('drinks');
   const [newSaleQuantities, setNewSaleQuantities] = useState({});
   const [newSalePaymentMethod, setNewSalePaymentMethod] = useState('CASH');
+  const [newSaleIsSplit, setNewSaleIsSplit] = useState(false);
+  const [newSaleSplitCash, setNewSaleSplitCash] = useState('');
+  const [newSaleSplitMomo, setNewSaleSplitMomo] = useState('');
+  const [newSaleSplitOrange, setNewSaleSplitOrange] = useState('');
   const [newSaleNotice, setNewSaleNotice] = useState('');
 
   // Payment collecting loading states (prevents multiple clicks)
@@ -507,6 +697,10 @@ export default function PendingInvoices() {
   const [newServiceRetailTab, setNewServiceRetailTab] = useState('drinks');
   const [newServiceNotes, setNewServiceNotes] = useState('');
   const [newServicePaymentMethod, setNewServicePaymentMethod] = useState('CASH');
+  const [newServiceIsSplit, setNewServiceIsSplit] = useState(false);
+  const [newServiceSplitCash, setNewServiceSplitCash] = useState('');
+  const [newServiceSplitMomo, setNewServiceSplitMomo] = useState('');
+  const [newServiceSplitOrange, setNewServiceSplitOrange] = useState('');
   const [newServiceActionChoice, setNewServiceActionChoice] = useState('pending'); // 'pending' | 'pay_now'
   const [isSubmittingServiceInvoice, setIsSubmittingServiceInvoice] = useState(false);
   const [newServiceError, setNewServiceError] = useState('');
@@ -607,32 +801,74 @@ export default function PendingInvoices() {
     }
   }, [refreshInvoices]);
 
-  const myTechnicianId = user?.id;
-  const myTechnicianName = (user?.name || '').trim().toLowerCase();
+  const myUserId = user?.id;
+  const myUserName = (user?.name || '').trim().toLowerCase();
 
-  const filterByTechnician = useCallback((list) => {
-    if (!isTechnician) return list;
-    return (list || []).filter((inv) => {
-      if (inv.technicianId && String(inv.technicianId) === String(myTechnicianId)) return true;
-      if (inv.mainTechnicianId && String(inv.mainTechnicianId) === String(myTechnicianId)) return true;
-      if (Array.isArray(inv.items)) {
-        return inv.items.some(
-          (it) =>
-            (it.technicianId && String(it.technicianId) === String(myTechnicianId)) ||
-            (it.technician && String(it.technician).trim().toLowerCase() === myTechnicianName)
-        );
-      }
-      return false;
-    });
-  }, [isTechnician, myTechnicianId, myTechnicianName]);
+  const filterForUserRole = useCallback((list) => {
+    const matchName = (name) => {
+      if (!name || !myUserName) return false;
+      const str = String(name).trim().toLowerCase();
+      return str === myUserName || str.includes(myUserName) || myUserName.includes(str);
+    };
+
+    if (isTechnician) {
+      return (list || []).filter((inv) => {
+        if (inv.technicianId && String(inv.technicianId) === String(myUserId)) return true;
+        if (inv.mainTechnicianId && String(inv.mainTechnicianId) === String(myUserId)) return true;
+        if (inv.createdById && String(inv.createdById) === String(myUserId)) return true;
+        if (inv.technician && matchName(inv.technician)) return true;
+        if (inv.technicianName && matchName(inv.technicianName)) return true;
+        if (inv.mainTechnicianName && matchName(inv.mainTechnicianName)) return true;
+        if (Array.isArray(inv.items)) {
+          return inv.items.some(
+            (it) =>
+              (it.technicianId && String(it.technicianId) === String(myUserId)) ||
+              (it.technician && matchName(it.technician))
+          );
+        }
+        return false;
+      });
+    }
+
+    if (isMarketer) {
+      // Find all client IDs introduced by this marketer
+      const myClientIds = new Set(
+        (clients || [])
+          .filter((c) =>
+            (c.introducedById && String(c.introducedById) === String(myUserId)) ||
+            (c.introducedBy && matchName(c.introducedBy))
+          )
+          .map((c) => String(c.id))
+      );
+
+      return (list || []).filter((inv) => {
+        // 1. Created by this marketer
+        if (inv.createdById && String(inv.createdById) === String(myUserId)) return true;
+        // 2. Direct introducedBy attribute on invoice
+        if (inv.introducedById && String(inv.introducedById) === String(myUserId)) return true;
+        if (inv.introducedBy && matchName(inv.introducedBy)) return true;
+        // 3. Client belongs to this marketer
+        if (inv.clientId && myClientIds.has(String(inv.clientId))) return true;
+        if (inv.client && (
+          (inv.client.introducedByEmployeeId && String(inv.client.introducedByEmployeeId) === String(myUserId)) ||
+          (inv.client.introducedBy && matchName(inv.client.introducedBy))
+        )) return true;
+        return false;
+      });
+    }
+
+    return list || [];
+  }, [isTechnician, isMarketer, myUserId, myUserName, clients]);
 
   const rawPendingInvoices = typeof getPendingInvoices === 'function' ? getPendingInvoices() : [];
   const rawPaidTodayInvoices = typeof getPaidTodayInvoices === 'function' ? getPaidTodayInvoices() : [];
   const rawHistoryInvoices = typeof getHistoryInvoices === 'function' ? getHistoryInvoices() : [];
 
-  const pendingInvoices = useMemo(() => filterByTechnician(rawPendingInvoices), [rawPendingInvoices, filterByTechnician]);
-  const paidTodayInvoices = useMemo(() => filterByTechnician(rawPaidTodayInvoices), [rawPaidTodayInvoices, filterByTechnician]);
-  const historyInvoices = useMemo(() => filterByTechnician(rawHistoryInvoices), [rawHistoryInvoices, filterByTechnician]);
+  const pendingInvoices = useMemo(() => filterForUserRole(rawPendingInvoices), [rawPendingInvoices, filterForUserRole]);
+  const paidTodayInvoices = useMemo(() => filterForUserRole(rawPaidTodayInvoices), [rawPaidTodayInvoices, filterForUserRole]);
+  const historyInvoices = useMemo(() => filterForUserRole(rawHistoryInvoices), [rawHistoryInvoices, filterForUserRole]);
+
+
 
   // --- History Tab Search, Filter & Pagination State ---
   const [historySearch, setHistorySearch] = useState('');
@@ -689,25 +925,31 @@ export default function PendingInvoices() {
 
         if (!invDateStr) return false;
 
-        const todayObj = new Date();
-        const todayIso = todayObj.toISOString().slice(0, 10);
+        const formatLocalDate = (d) => {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+        };
+
+        const todayIso = formatLocalDate(new Date());
 
         if (historyDateFilter === 'TODAY') {
           if (invDateStr !== todayIso) return false;
         } else if (historyDateFilter === 'YESTERDAY') {
           const yestObj = new Date();
           yestObj.setDate(yestObj.getDate() - 1);
-          const yestIso = yestObj.toISOString().slice(0, 10);
+          const yestIso = formatLocalDate(yestObj);
           if (invDateStr !== yestIso) return false;
         } else if (historyDateFilter === 'WEEK') {
           const weekAgo = new Date();
           weekAgo.setDate(weekAgo.getDate() - 7);
-          const weekAgoIso = weekAgo.toISOString().slice(0, 10);
+          const weekAgoIso = formatLocalDate(weekAgo);
           if (invDateStr < weekAgoIso) return false;
         } else if (historyDateFilter === 'MONTH') {
           const monthAgo = new Date();
           monthAgo.setDate(monthAgo.getDate() - 30);
-          const monthAgoIso = monthAgo.toISOString().slice(0, 10);
+          const monthAgoIso = formatLocalDate(monthAgo);
           if (invDateStr < monthAgoIso) return false;
         } else if (historyDateFilter === 'CUSTOM' && historyCustomDate) {
           if (invDateStr !== historyCustomDate) return false;
@@ -776,7 +1018,16 @@ export default function PendingInvoices() {
   };
 
   const toggleExpand = (id) => {
-    setExpandedId((prev) => (prev === id ? null : id));
+    setExpandedId((prev) => {
+      const next = prev === id ? null : id;
+      if (next) {
+        const inv = pendingInvoices.find((i) => i.id === next);
+        if (inv?.clientId && fetchClientLoyalty) {
+          fetchClientLoyalty(inv.clientId);
+        }
+      }
+      return next;
+    });
   };
 
   const setPaymentMethod = (invoiceId, method) => {
@@ -789,12 +1040,19 @@ export default function PendingInvoices() {
       if (current.wantRedeem) {
         return { ...prev, [invoiceId]: { wantRedeem: false, points: '' } };
       }
-      const loyalty = getClientLoyalty(clientId);
+      const inv = pendingInvoices.find((i) => i.id === invoiceId);
+      const clientObj = getClient(clientId) || inv?.client;
+      const rawLoyalty = getClientLoyalty(clientId);
+      const availableBalance = Math.max(
+        Number(rawLoyalty?.balance) || 0,
+        Number(clientObj?.loyaltyPoints) || 0,
+        Number(inv?.client?.loyaltyPoints) || 0
+      );
       return {
         ...prev,
         [invoiceId]: {
           wantRedeem: true,
-          points: String(Math.min(loyalty.balance, settings.pointsForDiscount)),
+          points: String(Math.min(availableBalance, settings.pointsForDiscount || 100)),
         },
       };
     });
@@ -814,6 +1072,10 @@ export default function PendingInvoices() {
     setNewSaleTab('drinks');
     setNewSaleQuantities({});
     setNewSalePaymentMethod('CASH');
+    setNewSaleIsSplit(false);
+    setNewSaleSplitCash('');
+    setNewSaleSplitMomo('');
+    setNewSaleSplitOrange('');
     setNewSaleNotice('');
     setShowNewRetailSaleModal(true);
   };
@@ -821,6 +1083,10 @@ export default function PendingInvoices() {
   const closeNewRetailSaleModal = () => {
     setShowNewRetailSaleModal(false);
     setNewSaleCart([]);
+    setNewSaleIsSplit(false);
+    setNewSaleSplitCash('');
+    setNewSaleSplitMomo('');
+    setNewSaleSplitOrange('');
     setNewSaleNotice('');
   };
 
@@ -890,9 +1156,39 @@ export default function PendingInvoices() {
 
   const newSaleTotal = newSaleCart.reduce((sum, it) => sum + it.price, 0);
 
+  const newSaleCashNum = parseInt(String(newSaleSplitCash || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newSaleMomoNum = parseInt(String(newSaleSplitMomo || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newSaleOrangeNum = parseInt(String(newSaleSplitOrange || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newSaleSplitTotal = newSaleCashNum + newSaleMomoNum + newSaleOrangeNum;
+  const newSaleSplitRemaining = newSaleTotal - newSaleSplitTotal;
+  const newSaleSplitIsValid = newSaleIsSplit
+    ? newSaleSplitTotal === newSaleTotal && newSaleTotal > 0
+    : true;
+
+  const handleQuickSplit5050NewSale = () => {
+    const half1 = Math.round(newSaleTotal / 2);
+    const half2 = newSaleTotal - half1;
+    setNewSaleIsSplit(true);
+    setNewSaleSplitCash(String(half1));
+    setNewSaleSplitMomo(String(half2));
+    setNewSaleSplitOrange('');
+  };
+
+  const handleClearSplitNewSale = () => {
+    setNewSaleSplitCash('');
+    setNewSaleSplitMomo('');
+    setNewSaleSplitOrange('');
+  };
+
   const handleCollectNewSale = async () => {
     if (newSaleCart.length === 0 || newSaleTotal <= 0) return;
     if (isCollectingNewSale) return;
+
+    if (newSaleIsSplit && !newSaleSplitIsValid) {
+      setNewSaleNotice('Split amounts must exactly match the total sale amount.');
+      setTimeout(() => setNewSaleNotice(''), 4000);
+      return;
+    }
 
     // Revalidate stock before completing the sale
     for (const cartItem of newSaleCart) {
@@ -915,11 +1211,24 @@ export default function PendingInvoices() {
 
       const clientName = selectedClient ? selectedClient.name : 'Walk in';
 
+      // Build split list if split mode active
+      const splits = [];
+      if (newSaleIsSplit) {
+        if (newSaleCashNum > 0) splits.push({ amount: newSaleCashNum, method: 'CASH', paymentMethod: 'CASH' });
+        if (newSaleMomoNum > 0) splits.push({ amount: newSaleMomoNum, method: 'MTN_MOMO', paymentMethod: 'MTN_MOMO' });
+        if (newSaleOrangeNum > 0) splits.push({ amount: newSaleOrangeNum, method: 'ORANGE_MONEY', paymentMethod: 'ORANGE_MONEY' });
+      }
+
+      const effectivePaymentMethod = newSaleIsSplit
+        ? splits.map((s) => `${s.paymentMethod.replace(/_/g, ' ')} (${s.amount.toLocaleString('en-US')})`).join(' + ')
+        : newSalePaymentMethod;
+
       // 1. Create paid invoice in shared state & backend
       const paidInvoice = await createRetailSaleInvoice({
         client: selectedClient,
         items: newSaleCart,
-        paymentMethod: newSalePaymentMethod,
+        paymentMethod: effectivePaymentMethod,
+        splits: newSaleIsSplit ? splits : [],
       });
 
       // 2. Deduct retail stock (deducted ONLY after successful payment)
@@ -928,7 +1237,7 @@ export default function PendingInvoices() {
       // 3. Contribute to daily totals (no double counting)
       recordRetailSale({
         amount: newSaleTotal,
-        payment: newSalePaymentMethod,
+        payment: effectivePaymentMethod,
         items: newSaleCart,
         clientName,
         isWalkIn: !selectedClient,
@@ -943,7 +1252,7 @@ export default function PendingInvoices() {
       setExpandedId(paidInvoice?.id);
       setReceiptInvoice(paidInvoice);
       setPaymentSuccessNotice(
-        `Retail sale completed for ${clientName} (${newSaleTotal.toLocaleString('en-US')} FCFA via ${newSalePaymentMethod}). Receipt opened.`
+        `Retail sale completed for ${clientName} (${newSaleTotal.toLocaleString('en-US')} FCFA via ${effectivePaymentMethod}). Receipt opened.`
       );
       setTimeout(() => setPaymentSuccessNotice(null), 5000);
     } catch (err) {
@@ -968,35 +1277,159 @@ export default function PendingInvoices() {
 
   const newServiceGrandTotal = newServiceLinesTotal + newServiceRetailTotal;
 
-  const openNewServiceModal = () => {
+  const newServiceCashNum = parseInt(String(newServiceSplitCash || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newServiceMomoNum = parseInt(String(newServiceSplitMomo || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newServiceOrangeNum = parseInt(String(newServiceSplitOrange || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const newServiceSplitTotal = newServiceCashNum + newServiceMomoNum + newServiceOrangeNum;
+  const newServiceSplitRemaining = newServiceGrandTotal - newServiceSplitTotal;
+  const newServiceSplitIsValid = newServiceIsSplit
+    ? newServiceSplitTotal === newServiceGrandTotal && newServiceGrandTotal > 0
+    : true;
+
+  const handleQuickSplit5050NewService = () => {
+    const half1 = Math.round(newServiceGrandTotal / 2);
+    const half2 = newServiceGrandTotal - half1;
+    setNewServiceIsSplit(true);
+    setNewServiceSplitCash(String(half1));
+    setNewServiceSplitMomo(String(half2));
+    setNewServiceSplitOrange('');
+  };
+
+  const handleClearSplitNewService = () => {
+    setNewServiceSplitCash('');
+    setNewServiceSplitMomo('');
+    setNewServiceSplitOrange('');
+  };
+
+  // Multi-technician analysis for newServiceLines
+  const newServiceTechSummary = useMemo(() => {
+    const map = new Map();
+    (newServiceLines || []).forEach((line) => {
+      const tName = line.technicianName?.trim() || 'Unassigned Staff';
+      const tId = line.technicianId || null;
+      const priceNum =
+        typeof line.price === 'number'
+          ? line.price
+          : parseInt(String(line.price || 0).replace(/[^0-9]/g, ''), 10) || 0;
+      const existing = map.get(tName) || { name: tName, id: tId, total: 0, count: 0, services: [] };
+      existing.total += priceNum;
+      existing.count += 1;
+      if (line.serviceName) existing.services.push(line.serviceName);
+      map.set(tName, existing);
+    });
+    return Array.from(map.values());
+  }, [newServiceLines]);
+
+  const hasMultipleTechs = newServiceTechSummary.filter((t) => t.name !== 'Unassigned Staff').length > 1;
+
+  const openNewServiceModal = (isShared = false) => {
     setNewServiceClientType('walkin');
     setNewServiceClientId('');
     setNewServiceWalkInName('');
     setNewServiceWalkInPhone('+237 ');
-    setNewServiceIntroducedById('');
-    setNewServiceLines([
-      {
-        id: Date.now(),
-        serviceId: '',
-        serviceName: '',
-        technicianId: '',
-        technicianName: '',
-        price: '',
-        product: '',
-      },
-    ]);
+    setNewServiceIntroducedById(isMarketer ? String(user?.id) : '');
+
+    const tech1Id = isTechnician
+      ? String(user?.id)
+      : activeTechnicians[0]?.id
+        ? String(activeTechnicians[0].id)
+        : '';
+    const tech1Name = isTechnician
+      ? user?.name || ''
+      : activeTechnicians[0]?.name || '';
+
+    const otherTech =
+      activeTechnicians.find((t) => String(t.id) !== String(tech1Id)) ||
+      activeTechnicians[1] ||
+      activeTechnicians[0];
+    const tech2Id = otherTech?.id ? String(otherTech.id) : '';
+    const tech2Name = otherTech?.name || '';
+
+    if (isShared) {
+      setNewServiceLines([
+        {
+          id: Date.now(),
+          serviceId: '',
+          serviceName: '',
+          technicianId: tech1Id,
+          technicianName: tech1Name,
+          price: '',
+          product: '',
+        },
+        {
+          id: Date.now() + 1,
+          serviceId: '',
+          serviceName: '',
+          technicianId: tech2Id,
+          technicianName: tech2Name,
+          price: '',
+          product: '',
+        },
+      ]);
+    } else {
+      setNewServiceLines([
+        {
+          id: Date.now(),
+          serviceId: '',
+          serviceName: '',
+          technicianId: tech1Id,
+          technicianName: tech1Name,
+          price: '',
+          product: '',
+        },
+      ]);
+    }
+
     setNewServiceRetailCart([]);
     setShowRetailInServiceModal(false);
     setNewServiceRetailTab('drinks');
     setNewServiceNotes('');
     setNewServicePaymentMethod('CASH');
+    setNewServiceIsSplit(false);
+    setNewServiceSplitCash('');
+    setNewServiceSplitMomo('');
+    setNewServiceSplitOrange('');
     setNewServiceActionChoice('pending');
     setNewServiceError('');
     setShowNewServiceModal(true);
   };
 
+  const addSharedWorkLine = () => {
+    const assignedTechIds = new Set(
+      newServiceLines.map((l) => String(l.technicianId)).filter(Boolean)
+    );
+    const nextTech =
+      activeTechnicians.find((t) => !assignedTechIds.has(String(t.id))) ||
+      activeTechnicians[0];
+
+    // Ensure line 1 has technician assigned
+    if (newServiceLines.length > 0 && !newServiceLines[0].technicianId) {
+      const defaultFirstTech = isTechnician ? user : activeTechnicians[0];
+      if (defaultFirstTech) {
+        handleTechnicianLineSelect(0, String(defaultFirstTech.id));
+      }
+    }
+
+    setNewServiceLines((prev) => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        serviceId: '',
+        serviceName: '',
+        technicianId: nextTech ? String(nextTech.id) : '',
+        technicianName: nextTech ? nextTech.name : '',
+        price: '',
+        product: '',
+      },
+    ]);
+  };
+
   const closeNewServiceModal = () => {
     setShowNewServiceModal(false);
+    setNewServiceIsSplit(false);
+    setNewServiceSplitCash('');
+    setNewServiceSplitMomo('');
+    setNewServiceSplitOrange('');
     setNewServiceError('');
   };
 
@@ -1121,6 +1554,11 @@ export default function PendingInvoices() {
     if (isSubmittingServiceInvoice) return;
     setNewServiceError('');
 
+    // Safety guard: Marketer & Technician cannot collect payment directly
+    if (isMarketer || isTechnician) {
+      collectNow = false;
+    }
+
     // 1. Client Validation
     let resolvedClient = null;
     let clientName = '';
@@ -1175,6 +1613,11 @@ export default function PendingInvoices() {
       return;
     }
 
+    if (collectNow && newServiceIsSplit && !newServiceSplitIsValid) {
+      setNewServiceError('Split amounts must exactly match the invoice grand total.');
+      return;
+    }
+
     // 3. Retail stock validation
     for (const item of newServiceRetailCart) {
       const source = item.type === 'drink' ? drinks : cosmetics;
@@ -1188,7 +1631,9 @@ export default function PendingInvoices() {
     }
 
     // 4. Referral Staff
-    const refStaff = referralStaff.find((s) => String(s.id) === String(newServiceIntroducedById));
+    const refStaff = isMarketer
+      ? (allUsers?.find((s) => String(s.id) === String(user?.id)) || { id: user?.id, name: user?.name })
+      : referralStaff.find((s) => String(s.id) === String(newServiceIntroducedById));
 
     setIsSubmittingServiceInvoice(true);
     try {
@@ -1203,20 +1648,38 @@ export default function PendingInvoices() {
         minute: '2-digit',
       });
 
-      const formattedServices = newServiceLines.map((line) => ({
-        serviceId: line.serviceId,
-        service: line.serviceName,
-        name: line.serviceName,
-        technician: line.technicianName,
-        technicianId: line.technicianId,
-        price:
-          typeof line.price === 'number'
-            ? line.price
-            : parseInt(String(line.price).replace(/[^0-9]/g, ''), 10) || 0,
-        product: line.product || null,
-        category: 'SERVICES',
-        type: 'service',
-      }));
+      const formattedServices = newServiceLines
+        .filter((line) => line.serviceName || line.serviceId || Number(line.price) > 0)
+        .map((line) => {
+          const lineTechId = line.technicianId || (isTechnician ? String(user?.id) : '');
+          const lineTechName = line.technicianName || (isTechnician ? (user?.name || '') : '');
+          return {
+            serviceId: line.serviceId,
+            service: line.serviceName,
+            name: line.serviceName,
+            technician: lineTechName,
+            technicianId: lineTechId,
+            price:
+              typeof line.price === 'number'
+                ? line.price
+                : parseInt(String(line.price).replace(/[^0-9]/g, ''), 10) || 0,
+            product: line.product || null,
+            category: 'SERVICES',
+            type: 'service',
+          };
+        });
+
+      // Build split list if split mode active and collecting now
+      const splits = [];
+      if (collectNow && newServiceIsSplit) {
+        if (newServiceCashNum > 0) splits.push({ amount: newServiceCashNum, method: 'CASH', paymentMethod: 'CASH' });
+        if (newServiceMomoNum > 0) splits.push({ amount: newServiceMomoNum, method: 'MTN_MOMO', paymentMethod: 'MTN_MOMO' });
+        if (newServiceOrangeNum > 0) splits.push({ amount: newServiceOrangeNum, method: 'ORANGE_MONEY', paymentMethod: 'ORANGE_MONEY' });
+      }
+
+      const effectivePaymentMethod = collectNow && newServiceIsSplit
+        ? splits.map((s) => `${s.paymentMethod.replace(/_/g, ' ')} (${s.amount.toLocaleString('en-US')})`).join(' + ')
+        : newServicePaymentMethod;
 
       // Create invoice via InvoiceContext
       const invoice = await createWalkInServiceInvoice({
@@ -1227,10 +1690,13 @@ export default function PendingInvoices() {
         services: formattedServices,
         retailItems: newServiceRetailCart,
         status: collectNow ? 'PAID' : 'PENDING_PAYMENT',
-        paymentMethod: collectNow ? newServicePaymentMethod : null,
+        paymentMethod: collectNow ? effectivePaymentMethod : null,
+        splits: collectNow && newServiceIsSplit ? splits : [],
         notes: newServiceNotes,
         introducedBy: refStaff ? refStaff.name : null,
         introducedById: refStaff ? refStaff.id : null,
+        createdById: user?.id || null,
+        createdByName: user?.name || null,
         discount: 0,
       });
 
@@ -1244,7 +1710,7 @@ export default function PendingInvoices() {
         if (newServiceRetailCart.length > 0 && typeof recordRetailSale === 'function') {
           recordRetailSale({
             amount: newServiceRetailTotal,
-            payment: newServicePaymentMethod,
+            payment: effectivePaymentMethod,
             items: newServiceRetailCart,
             clientName,
             isWalkIn: !resolvedClient,
@@ -1274,7 +1740,7 @@ export default function PendingInvoices() {
               technician: item.technician,
               product: item.product,
               price: itemFinalPriceStr,
-              paymentMethod: newServicePaymentMethod,
+              paymentMethod: effectivePaymentMethod,
               date: today,
               time: timeStr,
               introducedBy: invoice.introducedBy,
@@ -1301,7 +1767,7 @@ export default function PendingInvoices() {
               servicePrice: itemPriceNum,
               clientName: invoice.clientName,
               date: today,
-              paymentMethod: newServicePaymentMethod,
+              paymentMethod: effectivePaymentMethod,
               invoiceId: invoice.id,
               introducedBy: invoice.introducedBy,
               introducedById: invoice.introducedById,
@@ -1343,7 +1809,7 @@ export default function PendingInvoices() {
         setExpandedId(invoice?.id);
         setReceiptInvoice(invoice);
         setPaymentSuccessNotice(
-          `Walk-in service completed for ${clientName} (${newServiceGrandTotal.toLocaleString('en-US')} FCFA via ${newServicePaymentMethod}). Receipt opened.`
+          `Walk-in service completed for ${clientName} (${newServiceGrandTotal.toLocaleString('en-US')} FCFA via ${effectivePaymentMethod}). Receipt opened.`
         );
         setTimeout(() => setPaymentSuccessNotice(null), 5000);
       } else {
@@ -1370,7 +1836,7 @@ export default function PendingInvoices() {
     setCollectingId(invoice.id);
 
     try {
-      const payment = formatPaymentMethod(paymentMethods[invoice.id] || 'CASH');
+      let payment = formatPaymentMethod(paymentMethods[invoice.id] || 'CASH');
 
       const today = new Date().toLocaleDateString('en-GB', {
         day: 'numeric',
@@ -1398,7 +1864,14 @@ export default function PendingInvoices() {
       }
 
       const clientId = invoice.clientId;
-      const clientLoyalty = getClientLoyalty(clientId);
+      const clientObj = getClient(clientId) || invoice.client;
+      const rawLoyalty = getClientLoyalty(clientId);
+      const availablePoints = Math.max(
+        Number(rawLoyalty?.balance) || 0,
+        Number(clientObj?.loyaltyPoints) || 0,
+        Number(invoice.client?.loyaltyPoints) || 0
+      );
+      const clientLoyalty = { ...rawLoyalty, balance: availablePoints };
 
       // Calculate loyalty redemption
       const rs = redeemState[invoice.id] || {};
@@ -1407,8 +1880,45 @@ export default function PendingInvoices() {
         rs.wantRedeem && enteredPts > 0
           ? Math.min(clientLoyalty.balance, enteredPts)
           : 0;
-      const discountAmount = calculateDiscount(validPtsToRedeem);
+      const loyaltyDiscountAmount = calculateDiscount(validPtsToRedeem);
+
+      // Calculate marketer prospect promo discount
+      const aptForPromo = invoice.appointmentId
+        ? appointments.find((a) => String(a.id) === String(invoice.appointmentId))
+        : null;
+      const parsedAptPromo = aptForPromo?.notes?.match(/(\d+)%\s*Discount/i)?.[1]
+        ? parseInt(aptForPromo.notes.match(/(\d+)%\s*Discount/i)[1], 10)
+        : 0;
+      const prospectPercent = prospectDiscounts[invoice.id] !== undefined ? prospectDiscounts[invoice.id] : parsedAptPromo;
+      const prospectDiscountAmount = Math.round((Number(invoice.total || 0) * prospectPercent) / 100);
+      const discountAmount = loyaltyDiscountAmount + prospectDiscountAmount;
       const finalTotal = Math.max(0, invoice.total - discountAmount);
+
+      const paidSoFar = Array.isArray(invoice.payments)
+        ? invoice.payments.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+        : Number(invoice.paidAmount || 0);
+      const remainingDue = Math.max(0, finalTotal - paidSoFar);
+
+      const splitData = getInvoiceSplitData(invoice.id, remainingDue);
+      let splitList = [];
+      if (splitData.isSplit) {
+        if (!splitData.isValid) {
+          setPaymentSuccessNotice(
+            `Cannot collect: Split amounts (${splitData.totalSplit.toLocaleString()} FCFA) must match Net Due (${remainingDue.toLocaleString()} FCFA).`
+          );
+          setTimeout(() => setPaymentSuccessNotice(null), 5000);
+          setCollectingId(null);
+          return;
+        }
+
+        if (splitData.cashNum > 0) splitList.push({ method: 'CASH', amount: splitData.cashNum });
+        if (splitData.momoNum > 0) splitList.push({ method: 'MTN_MOMO', amount: splitData.momoNum });
+        if (splitData.orangeNum > 0) splitList.push({ method: 'ORANGE_MONEY', amount: splitData.orangeNum });
+
+        payment = splitList
+          .map((s) => `${s.method.replace('_', ' ')}: ${s.amount.toLocaleString()} FCFA`)
+          .join(' + ');
+      }
 
       // Loyalty: calculate earned points from SERVICE items ONLY (retail excluded)
       const serviceItemsForLoyalty = invoice.items.filter(
@@ -1427,11 +1937,11 @@ export default function PendingInvoices() {
 
       // 1. Redeem points if applicable
       if (rs.wantRedeem && validPtsToRedeem >= settings.minPointsToRedeem) {
-        redeemPoints(clientId, {
-          pointsToRedeem: validPtsToRedeem,
-          serviceName: invoice.items.map((it) => it.service).join(', '),
-          date: today,
-        });
+        try {
+          await redeemPoints(invoice.id, validPtsToRedeem);
+        } catch (redeemErr) {
+          console.warn('Backend loyalty redemption error:', redeemErr);
+        }
       }
 
       // 2. For each service item, record operations (idempotent)
@@ -1453,16 +1963,16 @@ export default function PendingInvoices() {
         const itemFinalPriceStr = itemFinalPrice.toLocaleString('en-US');
         const itemSvcId = item.appointmentServiceId || item.id;
 
-        if (!isServiceClosed(itemSvcId, item.appointmentId)) {
+        if (!isServiceClosed(itemSvcId, item.appointmentId || invoice.appointmentId || invoice.id)) {
           closeServiceRecord({
-            appointmentId: item.appointmentId,
+            appointmentId: item.appointmentId || invoice.appointmentId || invoice.id,
             appointmentServiceId: itemSvcId,
             clientId: clientId,
             clientName: invoice.clientName,
             service: item.service,
             technician: item.technician,
             product: item.product,
-            price: itemFinalPriceStr,
+            price: itemFinalPrice,
             payment,
             date: today,
           });
@@ -1572,14 +2082,32 @@ export default function PendingInvoices() {
           if (comm) generatedCommissions.push(comm);
         });
       }
-
       // 7. Mark invoice paid (NOT removed — moved to Paid Today & History)
-      const paidInv = await markInvoicePaid(invoice.id, payment, {
-        discount: discountAmount,
-        finalTotal,
-        pointsEarned: earnedPts,
-        pointsRedeemed: validPtsToRedeem,
-      });
+      let paidInv;
+      if (splitData.isSplit && splitList.length > 0) {
+        paidInv = await recordSplitPayment(invoice.id, splitList, {
+          discount: discountAmount,
+          finalTotal: remainingDue,
+          amount: remainingDue,
+          pointsEarned: earnedPts,
+          pointsRedeemed: validPtsToRedeem,
+          notes: `Split payment: ${payment}`,
+        });
+      } else {
+        paidInv = await markInvoicePaid(invoice.id, payment, {
+          discount: discountAmount,
+          finalTotal: remainingDue,
+          amount: remainingDue,
+          pointsEarned: earnedPts,
+          pointsRedeemed: validPtsToRedeem,
+        });
+      }
+
+      if (typeof refreshInvoices === 'function') {
+        try {
+          await refreshInvoices();
+        } catch (rErr) { }
+      }
 
       // Switch to Paid Today tab and expand the paid invoice
       const commTotal = generatedCommissions.reduce((sum, c) => sum + c.commissionAmount, 0);
@@ -1588,11 +2116,17 @@ export default function PendingInvoices() {
         : '';
 
       setActiveTab('paid-today');
-      setExpandedId(invoice.id);
+      setExpandedId(paidInv?.id || invoice.id);
       setPaymentSuccessNotice(
-        `Payment collected for ${invoice.clientName} (${finalTotal.toLocaleString('en-US')} FCFA via ${payment.toUpperCase()}).${commNotice} Moved to Paid Today.`
+        `Payment collected for ${invoice.clientName} (${remainingDue.toLocaleString('en-US')} FCFA via ${payment.toUpperCase()}).${commNotice} Moved to Paid Today.`
       );
       setTimeout(() => setPaymentSuccessNotice(null), 6000);
+
+      // Feedback rating link is automatically dispatched by backend on payment collection
+      setWhatsAppFeedback((prev) => ({
+        ...prev,
+        [invoice.id]: '⭐ Feedback request sent to client on WhatsApp!',
+      }));
     } catch (err) {
       console.error('Payment collection error:', err);
       setPaymentSuccessNotice(`Payment error: ${err?.message || 'Could not complete payment'}`);
@@ -1606,17 +2140,26 @@ export default function PendingInvoices() {
   const handleSendWhatsAppReceipt = async (invoice, forceResend = false) => {
     if (!invoice) return;
     const client = getClient(invoice.clientId);
-    const phone = client?.whatsapp || client?.phone || invoice.clientPhone || invoice.phone;
+    let phone = invoice.clientPhone || invoice.phone || client?.whatsapp || client?.phone;
 
     if (!phone) {
-      setWhatsAppFeedback((prev) => ({
-        ...prev,
-        [invoice.id]: `Cannot send: No phone number on file for ${invoice.clientName || 'this client'}.`,
-      }));
-      setTimeout(() => {
-        setWhatsAppFeedback((prev) => ({ ...prev, [invoice.id]: null }));
-      }, 5000);
-      return;
+      const enteredPhone = window.prompt(
+        `No phone number on file for ${invoice.clientName || 'this walk-in client'}.\nPlease enter WhatsApp number (e.g. +2376XXXXXXXX):`,
+        '+237 '
+      );
+      if (!enteredPhone || !enteredPhone.trim() || enteredPhone.trim() === '+237' || enteredPhone.trim() === '+237 ') {
+        setWhatsAppFeedback((prev) => ({
+          ...prev,
+          [invoice.id]: `Cannot send: No phone number entered for ${invoice.clientName || 'this client'}.`,
+        }));
+        setTimeout(() => {
+          setWhatsAppFeedback((prev) => ({ ...prev, [invoice.id]: null }));
+        }, 5000);
+        return;
+      }
+      phone = enteredPhone.trim();
+      invoice.clientPhone = phone;
+      invoice.phone = phone;
     }
 
     // If already sent once, warn user and require confirmation click
@@ -1655,16 +2198,14 @@ export default function PendingInvoices() {
       try {
         let feedbackUrl = '';
         try {
-          if (invoice.clientId && isUUID(invoice.clientId)) {
-            const fbRes = await createFeedbackRequest({
-              clientId: invoice.clientId,
-              clientName: invoice.clientName,
-              appointmentId: isUUID(invoice.appointmentId) ? invoice.appointmentId : undefined,
-              service: invoice.items.map((it) => it.service || it.name).join(', '),
-              technician: invoice.items.map((it) => it.technician || 'Staff').join(', '),
-            });
-            feedbackUrl = fbRes?.url || '';
-          }
+          const fbRes = await createFeedbackRequest({
+            clientId: invoice.clientId,
+            clientName: invoice.clientName,
+            appointmentId: isUUID(invoice.appointmentId) ? invoice.appointmentId : undefined,
+            service: (invoice.items || []).map((it) => it.service || it.name).join(', '),
+            technician: (invoice.items || []).map((it) => it.technician || 'Staff').join(', '),
+          });
+          feedbackUrl = fbRes?.url || '';
         } catch (_) { }
 
         const message = buildReceiptWhatsAppMessage(
@@ -1714,8 +2255,14 @@ export default function PendingInvoices() {
   return (
     <div>
       <PageHeader
-        title={isTechnician ? "My Invoices" : "Invoices"}
-        subtitle={isTechnician ? "View your service invoices and payment status." : "Reception & Manager Invoices Management."}
+        title={isMarketer ? "Marketer Invoices" : isTechnician ? "My Invoices" : "Invoices"}
+        subtitle={
+          isMarketer
+            ? "Create service invoices for your clients and track pending payment."
+            : isTechnician
+              ? "View your service invoices and payment status."
+              : "Reception & Manager Invoices Management."
+        }
         action={
           <div className="flex items-center gap-2">
             <Button
@@ -1739,8 +2286,9 @@ export default function PendingInvoices() {
             {canCreateInvoice && (
               <Button
                 variant="primary"
-                onClick={openNewServiceModal}
+                onClick={() => openNewServiceModal(false)}
                 title="Create Walk-In / Service Invoice"
+                className="gap-1.5"
               >
                 <Sparkles size={15} strokeWidth={2.2} />
                 <span>+ New Service</span>
@@ -1755,8 +2303,8 @@ export default function PendingInvoices() {
         <div
           onClick={() => setActiveTab('pending')}
           className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${activeTab === 'pending'
-              ? 'border-warning ring-2 ring-warning/20'
-              : 'border-border hover:border-warning/50'
+            ? 'border-warning ring-2 ring-warning/20'
+            : 'border-border hover:border-warning/50'
             }`}
         >
           <p className="text-[10px] sm:text-xs text-muted-gray uppercase tracking-wider font-semibold truncate">
@@ -1770,8 +2318,8 @@ export default function PendingInvoices() {
         <div
           onClick={() => setActiveTab('paid-today')}
           className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${activeTab === 'paid-today'
-              ? 'border-success ring-2 ring-success/20'
-              : 'border-border hover:border-success/50'
+            ? 'border-success ring-2 ring-success/20'
+            : 'border-border hover:border-success/50'
             }`}
         >
           <p className="text-[10px] sm:text-xs text-muted-gray uppercase tracking-wider font-semibold truncate">
@@ -1785,8 +2333,8 @@ export default function PendingInvoices() {
         <div
           onClick={() => setActiveTab('history')}
           className={`bg-white border rounded-[14px] p-3 sm:p-4 shadow-card cursor-pointer transition-all ${activeTab === 'history'
-              ? 'border-sage ring-2 ring-sage/20'
-              : 'border-border hover:border-sage/50'
+            ? 'border-sage ring-2 ring-sage/20'
+            : 'border-border hover:border-sage/50'
             }`}
         >
           <p className="text-[10px] sm:text-xs text-muted-gray uppercase tracking-wider font-semibold truncate">
@@ -1819,15 +2367,15 @@ export default function PendingInvoices() {
         <button
           onClick={() => setActiveTab('pending')}
           className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'pending'
-              ? 'border-sage text-charcoal font-bold'
-              : 'border-transparent text-muted-gray hover:text-charcoal'
+            ? 'border-sage text-charcoal font-bold'
+            : 'border-transparent text-muted-gray hover:text-charcoal'
             }`}
         >
           <span>Pending</span>
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-medium ${activeTab === 'pending'
-                ? 'bg-warning-soft text-warning'
-                : 'bg-soft-cream text-muted-gray'
+              ? 'bg-warning-soft text-warning'
+              : 'bg-soft-cream text-muted-gray'
               }`}
           >
             {pendingInvoices.length}
@@ -1837,15 +2385,15 @@ export default function PendingInvoices() {
         <button
           onClick={() => setActiveTab('paid-today')}
           className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'paid-today'
-              ? 'border-sage text-charcoal font-bold'
-              : 'border-transparent text-muted-gray hover:text-charcoal'
+            ? 'border-sage text-charcoal font-bold'
+            : 'border-transparent text-muted-gray hover:text-charcoal'
             }`}
         >
           <span>Paid Today</span>
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-medium ${activeTab === 'paid-today'
-                ? 'bg-success-soft text-success'
-                : 'bg-soft-cream text-muted-gray'
+              ? 'bg-success-soft text-success'
+              : 'bg-soft-cream text-muted-gray'
               }`}
           >
             {paidTodayInvoices.length}
@@ -1855,15 +2403,15 @@ export default function PendingInvoices() {
         <button
           onClick={() => setActiveTab('history')}
           className={`pb-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === 'history'
-              ? 'border-sage text-charcoal font-bold'
-              : 'border-transparent text-muted-gray hover:text-charcoal'
+            ? 'border-sage text-charcoal font-bold'
+            : 'border-transparent text-muted-gray hover:text-charcoal'
             }`}
         >
           <span>History</span>
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-medium ${activeTab === 'history'
-                ? 'bg-sage-soft text-sage'
-                : 'bg-soft-cream text-muted-gray'
+              ? 'bg-sage-soft text-sage'
+              : 'bg-soft-cream text-muted-gray'
               }`}
           >
             {historyInvoices.length}
@@ -1885,7 +2433,11 @@ export default function PendingInvoices() {
               </p>
               {canCreateInvoice ? (
                 <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
-                  <Button variant="primary" onClick={openNewServiceModal}>
+                  <Button
+                    variant="primary"
+                    onClick={() => openNewServiceModal(false)}
+                    className="gap-1.5"
+                  >
                     <Sparkles size={15} strokeWidth={2.2} />
                     <span>+ New Service Invoice</span>
                   </Button>
@@ -1907,20 +2459,42 @@ export default function PendingInvoices() {
               {pendingInvoices.map((invoice) => {
                 const isExpanded = expandedId === invoice.id;
                 const selectedPayment = formatPaymentMethod(paymentMethods[invoice.id] || 'CASH');
-                const clientLoyalty = getClientLoyalty(invoice.clientId);
+                const clientObj = getClient(invoice.clientId) || invoice.client;
+                const rawLoyalty = getClientLoyalty(invoice.clientId);
+                const availablePoints = Math.max(
+                  Number(rawLoyalty?.balance) || 0,
+                  Number(clientObj?.loyaltyPoints) || 0,
+                  Number(invoice.client?.loyaltyPoints) || 0
+                );
+                const clientLoyalty = { ...rawLoyalty, balance: availablePoints };
                 const rs = redeemState[invoice.id] || {};
                 const enteredPts = parseInt(rs.points, 10) || 0;
                 const validPtsToRedeem =
                   rs.wantRedeem && enteredPts > 0
                     ? Math.min(clientLoyalty.balance, enteredPts)
                     : 0;
-                const discountAmount = calculateDiscount(validPtsToRedeem);
-                const finalTotal = Math.max(0, invoice.total - discountAmount);
-                const invNum = formatInvoiceNumber(invoice);
+                const loyaltyDiscountAmount = calculateDiscount(validPtsToRedeem);
 
                 const linkedApt = invoice.appointmentId
                   ? appointments.find((a) => String(a.id) === String(invoice.appointmentId))
                   : null;
+                const parsedAptPromo = linkedApt?.notes?.match(/(\d+)%\s*Discount/i)?.[1]
+                  ? parseInt(linkedApt.notes.match(/(\d+)%\s*Discount/i)[1], 10)
+                  : 0;
+                const prospectPercent = prospectDiscounts[invoice.id] !== undefined ? prospectDiscounts[invoice.id] : parsedAptPromo;
+                const prospectDiscountAmount = Math.round((Number(invoice.total || 0) * prospectPercent) / 100);
+                const discountAmount = loyaltyDiscountAmount + prospectDiscountAmount;
+                const finalTotal = Math.max(0, invoice.total - discountAmount);
+
+                const paidSoFar = Array.isArray(invoice.payments)
+                  ? invoice.payments.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+                  : Number(invoice.paidAmount || 0);
+                const remainingDue = Math.max(0, finalTotal - paidSoFar);
+
+                const isSplit = isInvoiceSplit(invoice.id);
+                const splitData = getInvoiceSplitData(invoice.id, remainingDue);
+                const invNum = formatInvoiceNumber(invoice);
+
                 const techItems = invoice.items
                   .map((it) =>
                     it.technician && it.technician !== 'Staff' && it.technician !== 'Technician'
@@ -1968,18 +2542,42 @@ export default function PendingInvoices() {
                               <User size={11} className="text-sage shrink-0" />
                               <span>Tech: {techDisplay}</span>
                             </span>
+                            {techItems.length > 1 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#2C422E] bg-[#E8F2E6] px-2 py-0.5 rounded-[6px] border border-[#B7CEB3]">
+                                <Users size={11} className="text-[#3D5A40] shrink-0" />
+                                <span>Shared Work ({techItems.length} Techs)</span>
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 w-full sm:w-auto pt-2 sm:pt-0 border-t border-border/40 sm:border-0">
                         <div className="flex items-center gap-2.5">
-                          <span className="text-sm font-bold text-charcoal">
-                            {invoice.total.toLocaleString('en-US')}{' '}
-                            <span className="text-xs font-normal">FCFA</span>
-                          </span>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-[6px] bg-warning-soft text-warning border border-warning/30">
-                            Pending
+                          {paidSoFar > 0 ? (
+                            <div className="text-right">
+                              <span className="text-sm font-extrabold text-charcoal block">
+                                {remainingDue.toLocaleString('en-US')}{' '}
+                                <span className="text-xs font-normal">FCFA</span>
+                              </span>
+                              <span className="text-[10px] text-muted-gray font-medium">
+                                Due ({paidSoFar.toLocaleString('en-US')} paid)
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm font-bold text-charcoal">
+                              {invoice.total.toLocaleString('en-US')}{' '}
+                              <span className="text-xs font-normal">FCFA</span>
+                            </span>
+                          )}
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-[6px] ${
+                              paidSoFar > 0
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-warning-soft text-warning border border-warning/30'
+                            }`}
+                          >
+                            {paidSoFar > 0 ? 'Partial' : 'Pending'}
                           </span>
                         </div>
                         {isExpanded ? (
@@ -1993,6 +2591,21 @@ export default function PendingInvoices() {
                     {/* Expanded Review & Payment Section */}
                     {isExpanded && (
                       <div className="px-5 pb-5 pt-0 border-t border-border">
+                        {/* Partial Payment Notice Banner */}
+                        {paidSoFar > 0 && (
+                          <div className="mt-4 mb-2 p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-[12px] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-2">
+                              <Clock size={16} className="text-amber-600 shrink-0" />
+                              <div>
+                                <span className="font-bold text-amber-950">Partial Payment Already Recorded: </span>
+                                <span className="text-amber-800 font-semibold">{paidSoFar.toLocaleString('en-US')} FCFA paid</span>
+                              </div>
+                            </div>
+                            <span className="font-extrabold text-amber-900 bg-amber-100 px-2.5 py-1 rounded-[6px] border border-amber-200 text-right sm:text-left">
+                              Remaining to Settle: {remainingDue.toLocaleString('en-US')} FCFA
+                            </span>
+                          </div>
+                        )}
                         {/* Invoice Items (Services + Drinks + Cosmetics) */}
                         <div className="mt-4 mb-4">
                           <div className="flex items-center justify-between mb-2">
@@ -2126,73 +2739,316 @@ export default function PendingInvoices() {
                               </div>
                             </div>
 
-                            {/* Payment Method Selector */}
-                            <div className="mb-5">
-                              <p className="text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-2">
-                                Payment Method:
-                              </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                {PAYMENT_METHODS.map((pm) => {
-                                  const isSelected = selectedPayment === pm.key;
-                                  return (
-                                    <button
-                                      key={pm.key}
-                                      type="button"
-                                      onClick={() => setPaymentMethod(invoice.id, pm.key)}
-                                      className={`h-[44px] px-3.5 rounded-[11px] text-xs font-bold border transition-all duration-150 cursor-pointer flex items-center justify-start gap-2.5 ${isSelected
-                                          ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
-                                          : 'bg-white border-border text-charcoal/80 hover:border-sage/40 hover:bg-soft-cream/30'
-                                        }`}
-                                    >
-                                      <span
-                                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${isSelected
-                                            ? 'border-sage bg-sage'
-                                            : 'border-muted-gray/50 bg-white'
-                                          }`}
-                                      >
-                                        {isSelected && (
-                                          <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                                        )}
-                                      </span>
-                                      <span>{pm.label}</span>
-                                    </button>
-                                  );
-                                })}
+                            {/* Marketer Prospecting Promo Discount (5%, 10%, 15%, 20%) */}
+                            <div className="p-3.5 bg-warm-ivory/50 border border-border/80 rounded-[12px] space-y-2 mb-4">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-charcoal flex items-center gap-1.5">
+                                  <Award size={14} className="text-[#8B6E58]" />
+                                  Marketer Prospect Welcome Promo
+                                </span>
+                                {prospectPercent > 0 && (
+                                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                    -{prospectDiscountAmount.toLocaleString('en-US')} FCFA ({prospectPercent}%)
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {[0, 5, 10, 15, 20].map((rate) => (
+                                  <button
+                                    key={rate}
+                                    type="button"
+                                    onClick={() => setProspectDiscounts((prev) => ({ ...prev, [invoice.id]: rate }))}
+                                    className={`px-2.5 py-1 rounded-[8px] text-xs font-semibold border transition-all cursor-pointer ${prospectPercent === rate
+                                      ? 'bg-charcoal text-white border-charcoal font-bold shadow-2xs'
+                                      : 'bg-white text-charcoal border-border hover:bg-soft-cream'
+                                      }`}
+                                  >
+                                    {rate === 0 ? 'No Promo (0%)' : `${rate}% Off`}
+                                  </button>
+                                ))}
                               </div>
                             </div>
 
-                            {/* Collect Payment CTA */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
-                              <div className="text-xs text-muted-gray">
-                                Collecting will mark status as{' '}
-                                <span className="font-bold text-success">PAID</span> and move
-                                to Paid Today.
-                              </div>
-                              <Button
-                                className="w-full sm:w-auto min-w-[220px]"
-                                disabled={Boolean(collectingId)}
-                                onClick={() => handleCollectPayment(invoice)}
-                              >
-                                {collectingId === invoice.id ? (
-                                  <>
-                                    <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
-                                    <span>Collecting Payment...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
-                                    <span>
-                                      Collect Payment (
-                                      {(discountAmount > 0
-                                        ? finalTotal
-                                        : invoice.total
-                                      ).toLocaleString('en-US')}{' '}
-                                      FCFA)
-                                    </span>
-                                  </>
+                            {/* Payment Mode Selector: Single vs Split */}
+                            <div className="mb-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-[10px] font-bold text-muted-gray uppercase tracking-wider">
+                                  Payment Mode:
+                                </p>
+                                {isSplit && (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8B6E58] bg-[#F5EFEB] px-2 py-0.5 rounded-full border border-[#D8C7BC]">
+                                    <Layers size={12} />
+                                    Split Payment Active
+                                  </span>
                                 )}
-                              </Button>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 p-1 bg-soft-cream/60 rounded-[12px] border border-border/80">
+                                <button
+                                  type="button"
+                                  onClick={() => setInvoiceSplitMode(invoice.id, false)}
+                                  className={`py-2 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                    !isSplit
+                                      ? 'bg-white text-charcoal shadow-2xs border border-border'
+                                      : 'text-muted-gray hover:text-charcoal'
+                                  }`}
+                                >
+                                  <span>Single Payment</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setInvoiceSplitMode(invoice.id, true)}
+                                  className={`py-2 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                    isSplit
+                                      ? 'bg-charcoal text-white shadow-2xs border border-charcoal font-bold'
+                                      : 'text-muted-gray hover:text-charcoal'
+                                  }`}
+                                >
+                                  <Layers size={13} />
+                                  <span>Split Payment (Multi-Method)</span>
+                                </button>
+                              </div>
                             </div>
+
+                            {/* Payment Method Selector or Split Payment Inputs */}
+                            {!isSplit ? (
+                              <div className="mb-5">
+                                <p className="text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-2">
+                                  Payment Method:
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                  {PAYMENT_METHODS.map((pm) => {
+                                    const isSelected = selectedPayment === pm.key;
+                                    return (
+                                      <button
+                                        key={pm.key}
+                                        type="button"
+                                        onClick={() => setPaymentMethod(invoice.id, pm.key)}
+                                        className={`h-[44px] px-3.5 rounded-[11px] text-xs font-bold border transition-all duration-150 cursor-pointer flex items-center justify-start gap-2.5 ${
+                                          isSelected
+                                            ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                                            : 'bg-white border-border text-charcoal/80 hover:border-sage/40 hover:bg-soft-cream/30'
+                                        }`}
+                                      >
+                                        <span
+                                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                            isSelected
+                                              ? 'border-sage bg-sage'
+                                              : 'border-muted-gray/50 bg-white'
+                                          }`}
+                                        >
+                                          {isSelected && (
+                                            <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                          )}
+                                        </span>
+                                        <span>{pm.label}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mb-5 p-4 bg-warm-ivory/50 rounded-[14px] border border-border/90 space-y-3.5">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <div>
+                                    <span className="text-xs font-bold text-charcoal flex items-center gap-1.5">
+                                      <Layers size={14} className="text-sage" />
+                                      Enter Amounts per Payment Method
+                                    </span>
+                                    <p className="text-[11px] text-muted-gray mt-0.5">
+                                      Combine Cash, MTN MoMo, or Orange Money to settle this invoice.
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickSplit5050(invoice.id, remainingDue)}
+                                      className="px-2.5 py-1 text-[11px] font-semibold bg-white border border-border rounded-[7px] text-charcoal hover:bg-soft-cream cursor-pointer transition-colors shadow-2xs"
+                                    >
+                                      50 / 50 Cash & MoMo
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleClearSplit(invoice.id)}
+                                      className="px-2 py-1 text-[11px] font-medium text-muted-gray hover:text-rose-600 cursor-pointer transition-colors"
+                                    >
+                                      Clear
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                  {/* Cash */}
+                                  <div className="p-3 bg-white rounded-[10px] border border-border/80 focus-within:border-sage focus-within:ring-1 focus-within:ring-sage/30 transition-all">
+                                    <label className="flex items-center justify-between text-[11px] font-bold text-charcoal uppercase tracking-wider mb-1.5">
+                                      <span>💵 Cash (FCFA)</span>
+                                      {splitData.cashNum > 0 && (
+                                        <span className="text-sage font-mono text-[10px]">
+                                          {((splitData.cashNum / (remainingDue || 1)) * 100).toFixed(0)}%
+                                        </span>
+                                      )}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      placeholder="0"
+                                      value={splitData.cash}
+                                      onChange={(e) => setInvoiceSplitAmount(invoice.id, 'cash', e.target.value)}
+                                      className="w-full text-base font-bold text-charcoal outline-none bg-transparent"
+                                    />
+                                  </div>
+
+                                  {/* MTN MoMo */}
+                                  <div className="p-3 bg-white rounded-[10px] border border-border/80 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400/30 transition-all">
+                                    <label className="flex items-center justify-between text-[11px] font-bold text-charcoal uppercase tracking-wider mb-1.5">
+                                      <span>📱 MTN MoMo (FCFA)</span>
+                                      {splitData.momoNum > 0 && (
+                                        <span className="text-amber-600 font-mono text-[10px]">
+                                          {((splitData.momoNum / (remainingDue || 1)) * 100).toFixed(0)}%
+                                        </span>
+                                      )}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      placeholder="0"
+                                      value={splitData.momo}
+                                      onChange={(e) => setInvoiceSplitAmount(invoice.id, 'momo', e.target.value)}
+                                      className="w-full text-base font-bold text-charcoal outline-none bg-transparent"
+                                    />
+                                  </div>
+
+                                  {/* Orange Money */}
+                                  <div className="p-3 bg-white rounded-[10px] border border-border/80 focus-within:border-orange-400 focus-within:ring-1 focus-within:ring-orange-400/30 transition-all">
+                                    <label className="flex items-center justify-between text-[11px] font-bold text-charcoal uppercase tracking-wider mb-1.5">
+                                      <span>🍊 Orange Money (FCFA)</span>
+                                      {splitData.orangeNum > 0 && (
+                                        <span className="text-orange-600 font-mono text-[10px]">
+                                          {((splitData.orangeNum / (remainingDue || 1)) * 100).toFixed(0)}%
+                                        </span>
+                                      )}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      placeholder="0"
+                                      value={splitData.orange}
+                                      onChange={(e) => setInvoiceSplitAmount(invoice.id, 'orange', e.target.value)}
+                                      className="w-full text-base font-bold text-charcoal outline-none bg-transparent"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Split Reconciliation Summary Bar */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2.5 border-t border-border/70 text-xs">
+                                  <div className="flex items-center gap-4 flex-wrap">
+                                    <div>
+                                      <span className="text-muted-gray text-[10px] uppercase font-bold block">
+                                        Net Due to Settle
+                                      </span>
+                                      <span className="font-extrabold text-charcoal">
+                                        {remainingDue.toLocaleString('en-US')} FCFA
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-gray text-[10px] uppercase font-bold block">
+                                        Total Allocated
+                                      </span>
+                                      <span className="font-extrabold text-charcoal">
+                                        {splitData.totalSplit.toLocaleString('en-US')} FCFA
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    {splitData.isValid ? (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        <CheckCircle2 size={13} />
+                                        Exact Match: Ready to Collect
+                                      </span>
+                                    ) : splitData.remainingToAllocate > 0 ? (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                        <AlertTriangle size={13} />
+                                        Remaining: {splitData.remainingToAllocate.toLocaleString('en-US')} FCFA
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                        <AlertCircle size={13} />
+                                        Over by: {Math.abs(splitData.remainingToAllocate).toLocaleString('en-US')} FCFA
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Collect Payment CTA */}
+                            {canCollectPayment ? (
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
+                                <div className="text-xs text-muted-gray">
+                                  {isSplit ? (
+                                    <span>
+                                      Collecting will record each split payment and mark invoice as{' '}
+                                      <span className="font-bold text-success">PAID</span>.
+                                    </span>
+                                  ) : (
+                                    <span>
+                                      Collecting will mark status as{' '}
+                                      <span className="font-bold text-success">PAID</span> and move
+                                      to Paid Today.
+                                    </span>
+                                  )}
+                                </div>
+                                <Button
+                                  className="w-full sm:w-auto min-w-[220px]"
+                                  disabled={Boolean(collectingId) || (isSplit && !splitData.isValid)}
+                                  onClick={() => handleCollectPayment(invoice)}
+                                >
+                                  {collectingId === invoice.id ? (
+                                    <>
+                                      <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
+                                      <span>Collecting Payment...</span>
+                                    </>
+                                  ) : isSplit ? (
+                                    splitData.isValid ? (
+                                      <>
+                                        <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
+                                        <span>
+                                          Collect Split Payment ({remainingDue.toLocaleString('en-US')} FCFA)
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Lock size={15} className="shrink-0" />
+                                        <span>
+                                          {splitData.remainingToAllocate > 0
+                                            ? `Allocate ${splitData.remainingToAllocate.toLocaleString('en-US')} FCFA Remaining`
+                                            : `Over by ${Math.abs(splitData.remainingToAllocate).toLocaleString('en-US')} FCFA`}
+                                        </span>
+                                      </>
+                                    )
+                                  ) : (
+                                    <>
+                                      <DollarSign size={16} strokeWidth={1.8} className="shrink-0" />
+                                      <span>
+                                        Collect Payment ({remainingDue.toLocaleString('en-US')} FCFA)
+                                      </span>
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between gap-3 pt-3 border-t border-border bg-amber-50/70 p-3 rounded-[12px] border border-amber-200/80 text-amber-900 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <Lock size={15} className="text-amber-600 shrink-0" />
+                                  <span className="font-medium">
+                                    Pending Payment · Awaiting Reception Desk to collect
+                                  </span>
+                                </div>
+                                <span className="font-bold text-charcoal">
+                                  {remainingDue.toLocaleString('en-US')} FCFA
+                                </span>
+                              </div>
+                            )}
                           </>
                         ) : (
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border bg-warm-ivory/60 p-3.5 rounded-[12px] border border-border/80">
@@ -2251,10 +3107,20 @@ export default function PendingInvoices() {
                     ? techItems.join(', ')
                     : linkedApt?.technicianName || invoice.mainTechnicianName || 'Staff';
 
+                const isMidnightOrDateOnly = (t) => {
+                  if (!t) return true;
+                  const str = String(t);
+                  return str.endsWith('T00:00:00.000Z') || str.endsWith('T00:00:00Z') || /^\d{4}-\d{2}-\d{2}$/.test(str);
+                };
+
+                const realPaidTimestamp =
+                  (!isMidnightOrDateOnly(invoice.paidAt) ? invoice.paidAt : null) ||
+                  (!isMidnightOrDateOnly(invoice.createdAt) ? invoice.createdAt : null);
+
                 const paidTimeDisplay =
-                  invoice.paidTime ||
-                  (invoice.paidAt
-                    ? new Date(invoice.paidAt).toLocaleTimeString([], {
+                  (invoice.paidTime && invoice.paidTime !== '05:30 AM' && invoice.paidTime !== '05:30' ? invoice.paidTime : null) ||
+                  (realPaidTimestamp
+                    ? new Date(realPaidTimestamp).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
                     })
@@ -2263,9 +3129,12 @@ export default function PendingInvoices() {
                 const totalAmount =
                   invoice.finalTotal !== undefined ? invoice.finalTotal : invoice.total;
 
-                const paymentBadge = formatPaymentMethod(invoice.paymentMethod);
+                const isSplitPayment = (Array.isArray(invoice.payments) && invoice.payments.length > 1) || String(invoice.paymentMethod || '').includes('+');
+                const paymentBadge = isSplitPayment ? 'SPLIT PAYMENT' : formatPaymentMethod(invoice.paymentMethod);
 
-                const clientLoyalty = getClientLoyalty(invoice.clientId);
+                const clientObj = getClient(invoice.clientId) || invoice.client;
+                const rawLoyalty = getClientLoyalty(invoice.clientId);
+                const clientLoyalty = { ...rawLoyalty, balance: Math.max(Number(rawLoyalty?.balance) || 0, Number(clientObj?.loyaltyPoints) || 0, Number(invoice.client?.loyaltyPoints) || 0) };
 
                 return (
                   <div
@@ -2286,6 +3155,12 @@ export default function PendingInvoices() {
                             <span className="font-mono text-xs font-bold text-charcoal bg-soft-cream px-2 py-0.5 rounded">
                               {invNum}
                             </span>
+                            {techItems.length > 1 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#2C422E] bg-[#E8F2E6] px-2 py-0.5 rounded-[6px] border border-[#B7CEB3]">
+                                <Users size={11} className="text-[#3D5A40] shrink-0" />
+                                <span>Shared Work ({techItems.length} Techs)</span>
+                              </span>
+                            )}
                             <span className="text-sm font-bold text-charcoal truncate">
                               {formatClientDisplay(invoice.clientName, invoice.clientId)}
                             </span>
@@ -2363,7 +3238,7 @@ export default function PendingInvoices() {
                                 Payment Method
                               </span>
                               <span className="font-bold text-charcoal uppercase">
-                                {formatPaymentMethod(invoice.paymentMethod)}
+                                {getInvoicePaymentDisplay(invoice)}
                               </span>
                             </div>
                           </div>
@@ -2695,7 +3570,8 @@ export default function PendingInvoices() {
                             })
                             : invoice.date;
 
-                          const paymentLabel_ = formatPaymentMethod(invoice.paymentMethod);
+                          const isHistorySplit = (Array.isArray(invoice.payments) && invoice.payments.length > 1) || String(invoice.paymentMethod || '').includes('+');
+                          const paymentLabel_ = isHistorySplit ? 'SPLIT' : formatPaymentMethod(invoice.paymentMethod);
 
                           return (
                             <tr
@@ -2728,6 +3604,7 @@ export default function PendingInvoices() {
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-end gap-2">
+
                                   <Button
                                     variant="secondary"
                                     className="!py-1 !px-2.5 !text-xs !h-[30px]"
@@ -2810,6 +3687,7 @@ export default function PendingInvoices() {
                             className="flex items-center gap-2 pt-2 border-t border-border/50"
                             onClick={(e) => e.stopPropagation()}
                           >
+
                             <Button
                               variant="secondary"
                               className="flex-1 !h-[38px] !text-xs font-semibold"
@@ -2843,8 +3721,8 @@ export default function PendingInvoices() {
                           disabled={historyPage === 1}
                           onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
                           className={`px-3 py-1.5 rounded-[8px] border border-border text-xs font-semibold flex items-center gap-1 transition-all ${historyPage === 1
-                              ? 'bg-soft-cream/50 text-muted-gray/50 cursor-not-allowed'
-                              : 'bg-white hover:bg-sage-soft text-charcoal cursor-pointer shadow-2xs'
+                            ? 'bg-soft-cream/50 text-muted-gray/50 cursor-not-allowed'
+                            : 'bg-white hover:bg-sage-soft text-charcoal cursor-pointer shadow-2xs'
                             }`}
                         >
                           <ChevronLeft size={13} />
@@ -2870,8 +3748,8 @@ export default function PendingInvoices() {
                                   <button
                                     onClick={() => setHistoryPage(p)}
                                     className={`w-7 h-7 rounded-[7px] text-xs font-bold transition-all cursor-pointer ${historyPage === p
-                                        ? 'bg-sage text-white shadow-xs'
-                                        : 'bg-white hover:bg-sage-soft text-charcoal border border-border'
+                                      ? 'bg-sage text-white shadow-xs'
+                                      : 'bg-white hover:bg-sage-soft text-charcoal border border-border'
                                       }`}
                                   >
                                     {p}
@@ -2885,8 +3763,8 @@ export default function PendingInvoices() {
                           disabled={historyPage >= totalHistoryPages}
                           onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
                           className={`px-3 py-1.5 rounded-[8px] border border-border text-xs font-semibold flex items-center gap-1 transition-all ${historyPage >= totalHistoryPages
-                              ? 'bg-soft-cream/50 text-muted-gray/50 cursor-not-allowed'
-                              : 'bg-white hover:bg-sage-soft text-charcoal cursor-pointer shadow-2xs'
+                            ? 'bg-soft-cream/50 text-muted-gray/50 cursor-not-allowed'
+                            : 'bg-white hover:bg-sage-soft text-charcoal cursor-pointer shadow-2xs'
                             }`}
                         >
                           <span>Next</span>
@@ -3035,7 +3913,7 @@ export default function PendingInvoices() {
                   Payment Method
                 </span>
                 <span className="font-bold text-charcoal uppercase">
-                  {formatPaymentMethod(detailInvoice.paymentMethod)}
+                  {getInvoicePaymentDisplay(detailInvoice)}
                 </span>
               </div>
 
@@ -3050,6 +3928,7 @@ export default function PendingInvoices() {
 
             {/* Actions */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 px-4 sm:px-6 py-3.5 sm:py-4 border-t border-border bg-white">
+
               <Button
                 variant="secondary"
                 className="w-full sm:w-auto"
@@ -3115,8 +3994,8 @@ export default function PendingInvoices() {
                 type="button"
                 onClick={() => setRetailPickerTab('drinks')}
                 className={`pb-2.5 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap shrink-0 ${retailPickerTab === 'drinks'
-                    ? 'border-charcoal text-charcoal'
-                    : 'border-transparent text-muted-gray hover:text-charcoal'
+                  ? 'border-charcoal text-charcoal'
+                  : 'border-transparent text-muted-gray hover:text-charcoal'
                   }`}
               >
                 <Coffee size={14} />
@@ -3126,8 +4005,8 @@ export default function PendingInvoices() {
                 type="button"
                 onClick={() => setRetailPickerTab('cosmetics')}
                 className={`pb-2.5 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap shrink-0 ${retailPickerTab === 'cosmetics'
-                    ? 'border-charcoal text-charcoal'
-                    : 'border-transparent text-muted-gray hover:text-charcoal'
+                  ? 'border-charcoal text-charcoal'
+                  : 'border-transparent text-muted-gray hover:text-charcoal'
                   }`}
               >
                 <Sparkles size={14} />
@@ -3229,8 +4108,8 @@ export default function PendingInvoices() {
                             setTimeout(() => setRetailAddedNotice(''), 3000);
                           }}
                           className={`px-3 py-1.5 rounded-[9px] text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${isOutOfStock || qty > product.stock
-                              ? 'bg-border/50 text-muted-gray cursor-not-allowed'
-                              : 'bg-sage-soft hover:bg-sage hover:text-white text-charcoal cursor-pointer border border-sage/30'
+                            ? 'bg-border/50 text-muted-gray cursor-not-allowed'
+                            : 'bg-sage-soft hover:bg-sage hover:text-white text-charcoal cursor-pointer border border-sage/30'
                             }`}
                         >
                           <Plus size={13} strokeWidth={2.5} />
@@ -3290,26 +4169,48 @@ export default function PendingInvoices() {
             {/* Scrollable Content */}
             <div className="overflow-y-auto p-4 sm:p-6 space-y-4 flex-1 text-xs">
               {/* 1. Client (Optional) */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray mb-1.5">
-                  Client (Optional)
-                </label>
-                <select
+              <div className="relative z-30">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray">
+                    Client (Optional)
+                  </label>
+                  {newSaleClientId && (
+                    <button
+                      type="button"
+                      onClick={() => setNewSaleClientId('')}
+                      className="text-[10px] text-sage hover:text-[#2d4027] font-semibold underline cursor-pointer"
+                    >
+                      Reset to Walk-in
+                    </button>
+                  )}
+                </div>
+                <SearchableSelect
                   value={newSaleClientId}
-                  onChange={(e) => setNewSaleClientId(e.target.value)}
-                  className="w-full h-[42px] px-3 bg-white border border-border rounded-[10px] text-xs text-charcoal font-medium outline-none focus:border-sage"
-                >
-                  <option value="">Walk in (No client profile)</option>
-                  {clients
-                    .filter((c) => c.status !== 'INACTIVE' && c.isActive !== false)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.phone ? `(${c.phone})` : ''}
-                      </option>
-                    ))}
-                </select>
+                  onChange={(val) => setNewSaleClientId(val)}
+                  placeholder="Walk in (No client profile)"
+                  searchPlaceholder="Search client by name or phone..."
+                  heightClass="h-[42px]"
+                  options={[
+                    {
+                      value: '',
+                      label: 'Walk in (No client profile)',
+                      sublabel: 'Direct walk-in customer without registered profile',
+                    },
+                    ...clients
+                      .filter((c) => c.status !== 'INACTIVE' && c.isActive !== false)
+                      .map((c) => {
+                        const loyalty = getClientLoyalty(c.id);
+                        return {
+                          value: String(c.id),
+                          label: c.name,
+                          sublabel: c.phone || 'No phone',
+                          badge: loyalty?.balance ? `${loyalty.balance} pts` : '',
+                        };
+                      }),
+                  ]}
+                />
                 <p className="text-[11px] text-muted-gray mt-1">
-                  Optional for walk-in retail customers.
+                  Type to search client by name or phone number, or select Walk in.
                 </p>
               </div>
 
@@ -3323,8 +4224,8 @@ export default function PendingInvoices() {
                     type="button"
                     onClick={() => setNewSaleTab('drinks')}
                     className={`pb-2 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${newSaleTab === 'drinks'
-                        ? 'border-charcoal text-charcoal'
-                        : 'border-transparent text-muted-gray hover:text-charcoal'
+                      ? 'border-charcoal text-charcoal'
+                      : 'border-transparent text-muted-gray hover:text-charcoal'
                       }`}
                   >
                     <Coffee size={14} />
@@ -3334,8 +4235,8 @@ export default function PendingInvoices() {
                     type="button"
                     onClick={() => setNewSaleTab('cosmetics')}
                     className={`pb-2 text-xs font-bold transition-colors cursor-pointer border-b-2 flex items-center gap-1.5 ${newSaleTab === 'cosmetics'
-                        ? 'border-charcoal text-charcoal'
-                        : 'border-transparent text-muted-gray hover:text-charcoal'
+                      ? 'border-charcoal text-charcoal'
+                      : 'border-transparent text-muted-gray hover:text-charcoal'
                       }`}
                   >
                     <Sparkles size={14} />
@@ -3438,8 +4339,8 @@ export default function PendingInvoices() {
                               disabled={isOutOfStock || qty > remainingStock}
                               onClick={() => addToNewSaleCart(product, qty)}
                               className={`px-3 py-1.5 rounded-[8px] text-xs font-bold transition-all flex items-center gap-1 ${isOutOfStock || qty > remainingStock
-                                  ? 'bg-border/50 text-muted-gray cursor-not-allowed'
-                                  : 'bg-sage-soft hover:bg-sage hover:text-white text-charcoal cursor-pointer border border-sage/30'
+                                ? 'bg-border/50 text-muted-gray cursor-not-allowed'
+                                : 'bg-sage-soft hover:bg-sage hover:text-white text-charcoal cursor-pointer border border-sage/30'
                                 }`}
                             >
                               <Plus size={13} strokeWidth={2.5} />
@@ -3535,39 +4436,203 @@ export default function PendingInvoices() {
                 )}
               </div>
 
-              {/* 4. Payment Method */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray mb-1.5">
-                  Payment Method:
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {PAYMENT_METHODS.map((pm) => {
-                    const isSelected = newSalePaymentMethod === pm.key;
-                    return (
-                      <button
-                        key={pm.key}
-                        type="button"
-                        onClick={() => setNewSalePaymentMethod(pm.key)}
-                        className={`h-[42px] px-3 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 ${isSelected
-                            ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
-                            : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
-                          }`}
-                      >
-                        <span
-                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected
-                              ? 'border-sage bg-sage'
-                              : 'border-muted-gray/50 bg-white'
-                            }`}
-                        >
-                          {isSelected && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                          )}
-                        </span>
-                        <span>{pm.label}</span>
-                      </button>
-                    );
-                  })}
+              {/* 4. Payment Mode & Methods (Single vs Split) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray">
+                    Payment Mode:
+                  </label>
+                  {newSaleIsSplit && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8B6E58] bg-[#F5EFEB] px-2 py-0.5 rounded-full border border-[#D8C7BC]">
+                      <Layers size={12} />
+                      Split Active
+                    </span>
+                  )}
                 </div>
+
+                <div className="grid grid-cols-2 gap-2 p-1 bg-soft-cream/60 rounded-[12px] border border-border/80">
+                  <button
+                    type="button"
+                    onClick={() => setNewSaleIsSplit(false)}
+                    className={`py-2 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      !newSaleIsSplit
+                        ? 'bg-white text-charcoal shadow-2xs border border-border'
+                        : 'text-muted-gray hover:text-charcoal'
+                    }`}
+                  >
+                    <span>Single Payment</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewSaleIsSplit(true);
+                      if (newSaleSplitTotal === 0 && newSaleTotal > 0) {
+                        handleQuickSplit5050NewSale();
+                      }
+                    }}
+                    className={`py-2 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      newSaleIsSplit
+                        ? 'bg-charcoal text-white shadow-2xs border border-charcoal font-bold'
+                        : 'text-muted-gray hover:text-charcoal'
+                    }`}
+                  >
+                    <Layers size={13} />
+                    <span>Split Payment</span>
+                  </button>
+                </div>
+
+                {!newSaleIsSplit ? (
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray mb-1.5">
+                      Payment Method:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {PAYMENT_METHODS.map((pm) => {
+                        const isSelected = newSalePaymentMethod === pm.key;
+                        return (
+                          <button
+                            key={pm.key}
+                            type="button"
+                            onClick={() => setNewSalePaymentMethod(pm.key)}
+                            className={`h-[42px] px-3 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 ${
+                              isSelected
+                                ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                                : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
+                            }`}
+                          >
+                            <span
+                              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                                isSelected
+                                  ? 'border-sage bg-sage'
+                                  : 'border-muted-gray/50 bg-white'
+                              }`}
+                            >
+                              {isSelected && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                              )}
+                            </span>
+                            <span>{pm.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-warm-ivory/50 rounded-[14px] border border-border/90 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                      <span className="text-xs font-bold text-charcoal flex items-center gap-1.5">
+                        <Layers size={13} className="text-sage" />
+                        Enter Amounts per Method
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleQuickSplit5050NewSale}
+                          className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-border rounded-[6px] text-charcoal hover:bg-soft-cream cursor-pointer transition-colors shadow-2xs"
+                        >
+                          50 / 50 Cash & MoMo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearSplitNewSale}
+                          className="px-2 py-0.5 text-[11px] font-medium text-muted-gray hover:text-rose-600 cursor-pointer transition-colors"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {/* Cash */}
+                      <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-sage focus-within:ring-1 focus-within:ring-sage/30 transition-all">
+                        <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                          <span>💵 Cash (FCFA)</span>
+                          {newSaleCashNum > 0 && (
+                            <span className="text-sage font-mono text-[10px]">
+                              {((newSaleCashNum / (newSaleTotal || 1)) * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={newSaleSplitCash}
+                          onChange={(e) => setNewSaleSplitCash(e.target.value.replace(/[^0-9]/g, ''))}
+                          className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                        />
+                      </div>
+
+                      {/* MTN MoMo */}
+                      <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400/30 transition-all">
+                        <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                          <span>📱 MTN MoMo</span>
+                          {newSaleMomoNum > 0 && (
+                            <span className="text-amber-600 font-mono text-[10px]">
+                              {((newSaleMomoNum / (newSaleTotal || 1)) * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={newSaleSplitMomo}
+                          onChange={(e) => setNewSaleSplitMomo(e.target.value.replace(/[^0-9]/g, ''))}
+                          className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                        />
+                      </div>
+
+                      {/* Orange Money */}
+                      <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-orange-400 focus-within:ring-1 focus-within:ring-orange-400/30 transition-all">
+                        <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                          <span>🍊 Orange Money</span>
+                          {newSaleOrangeNum > 0 && (
+                            <span className="text-orange-600 font-mono text-[10px]">
+                              {((newSaleOrangeNum / (newSaleTotal || 1)) * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={newSaleSplitOrange}
+                          onChange={(e) => setNewSaleSplitOrange(e.target.value.replace(/[^0-9]/g, ''))}
+                          className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Split summary bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-border/70 text-xs">
+                      <div className="flex items-center gap-3">
+                        <span className="text-muted-gray text-[11px]">Allocated:</span>
+                        <span className="font-extrabold text-charcoal">
+                          {newSaleSplitTotal.toLocaleString('en-US')} / {newSaleTotal.toLocaleString('en-US')} FCFA
+                        </span>
+                      </div>
+                      <div>
+                        {newSaleSplitIsValid ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 size={12} />
+                            Exact Match
+                          </span>
+                        ) : newSaleSplitRemaining > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <AlertTriangle size={12} />
+                            Remaining: {newSaleSplitRemaining.toLocaleString('en-US')} FCFA
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            <AlertCircle size={12} />
+                            Over by: {Math.abs(newSaleSplitRemaining).toLocaleString('en-US')} FCFA
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -3593,7 +4658,12 @@ export default function PendingInvoices() {
                 </Button>
                 <Button
                   className="flex-1 sm:flex-none min-w-[200px]"
-                  disabled={newSaleCart.length === 0 || newSaleTotal <= 0 || isCollectingNewSale}
+                  disabled={
+                    newSaleCart.length === 0 ||
+                    newSaleTotal <= 0 ||
+                    isCollectingNewSale ||
+                    (newSaleIsSplit && !newSaleSplitIsValid)
+                  }
                   onClick={handleCollectNewSale}
                 >
                   {isCollectingNewSale ? (
@@ -3627,9 +4697,17 @@ export default function PendingInvoices() {
                   <Sparkles size={20} strokeWidth={2.2} />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-charcoal">
-                    New Walk-In / Service Invoice
-                  </h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-bold text-charcoal">
+                      New Walk-In / Service Invoice
+                    </h3>
+                    {newServiceLines.length > 1 && (
+                      <span className="text-[10px] font-bold bg-[#E8F2E6] text-[#2C422E] border border-[#B7CEB3] px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Users size={11} strokeWidth={2.2} />
+                        Shared Work ({newServiceLines.length} Services)
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-gray">
                     Create service invoice & assign performing technicians
                   </p>
@@ -3665,8 +4743,8 @@ export default function PendingInvoices() {
                       type="button"
                       onClick={() => { setNewServiceClientType('walkin'); setNewServiceError(''); }}
                       className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceClientType === 'walkin'
-                          ? 'bg-white text-charcoal shadow-xs'
-                          : 'text-muted-gray hover:text-charcoal'
+                        ? 'bg-white text-charcoal shadow-xs'
+                        : 'text-muted-gray hover:text-charcoal'
                         }`}
                     >
                       Walk-in
@@ -3675,8 +4753,8 @@ export default function PendingInvoices() {
                       type="button"
                       onClick={() => { setNewServiceClientType('registered'); setNewServiceError(''); }}
                       className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceClientType === 'registered'
-                          ? 'bg-white text-charcoal shadow-xs'
-                          : 'text-muted-gray hover:text-charcoal'
+                        ? 'bg-white text-charcoal shadow-xs'
+                        : 'text-muted-gray hover:text-charcoal'
                         }`}
                     >
                       Registered Client
@@ -3743,45 +4821,68 @@ export default function PendingInvoices() {
                   <label className="block text-[11px] font-semibold text-muted-gray mb-1">
                     Introduced By / Referral Staff (Optional for Commission)
                   </label>
-                  <SearchableSelect
-                    value={newServiceIntroducedById}
-                    onChange={(val) => setNewServiceIntroducedById(val)}
-                    placeholder="None / Direct Visit"
-                    searchPlaceholder="Search staff name..."
-                    heightClass="h-[38px]"
-                    options={[
-                      { value: '', label: 'None / Direct Visit' },
-                      ...referralStaff.map((staff) => ({
-                        value: String(staff.id),
-                        label: staff.name,
-                        sublabel: staff.role
-                          ? `${staff.role.charAt(0).toUpperCase() + staff.role.slice(1)}`
-                          : '',
-                      })),
-                    ]}
-                  />
+                  {isMarketer ? (
+                    <div className="flex items-center gap-2 p-2.5 rounded-[10px] bg-[#EDE9FE]/70 border border-[#DDD6FE] text-xs font-semibold text-[#6D28D9]">
+                      <Sparkles size={14} className="shrink-0" />
+                      <span>Credited to you: <strong>{user?.name}</strong> (Marketer Referral)</span>
+                    </div>
+                  ) : (
+                    <SearchableSelect
+                      value={newServiceIntroducedById}
+                      onChange={(val) => setNewServiceIntroducedById(val)}
+                      placeholder="None / Direct Visit"
+                      searchPlaceholder="Search staff name..."
+                      heightClass="h-[38px]"
+                      options={[
+                        { value: '', label: 'None / Direct Visit' },
+                        ...referralStaff.map((staff) => ({
+                          value: String(staff.id),
+                          label: staff.name,
+                          sublabel: staff.role
+                            ? `${staff.role.charAt(0).toUpperCase() + staff.role.slice(1)}`
+                            : '',
+                        })),
+                      ]}
+                    />
+                  )}
                 </div>
               </div>
 
               {/* 2. Services List */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold text-charcoal uppercase tracking-wider">
                       Services Rendered
                     </span>
                     <span className="text-[10px] font-bold bg-sage-soft text-[#4F6748] px-2 py-0.5 rounded-full">
                       {newServiceLines.length}
                     </span>
+                    {hasMultipleTechs && (
+                      <span className="text-[10px] font-bold bg-[#DCE7D7] text-[#2C422E] px-2 py-0.5 rounded-full border border-sage/30 flex items-center gap-1">
+                        <Users size={10} /> Multi-Technician Shared Work
+                      </span>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={addServiceLine}
-                    className="text-xs font-semibold text-[#4F6748] hover:text-[#3E5238] flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Plus size={14} strokeWidth={2.5} />
-                    <span>Add Another Service</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={addSharedWorkLine}
+                      className="text-xs font-semibold px-2.5 py-1 rounded-[8px] bg-[#E8F2E6] hover:bg-[#DEECEB] text-[#2C422E] border border-[#B7CEB3] flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                      title="Add another service performed by a different technician"
+                    >
+                      <Users size={13} strokeWidth={2} />
+                      <span>+ Shared Work (Add 2nd Tech)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addServiceLine}
+                      className="text-xs font-semibold text-[#4F6748] hover:text-[#3E5238] flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Plus size={14} strokeWidth={2.5} />
+                      <span>Add Service</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -3791,9 +4892,20 @@ export default function PendingInvoices() {
                       className="bg-warm-ivory/50 rounded-[14px] p-3.5 border border-border/80 space-y-2.5 relative group"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-muted-gray uppercase tracking-wider">
-                          Service #{idx + 1}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-muted-gray uppercase tracking-wider">
+                            Service #{idx + 1}
+                          </span>
+                          {idx === 0 && newServiceLines.length > 1 ? (
+                            <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-sage-soft text-sage border border-sage/20">
+                              Main Tech
+                            </span>
+                          ) : idx > 0 ? (
+                            <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-[#EDE9FE] text-[#6D28D9] border border-[#DDD6FE]">
+                              Collaborating Tech #{idx + 1}
+                            </span>
+                          ) : null}
+                        </div>
                         {newServiceLines.length > 1 && (
                           <button
                             type="button"
@@ -3916,6 +5028,41 @@ export default function PendingInvoices() {
                     </div>
                   ))}
                 </div>
+
+                {hasMultipleTechs && (
+                  <div className="p-3.5 bg-gradient-to-r from-[#F4F9F2] to-[#EBF4E9] border border-[#BDD7B7] rounded-[14px] space-y-2.5 animate-fade-in shadow-2xs">
+                    <div className="flex items-center justify-between text-xs font-bold text-[#2C422E]">
+                      <div className="flex items-center gap-1.5">
+                        <Users size={15} className="text-[#3D5A40]" />
+                        <span>Shared Work Breakdown ({newServiceTechSummary.filter((t) => t.name !== 'Unassigned Staff').length} Technicians)</span>
+                      </div>
+                      <span className="text-[10.5px] font-semibold text-[#4B634E] bg-white/70 px-2 py-0.5 rounded-full border border-[#BDD7B7]">
+                        Separate Commission & Productivity
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {newServiceTechSummary.map((t) => (
+                        <div
+                          key={t.name}
+                          className="flex items-center justify-between bg-white px-3 py-2 rounded-[10px] border border-[#BDD7B7]/70 shadow-2xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="font-bold text-charcoal block truncate">{t.name}</span>
+                            <span className="text-[10px] text-muted-gray truncate block">
+                              {t.services.join(', ') || '1 service'}
+                            </span>
+                          </div>
+                          <span className="font-extrabold text-[#2C422E] shrink-0 ml-2">
+                            {t.total.toLocaleString()} FCFA
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-[#5A6E5C] leading-relaxed">
+                      ✓ Each technician will be credited for their specific service when Reception collects payment.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* 3. Optional Retail Items */}
@@ -4030,68 +5177,246 @@ export default function PendingInvoices() {
 
               {/* 5. Payment Selection (for instant checkout) */}
               <div className="p-4 rounded-[14px] bg-warm-ivory/60 border border-border/80 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-charcoal uppercase tracking-wider">
-                    Select Workflow:
-                  </label>
-                  <div className="flex items-center gap-1 bg-white p-1 rounded-[10px] border border-border text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setNewServiceActionChoice('pending')}
-                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pending'
-                          ? 'bg-[#4F6748] text-white shadow-xs'
-                          : 'text-muted-gray hover:text-charcoal'
-                        }`}
-                    >
-                      Pending Invoice
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewServiceActionChoice('pay_now')}
-                      className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pay_now'
-                          ? 'bg-[#4F6748] text-white shadow-xs'
-                          : 'text-muted-gray hover:text-charcoal'
-                        }`}
-                    >
-                      Collect Now
-                    </button>
-                  </div>
-                </div>
-
-                {newServiceActionChoice === 'pay_now' ? (
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1.5">
-                      Payment Method:
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {PAYMENT_METHODS.map((pm) => {
-                        const isSelected = newServicePaymentMethod === pm.key;
-                        return (
-                          <button
-                            key={pm.key}
-                            type="button"
-                            onClick={() => setNewServicePaymentMethod(pm.key)}
-                            className={`h-[40px] px-2.5 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${isSelected
-                                ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
-                                : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
-                              }`}
-                          >
-                            <span
-                              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-sage bg-sage' : 'border-muted-gray/50 bg-white'
-                                }`}
-                            >
-                              {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                            </span>
-                            <span>{pm.label}</span>
-                          </button>
-                        );
-                      })}
+                {isMarketer || isTechnician ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs font-bold text-[#4F6748]">
+                      <Sparkles size={15} className="shrink-0" />
+                      <span>Pending Invoice Mode (Payment at Reception)</span>
                     </div>
+                    <p className="text-[11px] text-muted-gray leading-relaxed">
+                      This invoice will be registered as <strong>PENDING</strong> for your client with the assigned technician.
+                      Payment collection is handled at the Reception counter when your client pays.
+                    </p>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-muted-gray">
-                    Invoice will be created in <strong>Pending</strong> status so Reception can review and collect payment when the client is ready.
-                  </p>
+                  <>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-charcoal uppercase tracking-wider">
+                        Select Workflow:
+                      </label>
+                      <div className="flex items-center gap-1 bg-white p-1 rounded-[10px] border border-border text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setNewServiceActionChoice('pending')}
+                          className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pending'
+                            ? 'bg-[#4F6748] text-white shadow-xs'
+                            : 'text-muted-gray hover:text-charcoal'
+                            }`}
+                        >
+                          Pending Invoice
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewServiceActionChoice('pay_now')}
+                          className={`px-3 py-1 rounded-[7px] font-semibold transition-all cursor-pointer ${newServiceActionChoice === 'pay_now'
+                            ? 'bg-[#4F6748] text-white shadow-xs'
+                            : 'text-muted-gray hover:text-charcoal'
+                            }`}
+                        >
+                          Collect Now
+                        </button>
+                      </div>
+                    </div>
+
+                    {newServiceActionChoice === 'pay_now' ? (
+                      <div className="space-y-3">
+                        {/* Mode Selector */}
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-gray">
+                            Payment Mode:
+                          </label>
+                          {newServiceIsSplit && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8B6E58] bg-[#F5EFEB] px-2 py-0.5 rounded-full border border-[#D8C7BC]">
+                              <Layers size={12} />
+                              Split Active
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 p-1 bg-soft-cream/60 rounded-[12px] border border-border/80">
+                          <button
+                            type="button"
+                            onClick={() => setNewServiceIsSplit(false)}
+                            className={`py-2 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              !newServiceIsSplit
+                                ? 'bg-white text-charcoal shadow-2xs border border-border'
+                                : 'text-muted-gray hover:text-charcoal'
+                            }`}
+                          >
+                            <span>Single Payment</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewServiceIsSplit(true);
+                              if (newServiceSplitTotal === 0 && newServiceGrandTotal > 0) {
+                                handleQuickSplit5050NewService();
+                              }
+                            }}
+                            className={`py-2 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              newServiceIsSplit
+                                ? 'bg-charcoal text-white shadow-2xs border border-charcoal font-bold'
+                                : 'text-muted-gray hover:text-charcoal'
+                            }`}
+                          >
+                            <Layers size={13} />
+                            <span>Split Payment</span>
+                          </button>
+                        </div>
+
+                        {!newServiceIsSplit ? (
+                          <div>
+                            <label className="block text-[10px] font-bold text-muted-gray uppercase tracking-wider mb-1.5">
+                              Payment Method:
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                              {PAYMENT_METHODS.map((pm) => {
+                                const isSelected = newServicePaymentMethod === pm.key;
+                                return (
+                                  <button
+                                    key={pm.key}
+                                    type="button"
+                                    onClick={() => setNewServicePaymentMethod(pm.key)}
+                                    className={`h-[40px] px-2.5 rounded-[10px] text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${isSelected
+                                      ? 'bg-sage-soft border-sage text-charcoal ring-1 ring-sage/40'
+                                      : 'bg-white border-border text-charcoal/80 hover:border-sage/40'
+                                      }`}
+                                  >
+                                    <span
+                                      className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-sage bg-sage' : 'border-muted-gray/50 bg-white'
+                                        }`}
+                                    >
+                                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                    </span>
+                                    <span>{pm.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3.5 bg-warm-ivory/50 rounded-[14px] border border-border/90 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                              <span className="text-xs font-bold text-charcoal flex items-center gap-1.5">
+                                <Layers size={13} className="text-sage" />
+                                Enter Amounts per Method
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={handleQuickSplit5050NewService}
+                                  className="px-2 py-0.5 text-[11px] font-semibold bg-white border border-border rounded-[6px] text-charcoal hover:bg-soft-cream cursor-pointer transition-colors shadow-2xs"
+                                >
+                                  50 / 50 Cash & MoMo
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleClearSplitNewService}
+                                  className="px-2 py-0.5 text-[11px] font-medium text-muted-gray hover:text-rose-600 cursor-pointer transition-colors"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                              {/* Cash */}
+                              <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-sage focus-within:ring-1 focus-within:ring-sage/30 transition-all">
+                                <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                                  <span>💵 Cash (FCFA)</span>
+                                  {newServiceCashNum > 0 && (
+                                    <span className="text-sage font-mono text-[10px]">
+                                      {((newServiceCashNum / (newServiceGrandTotal || 1)) * 100).toFixed(0)}%
+                                    </span>
+                                  )}
+                                </label>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="0"
+                                  value={newServiceSplitCash}
+                                  onChange={(e) => setNewServiceSplitCash(e.target.value.replace(/[^0-9]/g, ''))}
+                                  className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                                />
+                              </div>
+
+                              {/* MTN MoMo */}
+                              <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400/30 transition-all">
+                                <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                                  <span>📱 MTN MoMo</span>
+                                  {newServiceMomoNum > 0 && (
+                                    <span className="text-amber-600 font-mono text-[10px]">
+                                      {((newServiceMomoNum / (newServiceGrandTotal || 1)) * 100).toFixed(0)}%
+                                    </span>
+                                  )}
+                                </label>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="0"
+                                  value={newServiceSplitMomo}
+                                  onChange={(e) => setNewServiceSplitMomo(e.target.value.replace(/[^0-9]/g, ''))}
+                                  className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                                />
+                              </div>
+
+                              {/* Orange Money */}
+                              <div className="p-2.5 bg-white rounded-[10px] border border-border/80 focus-within:border-orange-400 focus-within:ring-1 focus-within:ring-orange-400/30 transition-all">
+                                <label className="flex items-center justify-between text-[10px] font-bold text-charcoal uppercase tracking-wider mb-1">
+                                  <span>🍊 Orange Money</span>
+                                  {newServiceOrangeNum > 0 && (
+                                    <span className="text-orange-600 font-mono text-[10px]">
+                                      {((newServiceOrangeNum / (newServiceGrandTotal || 1)) * 100).toFixed(0)}%
+                                    </span>
+                                  )}
+                                </label>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="0"
+                                  value={newServiceSplitOrange}
+                                  onChange={(e) => setNewServiceSplitOrange(e.target.value.replace(/[^0-9]/g, ''))}
+                                  className="w-full text-sm font-bold text-charcoal outline-none bg-transparent"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Reconciliation Bar */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-border/70 text-xs">
+                              <div className="flex items-center gap-3">
+                                <span className="text-muted-gray text-[11px]">Allocated:</span>
+                                <span className="font-extrabold text-charcoal">
+                                  {newServiceSplitTotal.toLocaleString('en-US')} / {newServiceGrandTotal.toLocaleString('en-US')} FCFA
+                                </span>
+                              </div>
+                              <div>
+                                {newServiceSplitIsValid ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <CheckCircle2 size={12} />
+                                    Exact Match
+                                  </span>
+                                ) : newServiceSplitRemaining > 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    <AlertTriangle size={12} />
+                                    Remaining: {newServiceSplitRemaining.toLocaleString('en-US')} FCFA
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                    <AlertCircle size={12} />
+                                    Over by: {Math.abs(newServiceSplitRemaining).toLocaleString('en-US')} FCFA
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-muted-gray">
+                        Invoice will be created in <strong>Pending</strong> status so Reception can review and collect payment when the client is ready.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -4117,10 +5442,14 @@ export default function PendingInvoices() {
                   Cancel
                 </Button>
 
-                {newServiceActionChoice === 'pay_now' ? (
+                {newServiceActionChoice === 'pay_now' && !isMarketer && !isTechnician ? (
                   <Button
                     className="flex-1 sm:flex-none min-w-[210px]"
-                    disabled={isSubmittingServiceInvoice || newServiceGrandTotal <= 0}
+                    disabled={
+                      isSubmittingServiceInvoice ||
+                      newServiceGrandTotal <= 0 ||
+                      (newServiceIsSplit && !newServiceSplitIsValid)
+                    }
                     onClick={() => handleSubmitWalkInServiceInvoice(true)}
                   >
                     {isSubmittingServiceInvoice ? (
@@ -4137,19 +5466,20 @@ export default function PendingInvoices() {
                   </Button>
                 ) : (
                   <Button
+                    variant="primary"
                     className="flex-1 sm:flex-none min-w-[190px]"
                     disabled={isSubmittingServiceInvoice || newServiceGrandTotal <= 0}
                     onClick={() => handleSubmitWalkInServiceInvoice(false)}
                   >
                     {isSubmittingServiceInvoice ? (
                       <>
-                        <Loader2 size={16} className="animate-spin text-charcoal shrink-0" />
+                        <Loader2 size={16} className="animate-spin text-white shrink-0" />
                         <span>Creating Invoice...</span>
                       </>
                     ) : (
                       <>
                         <Plus size={16} strokeWidth={2.5} className="shrink-0" />
-                        <span>Create as Pending</span>
+                        <span>{isTechnician ? 'Queue for Reception Payment' : 'Create as Pending'}</span>
                       </>
                     )}
                   </Button>

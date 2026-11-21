@@ -17,15 +17,18 @@ const RetailContext = createContext();
 
 export function RetailProvider({ children }) {
   const { isAuthenticated, user } = useAuth();
-  const hasAccess = user?.role === 'manager' || user?.role === 'reception' || user?.role === 'MANAGER' || user?.role === 'RECEPTION';
+  const roleUpper = String(user?.role || '').toUpperCase();
+  const allowedRoles = ['MANAGER', 'RECEPTION', 'TECHNICIAN', 'MARKETER'];
+  const hasAccess = Boolean(isAuthenticated) && allowedRoles.includes(roleUpper);
 
   const [retailProducts, setRetailProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch real retail products from backend (Manager & Reception only)
+  // Fetch real retail products from backend (Manager, Reception, Technician, Marketer)
   const refreshRetail = useCallback(async () => {
     if (!isAuthenticated || !hasAccess) {
+      setRetailProducts([]);
       setLoading(false);
       setError(null);
       return;

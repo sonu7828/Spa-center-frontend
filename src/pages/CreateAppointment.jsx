@@ -9,9 +9,9 @@
  * Source: WIREFRAME.md Screen 07, FLOW.md §11-12
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, TriangleAlert, Check, Plus, X, ChevronDown, Search, User, Sparkles } from 'lucide-react';
+import { ArrowLeft, TriangleAlert, Check, Plus, X, ChevronDown, Search, User, Sparkles, Award } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import Button from '../components/Button';
@@ -80,6 +80,40 @@ export default function CreateAppointment() {
   const [pickerSearch, setPickerSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
 
+  // Desktop & Universal Searchable Client Dropdown state
+  const [isClientOpen, setIsClientOpen] = useState(false);
+  const [clientSearch, setClientSearch] = useState('');
+  const [prospectPromoPercent, setProspectPromoPercent] = useState(0); // 0 | 5 | 10 | 15 | 20
+  const clientDropdownRef = useRef(null);
+  const clientSearchInputRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target)) {
+        setIsClientOpen(false);
+      }
+    }
+    if (isClientOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isClientOpen]);
+
+  const searchedClients = useMemo(() => {
+    if (!clientSearch.trim()) return activeClients;
+    const q = clientSearch.toLowerCase().trim();
+    const cleanQ = q.replace(/[\s\-\+]/g, '');
+    return activeClients.filter((c) => {
+      const nameMatch = c.name && c.name.toLowerCase().includes(q);
+      const cleanPhone = (c.phone || '').replace(/[\s\-\+]/g, '');
+      const phoneMatch = cleanQ.length > 0 && cleanPhone.includes(cleanQ);
+      const emailMatch = c.email && c.email.toLowerCase().includes(q);
+      return nameMatch || phoneMatch || emailMatch;
+    });
+  }, [activeClients, clientSearch]);
+
   useEffect(() => {
     if (isTechnician && user?.id && form.technicianId !== String(user.id)) {
       setForm((prev) => ({ ...prev, technicianId: String(user.id) }));
@@ -138,7 +172,7 @@ export default function CreateAppointment() {
   const newStartMins = form.time ? timeToMinutes(form.time) : 0;
   const newEndMins = form.time ? newStartMins + (totalDurationMinutes || 30) : 0;
   const newEndTime = form.time ? minutesToTime(newEndMins) : '';
-  const isTimeOutOfRange = form.time ? newStartMins < 10 * 60 || newStartMins > 21 * 60 : false;
+  const isTimeOutOfRange = form.time ? newStartMins < 9 * 60 || newStartMins > 21 * 60 : false;
 
   // Check if currently selected technician has a conflict
   const conflictingAppointment =
@@ -218,8 +252,8 @@ export default function CreateAppointment() {
       return;
     }
 
-    if (newStartMins < 10 * 60 || newStartMins > 21 * 60) {
-      setServerError('Appointments can only be booked between 10:00 AM and 9:00 PM (10:00 – 21:00).');
+    if (newStartMins < 9 * 60 || newStartMins > 21 * 60) {
+      setServerError('Appointments can only be booked between 09:00 AM and 9:00 PM (09:00 – 21:00).');
       return;
     }
 
@@ -253,6 +287,7 @@ export default function CreateAppointment() {
         time: form.time,
         totalDuration: totalDurationMinutes,
         duration: totalDurationMinutes,
+        notes: prospectPromoPercent > 0 ? `Marketer Prospect Promo: ${prospectPromoPercent}% Discount` : undefined,
       });
 
       setSaved(true);
@@ -297,61 +332,226 @@ export default function CreateAppointment() {
 
       <div className="bg-white border border-border rounded-[16px] p-4 sm:p-6 shadow-card">
         {/* Client */}
-        <div className="mb-4">
+        {/* Client Selection (Searchable) */}
+        <div className="mb-4" ref={clientDropdownRef}>
           <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-[13px] font-medium text-muted-gray">
-              Client
+            <label className="block text-[13px] font-semibold text-charcoal">
+              Client <span className="text-rose-500">*</span>
             </label>
-            {isTechnician && (
-              <span className="text-[11px] font-semibold text-sage">
-                Your Clients ({activeClients.length})
-              </span>
-            )}
-          </div>
-          {/* Desktop Native Select (Unchanged) */}
-          <select
-            value={form.clientId}
-            onChange={update('clientId')}
-            className="hidden md:block w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150 cursor-pointer appearance-none"
-          >
-            <option value="">
-              {isTechnician
-                ? activeClients.length > 0
-                  ? 'Select One of Your Clients'
-                  : 'No clients registered by you yet'
-                : 'Select Client'}
-            </option>
-            {activeClients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} {c.phone ? `(${c.phone})` : ''}
-              </option>
-            ))}
-          </select>
-
-          {/* Mobile / Tablet Luxury Trigger */}
-          <button
-            type="button"
-            onClick={() => {
-              setPickerSearch('');
-              setMobilePicker('client');
-            }}
-            className="md:hidden w-full h-[48px] px-3.5 bg-white border border-border rounded-[11px] text-sm text-left flex items-center justify-between outline-none focus:border-sage shadow-2xs active:bg-soft-cream/30 transition-colors"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-6 h-6 rounded-full bg-sage/10 text-sage flex items-center justify-center shrink-0">
-                <User size={13} />
-              </div>
-              <span className={selectedClient ? 'text-charcoal font-medium truncate' : 'text-muted-gray truncate'}>
-                {selectedClient
-                  ? `${selectedClient.name} ${selectedClient.phone ? `(${selectedClient.phone})` : ''}`
-                  : (isTechnician ? 'Select One of Your Clients...' : 'Select Client...')}
-              </span>
+            <div className="flex items-center gap-2">
+              {isTechnician && (
+                <span className="text-[11px] font-semibold text-sage">
+                  Your Clients ({activeClients.length})
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => navigate('/clients/new')}
+                className="text-[11px] font-semibold text-sage hover:text-sage-hover flex items-center gap-1 cursor-pointer transition-colors"
+                title="Create a new client"
+              >
+                <Plus size={12} />
+                + New Client
+              </button>
             </div>
-            <ChevronDown size={16} className="text-muted-gray shrink-0 ml-2" />
-          </button>
+          </div>
+
+          {/* When a client is chosen and dropdown is closed, show selected client card */}
+          {selectedClient && !isClientOpen ? (
+            <div className="w-full min-h-[52px] p-2.5 sm:p-3 bg-soft-cream/40 border border-sage/40 rounded-[12px] flex items-center justify-between gap-3 shadow-2xs transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-sage-soft text-sage border border-sage/30 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                  {(selectedClient.name || 'C').charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-charcoal truncate">
+                      {selectedClient.name}
+                    </span>
+                    {selectedClient.phone && (
+                      <span className="text-xs font-mono font-medium text-slate-700 bg-white px-2 py-0.5 rounded-[6px] border border-border">
+                        {selectedClient.phone}
+                      </span>
+                    )}
+                  </div>
+                  {selectedClient.notes && (
+                    <p className="text-[11px] text-muted-gray truncate mt-0.5">
+                      {selectedClient.notes}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsClientOpen(true);
+                    setClientSearch('');
+                    setTimeout(() => clientSearchInputRef.current?.focus(), 60);
+                  }}
+                  className="px-3 py-1.5 bg-white hover:bg-soft-cream border border-border rounded-[8px] text-xs font-semibold text-charcoal transition-colors cursor-pointer shadow-2xs"
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((prev) => ({ ...prev, clientId: '' }));
+                    setClientSearch('');
+                  }}
+                  className="w-7 h-7 rounded-[8px] bg-white hover:bg-rose-50 hover:text-rose-600 text-muted-gray border border-border flex items-center justify-center transition-colors cursor-pointer"
+                  title="Remove selected client"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Search Input Trigger & Dropdown Menu */
+            <div className="relative">
+              <div
+                className={`w-full min-h-[48px] bg-white border rounded-[12px] flex items-center px-3.5 gap-2.5 transition-all shadow-2xs ${
+                  isClientOpen ? 'border-sage ring-2 ring-sage/20' : 'border-border hover:border-sage/50'
+                }`}
+              >
+                <Search size={16} className={isClientOpen ? 'text-sage' : 'text-muted-gray'} />
+                <input
+                  ref={clientSearchInputRef}
+                  type="text"
+                  value={clientSearch}
+                  onFocus={() => setIsClientOpen(true)}
+                  onChange={(e) => {
+                    setClientSearch(e.target.value);
+                    if (!isClientOpen) setIsClientOpen(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setIsClientOpen(false);
+                    if (e.key === 'Enter' && searchedClients.length > 0) {
+                      e.preventDefault();
+                      setForm((prev) => ({ ...prev, clientId: searchedClients[0].id }));
+                      setIsClientOpen(false);
+                      setClientSearch('');
+                    }
+                  }}
+                  placeholder={
+                    activeClients.length > 0
+                      ? `Type client name or phone (+237)...`
+                      : 'No clients registered yet'
+                  }
+                  className="w-full h-full py-2.5 text-sm text-charcoal placeholder:text-muted-gray outline-none bg-transparent"
+                />
+                {clientSearch ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClientSearch('');
+                      clientSearchInputRef.current?.focus();
+                    }}
+                    className="p-1 text-muted-gray hover:text-charcoal cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsClientOpen(!isClientOpen);
+                      if (!isClientOpen) setTimeout(() => clientSearchInputRef.current?.focus(), 60);
+                    }}
+                    className="p-1 text-muted-gray hover:text-charcoal cursor-pointer"
+                  >
+                    <ChevronDown
+                      size={16}
+                      className={`transition-transform duration-200 ${isClientOpen ? 'rotate-180 text-sage' : ''}`}
+                    />
+                  </button>
+                )}
+              </div>
+
+              {/* Instant Search Results Dropdown */}
+              {isClientOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white border border-border rounded-[14px] shadow-2xl overflow-hidden animate-scale-up">
+                  <div className="px-3.5 py-2 border-b border-border/70 bg-soft-cream/40 flex items-center justify-between text-[11px] text-muted-gray font-medium">
+                    <span>
+                      {searchedClients.length} of {activeClients.length} client{searchedClients.length === 1 ? '' : 's'}
+                    </span>
+                    <span className="text-[10px] hidden sm:inline">Press Enter or click to select</span>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto divide-y divide-border/20 scrollbar-thin">
+                    {searchedClients.length === 0 ? (
+                      <div className="p-5 text-center space-y-2.5">
+                        <p className="text-xs text-muted-gray">
+                          No clients found matching <strong>"{clientSearch}"</strong>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => navigate('/clients/new')}
+                          className="px-3.5 py-1.5 bg-sage hover:bg-sage-hover text-white text-xs font-semibold rounded-[8px] transition-colors inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                        >
+                          <Plus size={13} />
+                          + Register New Client "{clientSearch}"
+                        </button>
+                      </div>
+                    ) : (
+                      searchedClients.map((c) => {
+                        const isSelected = String(form.clientId) === String(c.id);
+                        return (
+                          <div
+                            key={c.id}
+                            onClick={() => {
+                              setForm((prev) => ({ ...prev, clientId: c.id }));
+                              setIsClientOpen(false);
+                              setClientSearch('');
+                            }}
+                            className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between gap-3 hover:bg-soft-cream/70 transition-colors cursor-pointer ${
+                              isSelected ? 'bg-sage-soft/60 font-semibold' : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                                  isSelected
+                                    ? 'bg-sage text-white'
+                                    : 'bg-soft-cream text-sage border border-border'
+                                }`}
+                              >
+                                {(c.name || 'C').charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-charcoal truncate">
+                                  {c.name}
+                                </span>
+                                <span className="block text-xs font-mono text-muted-gray truncate">
+                                  {c.phone || 'No phone number'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {isSelected ? (
+                              <div className="w-5 h-5 rounded-full bg-sage text-white flex items-center justify-center shrink-0">
+                                <Check size={12} />
+                              </div>
+                            ) : (
+                              <span className="text-[11px] font-semibold text-sage opacity-60 hover:opacity-100 shrink-0">
+                                Select
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {isTechnician && activeClients.length === 0 && (
             <p className="text-xs text-muted-gray mt-1.5 leading-relaxed">
-              You haven't introduced any clients yet. You can register a new client using the <strong>Add New Client</strong> button on the Appointments page first.
+              You haven't introduced any clients yet. You can register a new client using the <strong>Add New Client</strong> button first.
             </p>
           )}
         </div>
@@ -380,7 +580,7 @@ export default function CreateAppointment() {
                 Outside Operating Hours
               </p>
               <p className="text-xs sm:text-sm text-error mt-0.5 leading-relaxed">
-                Appointments can only be booked between <strong>10:00 AM and 9:00 PM (10:00 – 21:00)</strong>.
+                Appointments can only be booked between <strong>09:00 AM and 9:00 PM (09:00 – 21:00)</strong>.
               </p>
             </div>
           </div>
@@ -564,7 +764,7 @@ export default function CreateAppointment() {
             <label className="block text-[13px] font-medium text-muted-gray mb-1.5">
               Time
               <span className="text-[11px] font-normal text-muted-gray ml-1.5">
-                (10:00 AM – 09:00 PM)
+                (09:00 AM – 09:00 PM)
               </span>
               {form.time && totalDurationMinutes > 0 && (
                 <span className="text-[11px] font-normal text-sage ml-1.5">
@@ -577,7 +777,7 @@ export default function CreateAppointment() {
               onChange={update('time')}
               className="w-full h-[46px] sm:h-[48px] px-3.5 sm:px-4 bg-white border border-border rounded-[11px] text-sm text-charcoal outline-none focus:border-sage focus:ring-1 focus:ring-sage/30 transition-colors duration-150 cursor-pointer appearance-none"
             >
-              <option value="">Select Time (10:00 AM – 09:00 PM)</option>
+              <option value="">Select Time (09:00 AM – 09:00 PM)</option>
               {BOOKING_TIME_SLOTS.map((slot) => (
                 <option key={slot.value} value={slot.value}>
                   {slot.label}
@@ -585,6 +785,38 @@ export default function CreateAppointment() {
               ))}
             </select>
           </div>
+        </div>
+
+        {/* Marketer Prospecting Welcome Promo (5%, 10%, 15%, 20%) */}
+        <div className="bg-warm-ivory/50 border border-border/80 rounded-[12px] p-3.5 sm:p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-[13px] font-semibold text-charcoal flex items-center gap-1.5">
+              <Award size={15} className="text-[#8B6E58]" />
+              Prospecting Welcome Promo Discount
+            </label>
+            <span className="text-[11px] text-muted-gray">For first-time prospects</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {[0, 5, 10, 15, 20].map((rate) => (
+              <button
+                key={rate}
+                type="button"
+                onClick={() => setProspectPromoPercent(rate)}
+                className={`px-3 py-1.5 rounded-[9px] text-xs font-semibold border transition-all cursor-pointer ${
+                  prospectPromoPercent === rate
+                    ? 'bg-charcoal text-white border-charcoal font-bold shadow-2xs'
+                    : 'bg-white text-charcoal border-border hover:bg-soft-cream'
+                }`}
+              >
+                {rate === 0 ? 'No Promo (0%)' : `${rate}% Off`}
+              </button>
+            ))}
+          </div>
+          {prospectPromoPercent > 0 && (
+            <p className="text-[11px] text-[#4F6748] font-medium mt-2">
+              ✓ {prospectPromoPercent}% will be automatically deducted from the client invoice at checkout.
+            </p>
+          )}
         </div>
 
         {/* Save */}

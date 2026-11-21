@@ -227,6 +227,11 @@ export default function CloseService() {
   // Already invoiced or closed — show confirmation
   if (alreadyClosed || alreadyInvoiced || submittedSuccess) {
     const existingInvoice = getInvoiceByAppointment(id);
+    const invoiceServiceItems = (existingInvoice?.items || []).filter(
+      (it) => it.type !== 'drink' && it.type !== 'cosmetic'
+    );
+    const displayServices = invoiceServiceItems.length > 0 ? invoiceServiceItems : servicesList;
+    const displayTotal = existingInvoice?.total !== undefined ? existingInvoice.total : totalVisitPrice;
 
     return (
       <div className="w-full">
@@ -267,20 +272,31 @@ export default function CloseService() {
             </div>
             <div className="space-y-1 pt-1">
               <p className="text-[11px] font-bold uppercase tracking-wider text-muted-gray">
-                Completed Services ({servicesList.length})
+                Completed Services ({displayServices.length})
               </p>
-              {servicesList.map((s, idx) => (
-                <div key={s.appointmentServiceId || idx} className="flex justify-between text-xs py-0.5">
-                  <span className="text-charcoal">{s.name}</span>
-                  <span className="font-semibold text-charcoal font-mono">
-                    {(pricesByServiceId[s.appointmentServiceId] ?? s.price ?? 15000).toLocaleString('en-US')} FCFA
-                  </span>
-                </div>
-              ))}
+              {displayServices.map((s, idx) => {
+                const svcName = s.service || s.name || 'Service';
+                const svcPrice = s.price !== undefined
+                  ? (typeof s.price === 'number' ? s.price : parseInt(String(s.price).replace(/[^0-9]/g, ''), 10) || 0)
+                  : (pricesByServiceId[s.appointmentServiceId] ?? 15000);
+                const techTag = s.technician && s.technician !== 'Staff' && s.technician !== apt.technicianName
+                  ? ` (${s.technician})`
+                  : '';
+                return (
+                  <div key={s.appointmentServiceId || s.id || idx} className="flex justify-between text-xs py-0.5">
+                    <span className="text-charcoal font-medium">
+                      {svcName}{techTag}
+                    </span>
+                    <span className="font-semibold text-charcoal font-mono">
+                      {svcPrice.toLocaleString('en-US')} FCFA
+                    </span>
+                  </div>
+                );
+              })}
             </div>
             <div className="flex justify-between pt-2 border-t border-sage/30 text-sm font-bold text-charcoal">
               <span>Total Invoice Amount:</span>
-              <span>{totalVisitPrice.toLocaleString('en-US')} FCFA</span>
+              <span>{displayTotal.toLocaleString('en-US')} FCFA</span>
             </div>
           </div>
 

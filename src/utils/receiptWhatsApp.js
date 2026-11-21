@@ -25,9 +25,20 @@ export function buildReceiptWhatsAppMessage(invoice, client, clientLoyalty, feed
       : invoice.total || 0;
 
   const formatPaymentMethod = (pm) => {
-    const p = String(pm || 'cash').trim().toUpperCase();
-    if (p.includes('MTN')) return 'MTN MoMo';
-    if (p.includes('ORANGE')) return 'Orange Money';
+    if (Array.isArray(invoice.payments) && invoice.payments.length > 1) {
+      return invoice.payments
+        .map((p) => {
+          const raw = String(p.paymentMethod || 'CASH').toUpperCase();
+          const label = raw.includes('MTN') ? 'MTN MoMo' : raw.includes('ORANGE') ? 'Orange Money' : 'Cash';
+          return `${label}: ${Number(p.amount || 0).toLocaleString('en-US')} FCFA`;
+        })
+        .join(' + ');
+    }
+    const p = String(pm || 'cash').trim();
+    if (p.includes('+') || p.includes(':')) return p;
+    const upper = p.toUpperCase();
+    if (upper.includes('MTN')) return 'MTN MoMo';
+    if (upper.includes('ORANGE')) return 'Orange Money';
     return 'Cash';
   };
   const pmDisplay = formatPaymentMethod(invoice.paymentMethod);
@@ -79,5 +90,5 @@ ${itemsText}
 *Points Fidélité / Loyalty:* +${pointsEarned} pts (Solde: ${currentBalance} pts)
 ----------------------------------------${feedbackSection}
 _Merci pour votre visite chez OMEGA SPA !_ 🌿
-_Douala, Cameroun · Tél: +237 6 87 67 32 62_`;
+_Douala, Cameroun · Tél: +237 6 53 14 62 69_`;
 }

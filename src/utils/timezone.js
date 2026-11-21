@@ -192,12 +192,12 @@ export const parseToCompany24Hour = parseToDouala24Hour;
 export const formatCompanyDateDisplay = formatDoualaDateDisplay;
 
 /**
- * All allowed appointment booking slots between 10:00 AM and 09:00 PM (10:00 - 21:00)
+ * All allowed appointment booking slots between 09:00 AM and 09:00 PM (09:00 - 21:00)
  * 15-minute increments
  */
 export const BOOKING_TIME_SLOTS = (() => {
   const slots = [];
-  for (let mins = 10 * 60; mins <= 21 * 60; mins += 15) {
+  for (let mins = 9 * 60; mins <= 21 * 60; mins += 15) {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
     const time24 = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;

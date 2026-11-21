@@ -71,6 +71,8 @@ export function CommissionProvider({ children }) {
   const [commissions, setCommissions] = useState([]);
   const [commissionRules, setCommissionRules] = useState([]);
   const [commissionRate, setCommissionRateState] = useState(10);
+  const [commissionFixedAmount, setCommissionFixedAmountState] = useState(null);
+  const [commissionRuleMode, setCommissionRuleModeState] = useState('percentage'); // 'percentage' | 'fixed'
   const [summary, setSummary] = useState({
     totalBaseCommission: 0,
     totalBonusAmount: 0,
@@ -107,11 +109,25 @@ export function CommissionProvider({ children }) {
         const rulesRes = await commissionsApi.getRules();
         const rules = rulesRes?.data || [];
         setCommissionRules(rules);
-        const generalRule = rules.find((r) => r.serviceCategory?.toLowerCase() === 'general');
-        if (generalRule && generalRule.percentage) {
-          setCommissionRateState(Number(generalRule.percentage));
-        } else if (rules.length > 0 && rules[0].percentage) {
-          setCommissionRateState(Number(rules[0].percentage));
+        const generalRule = rules.find(
+          (r) =>
+            r.serviceCategory?.toLowerCase() === 'general' ||
+            r.serviceCategory?.toLowerCase() === 'referral' ||
+            r.type === 'REFERRAL'
+        );
+        const targetRule = generalRule || (rules.length > 0 ? rules[0] : null);
+        if (targetRule) {
+          const fixed = targetRule.fixedAmount != null ? Number(targetRule.fixedAmount) : null;
+          const pct = targetRule.percentage != null ? Number(targetRule.percentage) : 10;
+          if (fixed != null && fixed > 0 && (pct === 0 || targetRule.type === 'REFERRAL')) {
+            setCommissionFixedAmountState(fixed);
+            setCommissionRateState(pct);
+            setCommissionRuleModeState('fixed');
+          } else {
+            setCommissionRateState(pct > 0 ? pct : 10);
+            setCommissionFixedAmountState(fixed);
+            setCommissionRuleModeState(fixed != null && fixed > 0 && pct === 0 ? 'fixed' : 'percentage');
+          }
         }
       }
     } catch (err) {
@@ -126,24 +142,48 @@ export function CommissionProvider({ children }) {
     refreshCommissions();
   }, [refreshCommissions]);
 
-  // Set Commission Rule percentage (Manager)
-  const setCommissionRate = useCallback(
-    async (newRate) => {
-      const parsed = Math.max(1, Math.min(100, Number(newRate) || 5));
-      setCommissionRateState(parsed);
+  // Set Referral Commission Rule (Manager can set percentage or fixed amount)
+  const setCommissionRule = useCallback(
+    async ({ mode = 'percentage', percentage = 10, fixedAmount = null }) => {
+      const isFixed = mode === 'fixed';
+      const pct = !isFixed ? Math.max(0.1, Math.min(100, Number(percentage) || 10)) : 0;
+      const fixed = isFixed ? Math.max(1, Math.round(Number(fixedAmount) || 1000)) : null;
+
+      setCommissionRuleModeState(isFixed ? 'fixed' : 'percentage');
+      if (isFixed) {
+        setCommissionFixedAmountState(fixed);
+        setCommissionRateState(0);
+      } else {
+        setCommissionRateState(pct);
+        setCommissionFixedAmountState(null);
+      }
+
       if (user?.role === 'manager') {
         try {
           await commissionsApi.saveRule({
             serviceCategory: 'General',
-            percentage: parsed,
+            percentage: pct,
+            fixedAmount: fixed,
+            type: 'REFERRAL',
           });
           await refreshCommissions();
+          return { success: true, mode: isFixed ? 'fixed' : 'percentage', percentage: pct, fixedAmount: fixed };
         } catch (err) {
-          console.error('Failed to save commission rule to backend:', err);
+          console.error('Failed to save referral commission rule:', err);
+          return { success: false, error: err?.message || 'Failed to save rule' };
         }
       }
+      return { success: true };
     },
     [user, refreshCommissions]
+  );
+
+  // Backward compatible helper for setCommissionRate(percentage)
+  const setCommissionRate = useCallback(
+    async (newRate) => {
+      return setCommissionRule({ mode: 'percentage', percentage: newRate });
+    },
+    [setCommissionRule]
   );
 
   // Save specific category commission rule (Manager)
@@ -308,11 +348,34 @@ export function CommissionProvider({ children }) {
     [commissions]
   );
 
+  // Authoritative Salary Contract & Target Performance Summary (Phase 4)
+  const getStaffSalarySummary = useCallback(async (techId, period) => {
+    try {
+      const res = await commissionsApi.getSalarySummary({
+        technicianId: techId,
+        ...(period ? { period } : {}),
+      });
+      return res?.data || null;
+    } catch (err) {
+      console.warn('Failed to fetch staff salary summary:', err);
+      return null;
+    }
+  }, []);
+
+  // Finalize and lock monthly payroll record (Manager only)
+  const finalizeStaffPayroll = useCallback(async (employeeId, period) => {
+    const res = await commissionsApi.finalizePayroll({ employeeId, period });
+    return res?.data || null;
+  }, []);
+
   return (
     <CommissionContext.Provider
       value={{
         commissionRate,
+        commissionFixedAmount,
+        commissionRuleMode,
         setCommissionRate,
+        setCommissionRule,
         commissionRules,
         saveCommissionRule,
         commissions,
@@ -327,6 +390,8 @@ export function CommissionProvider({ children }) {
         getEmployeeCommissionSummary,
         getAllEmployeeSummaries,
         getCommissionHistory,
+        getStaffSalarySummary,
+        finalizeStaffPayroll,
       }}
     >
       {children}
